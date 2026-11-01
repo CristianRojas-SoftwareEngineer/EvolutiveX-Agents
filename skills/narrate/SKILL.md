@@ -1,11 +1,11 @@
 ---
 name: narrate
-description: Controla la narración por voz de AI Voice-InterConnector (activar/desactivar, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración de la narración por voz.
+description: Controla la narración por voz y las notificaciones de escritorio de Agent Voice-InterConnector (activar/desactivar canales, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración del plugin.
 ---
 
-# Narración por voz con AI Voice-InterConnector
+# Narración por voz y notificaciones con Agent Voice-InterConnector
 
-Esta skill opera el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`), que narra por voz la actividad de la sesión. La **automatización por turno** la manejan los hooks (no esta skill); aquí se cubre el **uso consciente**: toggles, modo, estado y narración a demanda. Todas las operaciones pasan por un único script de control:
+Esta skill opera el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`), que narra por voz la actividad de la sesión mediante AI Voice-InterConnector y emite notificaciones de escritorio nativas. La **automatización por turno** la manejan los hooks (no esta skill); aquí se cubre el **uso consciente**: toggles de ambos canales, modo, estado y narración a demanda. Todas las operaciones pasan por un único script de control:
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" <comando> [args]
@@ -27,7 +27,7 @@ Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya est
 | Narrar un texto ahora                | `narrate-ctl.js say "texto a narrar"`              |
 | Pre-sintetizar los anuncios          | `narrate-ctl.js presynth` (`--force` para re-sync) |
 
-Tras `on`/`off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
+Tras `on`/`off`/`desktop-on`/`desktop-off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
 
 `presynth` pre-sintetiza de una vez los anuncios estáticos del plugin (acuse de `UserPromptSubmit` y fallbacks por evento) con `speech synthesize`, para que luego se reproduzcan al instante con `speech play`. Es **idempotente** (un anuncio ya pre-sintetizado no se re-sintetiza) y **requiere el daemon caliente**; normalmente lo ejecuta la instalación guiada, y solo hay que re-ejecutarlo tras borrar la caché del motor. Como los labels son slugs fijos, un **cambio de frase** de un anuncio no cambia su label, así que `presynth` a secas no lo detecta: para forzar la re-síntesis usa `presynth --force`, que pasa `--force` al motor y sobrescribe el WAV existente.
 

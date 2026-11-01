@@ -30,11 +30,17 @@ afterEach(() => {
 });
 
 test("enqueue escribe dos payloads y los lista en orden de llegada", () => {
-  enqueuePayload({ session_id: "s1", hook_event_name: "UserPromptSubmit" });
-  enqueuePayload({ session_id: "s2", hook_event_name: "Stop" });
+  const f1 = enqueuePayload({
+    session_id: "s1",
+    hook_event_name: "UserPromptSubmit",
+  });
+  const f2 = enqueuePayload({ session_id: "s2", hook_event_name: "Stop" });
   const pending = listPending();
-  assert.equal(pending.length, 2);
-  assert.ok(pending[0] < pending[1], "deben estar ordenados por nombre");
+  assert.deepEqual(
+    pending,
+    [basename(f1), basename(f2)],
+    "deben conservar exactamente el orden de inserción (f1 antes que f2)",
+  );
 });
 
 test("claimNext lee el primer payload y lo borra de la cola", () => {
@@ -58,12 +64,29 @@ test("pruneQueue descarta el más viejo al superar el tope", () => {
     session_id: "s1",
     hook_event_name: "UserPromptSubmit",
   });
-  enqueuePayload({ session_id: "s2", hook_event_name: "Stop" });
-  enqueuePayload({ session_id: "s3", hook_event_name: "Notification" });
+  const f2 = enqueuePayload({ session_id: "s2", hook_event_name: "Stop" });
+  const f3 = enqueuePayload({
+    session_id: "s3",
+    hook_event_name: "Notification",
+  });
   pruneQueue({ max: 2, maxAgeMs: 60 * 60 * 1000 });
   const pending = listPending();
-  assert.equal(pending.length, 2);
   assert.ok(!pending.includes(basename(f1)), "el más viejo (s1) se descarta");
+  assert.deepEqual(pending, [basename(f2), basename(f3)]);
+});
+
+test("enqueue y pruneQueue preservan el orden FIFO estricto en ráfagas dentro del mismo milisegundo", () => {
+  const inserted: string[] = [];
+  for (let i = 0; i < 20; i++) {
+    const file = enqueuePayload({
+      session_id: `s-${i}`,
+      hook_event_name: "Stop",
+    });
+    inserted.push(basename(file));
+  }
+  assert.deepEqual(listPending(), inserted);
+  pruneQueue({ max: 5, maxAgeMs: 60 * 60 * 1000 });
+  assert.deepEqual(listPending(), inserted.slice(-5));
 });
 
 test("pruneQueue elimina archivos expirados por TTL", () => {

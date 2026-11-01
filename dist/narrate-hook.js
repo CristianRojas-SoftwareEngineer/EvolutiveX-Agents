@@ -120,11 +120,31 @@ function readStdin() {
 
 // src/lib/queue.ts
 var MAX_AGE_MS = 60 * 60 * 1e3;
+var lastTimeMs = 0;
+var seq = 0;
+function nextQueueFileName() {
+  const now = Date.now();
+  if (now > lastTimeMs) {
+    lastTimeMs = now;
+    seq = 0;
+  } else {
+    seq += 1;
+    if (seq > 999999) {
+      lastTimeMs += 1;
+      seq = 0;
+    }
+  }
+  const ts = String(lastTimeMs).padStart(13, "0");
+  const step = String(seq).padStart(6, "0");
+  const pid = String(process.pid).padStart(10, "0");
+  const rand = Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+  return `${ts}-${step}-${pid}-${rand}.json`;
+}
 function enqueuePayload(payload) {
   ensureStateDir();
   const dir = queueDir();
   mkdirSync2(dir, { recursive: true });
-  const name = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}.json`;
+  const name = nextQueueFileName();
   const finalPath = join2(dir, name);
   const tmpPath = join2(dir, `.tmp-${name}`);
   writeFileSync2(tmpPath, JSON.stringify(payload), "utf8");

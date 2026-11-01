@@ -48,7 +48,7 @@ El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (op
 
 ### Estado (`config.json`)
 
-`config.json` solo guarda preferencias no secretas (`enabled` y `messageMode`). La API key **nunca** se escribe en este archivo.
+`config.json` solo guarda preferencias no secretas (`enabled`, `desktopEnabled` y `messageMode`). La API key **nunca** se escribe en este archivo.
 
 Ubicación por SO:
 

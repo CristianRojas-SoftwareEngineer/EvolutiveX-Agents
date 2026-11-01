@@ -30,11 +30,11 @@ El plugin es un cliente delgado que corre dentro de la sesión de Claude Code de
 
 ### Qué se persiste, dónde y con qué permisos
 
-- El _state dir_ por SO (`%LOCALAPPDATA%\agent-voice-interconnector` en Windows, `${XDG_STATE_HOME:-~/.local/state}/agent-voice-interconnector` en Linux, `~/Library/Application Support/agent-voice-interconnector` en macOS) contiene `config.json` —solo `enabled`, `desktopEnabled` y `messageMode`—, `worker.pid`, `payload.json` y `worker.log`. **Ninguno contiene la API key**: el plugin no persiste secretos en disco.
+- El _state dir_ por SO (`%LOCALAPPDATA%\agent-voice-interconnector` en Windows, `${XDG_STATE_HOME:-~/.local/state}/agent-voice-interconnector` en Linux, `~/Library/Application Support/agent-voice-interconnector` en macOS) contiene `config.json` —solo `enabled`, `desktopEnabled` y `messageMode`—, `worker.pid`, `queue/` (archivos `.json` transitorios de la cola FIFO) y `worker.log`. **Ninguno contiene la API key**: el plugin no persiste secretos en disco.
 - El canal de notificaciones de escritorio muestra extractos locales del evento (preview del prompt, herramienta/pregunta o último mensaje del asistente, truncados) en el centro de notificaciones del sistema operativo local. **Nunca envía datos por red**.
 - La API key se lee únicamente de la variable de entorno `GEMINI_API_KEY` y vive en memoria durante la generación.
 - La variable de entorno puede heredarse en procesos hijos y, si el usuario la define de forma persistente, queda en su perfil fuera del control del plugin. Esa decisión y su protección son responsabilidad del usuario.
-- `payload.json` y `worker.log` pueden contener extractos del último payload de hook; viven bajo el state dir y las protecciones del perfil de usuario del SO.
+- Los archivos transitorios en `queue/` y `worker.log` pueden contener extractos del último payload de hook; viven bajo el state dir y las protecciones del perfil de usuario del SO.
 
 ### Qué sale hacia terceros y bajo qué opt-in
 
@@ -48,9 +48,9 @@ El plugin es un cliente delgado que corre dentro de la sesión de Claude Code de
 - **No pide ni maneja claves dentro del chat**: ni la skill ni el comando de instalación piden la clave en la conversación (evita que quede en el transcript); ambos guían al usuario a la variable de entorno.
 - **No imprime el valor de una clave**: `narrate-ctl status` reporta solo `configurada`/`ausente`. Esta garantía está fijada por contrato en `tests/narrate-ctl.test.ts`.
 - **No manda nada a la red en modo `local`**, ni telemetría en ningún modo.
-- **No ejecuta contenido de la sesión**: el payload de los hooks se parsea de forma tolerante (`src/lib/hook-payload.ts`) y su texto solo se usa como entrada de saneamiento; el único proceso que el plugin lanza es el ejecutable `ai-voice-interconnector` resuelto del `PATH`, con argumentos fijos.
+- **No ejecuta contenido de la sesión**: el payload de los hooks se parsea de forma tolerante (`src/lib/hook-payload.ts`) y su texto solo se usa como entrada de saneamiento o formato visual; los únicos procesos externos que el plugin lanza son el ejecutable `ai-voice-interconnector` resuelto del `PATH` (canal de voz) y el notificador nativo del sistema operativo vía `node-notifier`/`vendor/` o `reg.exe` en el registro opt-in de Windows (canal de escritorio), siempre sin evaluar shell sobre el contenido del turno.
 
 ### Cadena de suministro
 
-- El plugin se distribuye clonando el repo con `dist/` **commiteado**; lo que ejecutas es el JS del árbol de git. El CI verifica en cada push a una rama que `dist/` es exactamente la compilación de `src/` (`npm run check-dist`); el pre-commit lo regenera al commitear y el checklist de release lo vuelve a comprobar. De este modo el fuente publicado y el artefacto ejecutado no pueden divergir sin que el pipeline falle.
-- No hay **ninguna dependencia de runtime**: los bundles solo usan la stdlib de Node y `fetch` nativo. Las dependencias de desarrollo (typescript, esbuild, @types/node) van fijadas por `package-lock.json` y no se instalan en la máquina del usuario final.
+- El plugin se distribuye clonando el repo con `dist/` y `vendor/` **commiteados**; lo que ejecutas es el JS del árbol de git. El CI verifica en cada push a una rama que `dist/` y `vendor/` coinciden exactamente con la compilación de `src/` (`npm run check-dist`); el pre-commit lo regenera al commitear y el checklist de release lo vuelve a comprobar. De este modo el fuente publicado y el artefacto ejecutado no pueden divergir sin que el pipeline falle.
+- No requiere **`npm install` en la máquina del usuario final**: los bundles de `dist/` son autocontenidos (usan la stdlib de Node, `fetch` nativo y empaquetan `commander` y `node-notifier` junto con los binarios redistribuibles de `vendor/`; ver `NOTICE`). Las dependencias de construcción y verificación van fijadas por `package-lock.json`.

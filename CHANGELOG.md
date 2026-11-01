@@ -20,21 +20,54 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Añadido
 
+- **Canal de notificaciones de escritorio nativas** (`src/notifications/`,
+  `dist/desktop-hook.js`, `dist/notification-cli.js`,
+  `dist/notification-register.js`): emite toasts silenciosos por defecto con
+  icono específico por evento (`assets/notifications/`) para los 12 perfiles del
+  ciclo de vida (`UserPromptSubmit`, `PreToolUse[AskUserQuestion]`,
+  `PostToolUse[TaskUpdate+in_progress]`, `SubagentStart`, `SubagentStop`,
+  `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`,
+  `TaskCreated`, `TaskCompleted`). Canal independiente del motor de voz,
+  controlado por `desktopEnabled` en `config.json` y por los subcomandos
+  `narrate-ctl desktop-on` / `desktop-off`, con registro idempotente del AUMID
+  `Agent.VoiceInterConnector` en Windows (`notification-register.js --install` /
+  `--status` / `--uninstall`) y empaquetado autocontenido en `dist/` y
+  `vendor/`.
 - **Cola FIFO de narración en disco** (`src/lib/queue.ts`): los hooks encolan
-  payloads en `queue/` del state dir y un único worker drenador los narra en
-  orden, sin solapamiento ni duplicación. El handoff `payload.json` compartido
-  queda eliminado.
+  payloads en `queue/` del state dir con nombres monotónicos de ancho fijo
+  (`timestamp` lógico + secuencia + `pid` + sufijo aleatorio) y un único worker
+  drenador los narra en orden estricto de llegada, sin solapamiento ni
+  duplicación. El handoff `payload.json` compartido queda eliminado.
 - **Timeout de invocación CLI en el worker**: `speech play` (10 s) y
   `speech say` (45 s) acotados con muerte del árbol de procesos al exceder el
   tiempo, registro en `worker.log` y continuación de la cola.
+- **Puerta de validación de manifiestos en el CI** (job `validate-manifest` en
+  `.circleci/config.yml`): valida `.claude-plugin/plugin.json` y
+  `.claude-plugin/marketplace.json` con `claude plugin validate --strict`, que
+  es el único comando que rechaza los nombres de plugin que Anthropic reserva
+  (por ejemplo, el prefijo `claude-`) y los que no son kebab-case, requisitos
+  del marketplace de Claude.ai. Cubre un hueco real: typecheck, build y los
+  tests nunca miran `.claude-plugin/`, así que un manifiesto inválido llegaba al
+  commit y al push con el pipeline en verde. La versión del CLI queda pineada en
+  el parámetro `claude_cli_version` (misma política de pins que `node_version`),
+  porque el veredicto del validador cambia entre versiones. El job no necesita
+  secretos: el validador es un análisis local, sin red ni autenticación.
+- **Subcomando `narrate-ctl presynth`**: pre-sintetiza los seis anuncios del catálogo con
+  `speech synthesize --daemon`, idempotente por defecto (exit `6` del
+  motor = «ya pre-sintetizado»). Integrado en la instalación guiada
+  (`/agent-voice-interconnector:install`) y re-ejecutable a mano tras borrar la caché
+  del motor. Acepta `--force` (alias `-f`), que pasa `--force` al motor para
+  sobrescribir el WAV de un label existente: el re-sync manual tras cambiar la
+  frase de un anuncio (como el label es fijo, `presynth` a secas no detecta el
+  cambio).
 
 ### Cambiado
 
 - **La API key de Gemini vive solo en el entorno** (`GEMINI_API_KEY`).
   `config.json` deja de almacenar claves y solo persiste preferencias no
-  secretas (`enabled` y `messageMode`); `loadConfig` ya no lee claves del
-  archivo y `updateConfig` nunca las escribe. Sin `GEMINI_API_KEY`, el modo
-  `llm` degrada a `local`.
+  secretas (`enabled`, `desktopEnabled` y `messageMode`); `loadConfig` ya no lee
+  claves del archivo y `updateConfig` nunca las escribe. Sin `GEMINI_API_KEY`,
+  el modo `llm` degrada a `local`.
 - **`messageMode` por defecto es `local`** (antes el código usaba `llm`), en
   línea con lo que ya declaraba el README. `llm` sigue siendo opt-in con
   `GEMINI_API_KEY` y `mode llm`.
@@ -78,28 +111,6 @@ play`) en vez de re-sintetizarse en cada aparición: el catálogo único de
   anuncios vive en `src/message/static-announcements.ts`, con un label semántico
   fijo por anuncio (p. ej. `voice-stop`) asignado explícitamente, no derivado
   del texto.
-
-### Añadido
-
-- **Puerta de validación de manifiestos en el CI** (job `validate-manifest` en
-  `.circleci/config.yml`): valida `.claude-plugin/plugin.json` y
-  `.claude-plugin/marketplace.json` con `claude plugin validate --strict`, que
-  es el único comando que rechaza los nombres de plugin que Anthropic reserva
-  (por ejemplo, el prefijo `claude-`) y los que no son kebab-case, requisitos
-  del marketplace de Claude.ai. Cubre un hueco real: typecheck, build y los
-  tests nunca miran `.claude-plugin/`, así que un manifiesto inválido llegaba al
-  commit y al push con el pipeline en verde. La versión del CLI queda pineada en
-  el parámetro `claude_cli_version` (misma política de pins que `node_version`),
-  porque el veredicto del validador cambia entre versiones. El job no necesita
-  secretos: el validador es un análisis local, sin red ni autenticación.
-- **Subcomando `narrate-ctl presynth`**: pre-sintetiza los seis anuncios del catálogo con
-  `speech synthesize --daemon`, idempotente por defecto (exit `6` del
-  motor = «ya pre-sintetizado»). Integrado en la instalación guiada
-  (`/agent-voice-interconnector:install`) y re-ejecutable a mano tras borrar la caché
-  del motor. Acepta `--force` (alias `-f`), que pasa `--force` al motor para
-  sobrescribir el WAV de un label existente: el re-sync manual tras cambiar la
-  frase de un anuncio (como el label es fijo, `presynth` a secas no detecta el
-  cambio).
 
 ### Eliminado
 

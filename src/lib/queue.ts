@@ -5,8 +5,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Cola FIFO de payloads de narración en disco. Cada hook escribe un archivo
-// único y el worker drena en orden de nombre (timestamp + pid + aleatorio),
-// que equivale al orden de llegada. Los archivos se borran al reclamarlos,
+// único y el worker drena en orden lexicográfico de nombre (timestamp
+// monotónico + secuencia + pid + aleatorio, todos de ancho fijo), que equivale
+// estrictamente al orden de llegada. Los archivos se borran al reclamarlos,
 // por lo que la cola es persistente solo mientras hay eventos pendientes y
 // no hay riesgo de narrar dos veces el mismo evento.
 import {
@@ -25,14 +26,40 @@ import { parsePayload, type HookPayload } from "./hook-payload.js";
 const MAX_PENDING = 64;
 const MAX_AGE_MS = 60 * 60 * 1000; // 1 h
 
+let lastTimeMs = 0;
+let seq = 0;
+
+/**
+ * Genera un nombre de archivo con segmentos de ancho fijo cuyo orden
+ * lexicográfico coincide estrictamente con el orden de llegada (FIFO),
+ * incluso ante múltiples inserciones dentro del mismo milisegundo o
+ * retrocesos breves del reloj del sistema.
+ */
+function nextQueueFileName(): string {
+  const now = Date.now();
+  if (now > lastTimeMs) {
+    lastTimeMs = now;
+    seq = 0;
+  } else {
+    seq += 1;
+    if (seq > 999_999) {
+      lastTimeMs += 1;
+      seq = 0;
+    }
+  }
+  const ts = String(lastTimeMs).padStart(13, "0");
+  const step = String(seq).padStart(6, "0");
+  const pid = String(process.pid).padStart(10, "0");
+  const rand = Math.random().toString(36).slice(2, 10).padEnd(8, "0");
+  return `${ts}-${step}-${pid}-${rand}.json`;
+}
+
 /** Escribe un payload en la cola de forma atómica (temporal + rename) y devuelve su ruta. */
 export function enqueuePayload(payload: HookPayload): string {
   ensureStateDir();
   const dir = queueDir();
   mkdirSync(dir, { recursive: true });
-  const name = `${Date.now()}-${process.pid}-${Math.random()
-    .toString(36)
-    .slice(2)}.json`;
+  const name = nextQueueFileName();
   const finalPath = join(dir, name);
   const tmpPath = join(dir, `.tmp-${name}`);
   writeFileSync(tmpPath, JSON.stringify(payload), "utf8");

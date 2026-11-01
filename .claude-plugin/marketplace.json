@@ -4,13 +4,13 @@
     "name": "Cristián Rojas Arredondo"
   },
   "metadata": {
-    "description": "Marketplace del plugin Agent Voice-InterConnector: narración por voz de la sesión de Claude Code mediante AI Voice-InterConnector."
+    "description": "Marketplace del plugin Agent Voice-InterConnector: narración por voz y notificaciones de escritorio de la sesión de Claude Code mediante AI Voice-InterConnector."
   },
   "plugins": [
     {
       "name": "agent-voice-interconnector",
       "source": "./",
-      "description": "Narra por voz la actividad de la sesión de Claude Code usando AI Voice-InterConnector. Genera un mensaje conversacional corto por turno (Gemini free tier con degradación local) y lo sintetiza vía el CLI ai-voice-interconnector. Multiplataforma, no intrusivo, costo cero."
+      "description": "Narra por voz la actividad de la sesión de Claude Code usando AI Voice-InterConnector y emite notificaciones de escritorio nativas. Genera un mensaje conversacional corto por turno (Gemini free tier con degradación local) y lo sintetiza vía el CLI ai-voice-interconnector. Multiplataforma, no intrusivo, costo cero."
     }
   ]
 }

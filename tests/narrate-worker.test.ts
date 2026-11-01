@@ -10,21 +10,19 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { writeFileSync, chmodSync } from "node:fs";
+import { writeFileSync, chmodSync, readFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { enqueuePayload } from "../src/lib/queue.js";
-import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
+import { withEnv, makeTempDir, removeDir } from "./helpers.js";
 
 const WORKER = join(process.cwd(), "dist", "narrate-worker.js");
 
 let restoreDirs: string[] = [];
-let restorePlatform: () => void;
 let restoreEnv: () => void;
 
 afterEach(() => {
   for (const d of restoreDirs) removeDir(d);
   restoreDirs = [];
-  if (restorePlatform) restorePlatform();
   if (restoreEnv) restoreEnv();
 });
 
@@ -70,9 +68,11 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
-  // Aislar state dir en `dir` y simular Linux para que XDG_STATE_HOME rija.
-  restorePlatform = fakePlatform("linux");
+  // Aislar state dir en `dir` tanto para el proceso padre como para el subproceso
+  // worker en el SO anfitrión real (win32: LOCALAPPDATA, darwin: HOME, linux: XDG_STATE_HOME).
   restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
     XDG_STATE_HOME: dir,
     GEMINI_API_KEY: undefined,
   });
@@ -89,15 +89,27 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
     last_assistant_message: "segundo",
   });
 
-  // El worker se ejecuta en el SO real; en Windows lee LOCALAPPDATA, así que se lo pasamos.
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env.GEMINI_API_KEY;
-  if (process.platform === "win32") env.LOCALAPPDATA = dir;
-  else env.XDG_STATE_HOME = dir;
-  env.PATH = cliDir + delimiter + env.PATH;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
 
   const res = runWorker(env);
   assert.equal(res.status, 0);
+
+  const calls = readFileSync(join(cliDir, "argv.log"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as string[]);
+  assert.equal(calls.length, 2, "debe invocar el CLI exactamente dos veces");
+  assert.deepEqual(calls[0]!.slice(0, 3), ["speech", "play", "--label"]);
+  assert.deepEqual(calls[1], [
+    "speech",
+    "say",
+    "--text",
+    "segundo",
+    "--daemon",
+  ]);
 });
 
 test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
@@ -107,17 +119,17 @@ test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
-  restorePlatform = fakePlatform("linux");
   restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
     XDG_STATE_HOME: dir,
     GEMINI_API_KEY: undefined,
   });
 
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env.GEMINI_API_KEY;
-  if (process.platform === "win32") env.LOCALAPPDATA = dir;
-  else env.XDG_STATE_HOME = dir;
-  env.PATH = cliDir + delimiter + env.PATH;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
 
   const res = runWorker(env);
   assert.equal(res.status, 0);

@@ -40,7 +40,6 @@ function makeSleepingCli(ms: number): string {
       cliPath + ".cmd",
       '@node "%~dp0impl.cjs" %*\r\n@exit /b %errorlevel%\r\n',
     );
-    restoreDirs.push(dir);
   } else {
     writeFileSync(cliPath, '#!/bin/sh\nexec node "${0%/*}/impl.cjs" "$@"\n');
     chmodSync(cliPath, 0o755);
