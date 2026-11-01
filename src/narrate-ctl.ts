@@ -6,12 +6,14 @@
 
 // Superficie de control de la narración (para la skill opcional y uso manual).
 // Lee y escribe config.json en el state dir: solo preferencias no secretas
-// (enabled y messageMode). La API key se lee del entorno. No participa en el
+// (enabled, desktopEnabled y messageMode). La API key se lee del entorno. No participa en el
 // flujo de hooks.
 //
 // Uso: node dist/narrate-ctl.js <comando> [args]
 //   on                 activa la narración
 //   off                desactiva la narración
+//   desktop-on         activa las notificaciones de escritorio
+//   desktop-off        desactiva las notificaciones de escritorio
 //   mode <llm|local>   fija el modo de generación
 //   status             muestra el estado (sin revelar las claves)
 //   say "<texto>"      narra un texto a demanda vía ai-voice-interconnector
@@ -25,6 +27,7 @@ function printStatus(): void {
   const cfg = loadConfig();
   const lines = [
     `enabled:      ${cfg.enabled}`,
+    `desktop:      ${cfg.desktopEnabled}`,
     `messageMode:  ${cfg.messageMode}`,
     `gemini key:   ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
     `config:       ${configPath()}`,
@@ -105,6 +108,14 @@ function main(): number {
     case "off":
       updateConfig({ enabled: false });
       console.log("Narración desactivada.");
+      return 0;
+    case "desktop-on":
+      updateConfig({ desktopEnabled: true });
+      console.log("Notificaciones de escritorio activadas.");
+      return 0;
+    case "desktop-off":
+      updateConfig({ desktopEnabled: false });
+      console.log("Notificaciones de escritorio desactivadas.");
       return 0;
     case "mode": {
       const mode = rest[0];

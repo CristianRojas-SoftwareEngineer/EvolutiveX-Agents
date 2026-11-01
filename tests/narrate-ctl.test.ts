@@ -79,6 +79,14 @@ test("off desactiva la narración y lo persiste", () => {
   assert.equal(readConfigFile().enabled, false);
 });
 
+test("desktop-off y desktop-on controlan las notificaciones de escritorio sin alterar voz", () => {
+  assert.equal(runCtl(["desktop-off"]).status, 0);
+  assert.equal(readConfigFile().desktopEnabled, false);
+  assert.equal(readConfigFile().enabled, true);
+  assert.equal(runCtl(["desktop-on"]).status, 0);
+  assert.equal(readConfigFile().desktopEnabled, true);
+});
+
 test("mode fija llm o local; un valor inválido devuelve 2 con uso", () => {
   assert.equal(runCtl(["mode", "local"]).status, 0);
   assert.equal(readConfigFile().messageMode, "local");
@@ -114,7 +122,11 @@ test("config.json solo persiste preferencias no secretas", () => {
   assert.equal(runCtl(["mode", "llm"]).status, 0);
   assert.equal(runCtl(["off"]).status, 0);
   const raw = readConfigFile();
-  assert.deepEqual(Object.keys(raw).sort(), ["enabled", "messageMode"]);
+  assert.deepEqual(Object.keys(raw).sort(), [
+    "desktopEnabled",
+    "enabled",
+    "messageMode",
+  ]);
   assert.equal(raw.enabled, false);
   assert.equal(raw.messageMode, "llm");
 });

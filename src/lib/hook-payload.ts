@@ -11,12 +11,22 @@ export interface HookPayload {
   cwd?: string;
   hook_event_name?: string;
   transcript_path?: string;
-  /** Presente en Stop: último mensaje del asistente en el turno. */
+  /** Presente en Stop / SubagentStop / StopFailure: último mensaje del asistente. */
   last_assistant_message?: string;
   /** Presente en Notification: aviso ya redactado y corto. */
   message?: string;
   /** Presente en UserPromptSubmit: la petición actual del usuario (fiable). */
   prompt?: string;
+  /** Presente en eventos de herramientas (PreToolUse, PostToolUse, PermissionRequest). */
+  tool_name?: string;
+  /** Argumentos de la herramienta invocada en eventos de herramientas. */
+  tool_input?: unknown;
+  /** Código de error en StopFailure (p. ej. rate_limit, server_error). */
+  error?: string;
+  /** Título nativo de la tarea en TaskCreated y TaskCompleted. */
+  task_subject?: string;
+  /** Fallback de asunto de tarea cuando se envía en nivel raíz. */
+  subject?: string;
 }
 
 /** Parseo tolerante: nunca lanza; ante entrada inválida devuelve un objeto vacío. */

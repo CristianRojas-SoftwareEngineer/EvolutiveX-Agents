@@ -1,4 +1,10 @@
 // Generado por build.mjs (esbuild). No editar a mano; editar src/ y recompilar.
+import { createRequire as __createRequire } from "node:module";
+import { fileURLToPath as __fileURLToPath } from "node:url";
+import { dirname as __pathDirname } from "node:path";
+const require = __createRequire(import.meta.url);
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __pathDirname(__filename);
 
 // src/narrate-worker.ts
 import { appendFileSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
@@ -48,6 +54,7 @@ function workerLogPath() {
 // src/lib/config.ts
 var DEFAULTS = {
   enabled: true,
+  desktopEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -55,8 +62,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, messageMode } = parsed;
-      return { enabled, messageMode };
+      const { enabled, desktopEnabled, messageMode } = parsed;
+      return { enabled, desktopEnabled, messageMode };
     }
   } catch {
   }
@@ -66,6 +73,7 @@ function loadConfig() {
   const file = readFileConfig();
   return {
     enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
+    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };

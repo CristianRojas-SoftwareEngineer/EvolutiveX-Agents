@@ -34,6 +34,7 @@ function writeConfigFile(contents: string): void {
 test("loadConfig sin archivo ni env devuelve los defaults", () => {
   const cfg = loadConfig();
   assert.equal(cfg.enabled, true);
+  assert.equal(cfg.desktopEnabled, true);
   assert.equal(cfg.messageMode, "local");
   assert.equal(cfg.geminiApiKey, undefined);
 });
@@ -93,7 +94,11 @@ test("updateConfig escribe solo preferencias y descarta claves del archivo", () 
     string,
     unknown
   >;
-  assert.deepEqual(Object.keys(raw).sort(), ["enabled", "messageMode"]);
+  assert.deepEqual(Object.keys(raw).sort(), [
+    "desktopEnabled",
+    "enabled",
+    "messageMode",
+  ]);
   assert.equal(raw.enabled, true);
   assert.equal(raw.messageMode, "llm");
 });
@@ -113,4 +118,15 @@ test("updateConfig crea el state dir si no existe y devuelve la config efectiva"
   const cfg = updateConfig({ enabled: false });
   assert.equal(cfg.enabled, false);
   assert.equal(cfg.messageMode, "local");
+});
+
+test("los controles de escritorio y narración son independientes", () => {
+  updateConfig({ desktopEnabled: true });
+  updateConfig({ enabled: false });
+  assert.equal(loadConfig().desktopEnabled, true);
+  assert.equal(loadConfig().enabled, false);
+  updateConfig({ desktopEnabled: false });
+  updateConfig({ enabled: true });
+  assert.equal(loadConfig().desktopEnabled, false);
+  assert.equal(loadConfig().enabled, true);
 });

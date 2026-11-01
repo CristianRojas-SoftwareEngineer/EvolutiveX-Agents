@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Lee y escribe config.json en el state dir. El archivo solo guarda preferencias
-// no secretas (enabled y messageMode). La API key se lee únicamente de la
+// no secretas (enabled, desktopEnabled y messageMode). La API key se lee únicamente de la
 // variable de entorno GEMINI_API_KEY y nunca se persiste en disco.
 import { readFileSync, writeFileSync } from "node:fs";
 import { configPath, ensureStateDir } from "./state-dir.js";
@@ -14,6 +14,7 @@ export type MessageMode = "llm" | "local";
 
 export interface Config {
   enabled: boolean;
+  desktopEnabled: boolean;
   messageMode: MessageMode;
   /** Campo de tiempo de ejecución: proviene solo de GEMINI_API_KEY. */
   geminiApiKey?: string;
@@ -21,11 +22,13 @@ export interface Config {
 
 interface FileConfig {
   enabled?: boolean;
+  desktopEnabled?: boolean;
   messageMode?: MessageMode;
 }
 
 const DEFAULTS: Config = {
   enabled: true,
+  desktopEnabled: true,
   messageMode: "local",
 };
 
@@ -36,8 +39,8 @@ function readFileConfig(): FileConfig {
     if (parsed && typeof parsed === "object") {
       // Solo se conservan preferencias no secretas; cualquier campo de clave
       // presente en un archivo antiguo se ignora.
-      const { enabled, messageMode } = parsed as FileConfig;
-      return { enabled, messageMode };
+      const { enabled, desktopEnabled, messageMode } = parsed as FileConfig;
+      return { enabled, desktopEnabled, messageMode };
     }
   } catch {
     // Sin archivo o JSON inválido: se usan defaults.
@@ -55,6 +58,10 @@ export function loadConfig(): Config {
   return {
     enabled:
       typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
+    desktopEnabled:
+      typeof file.desktopEnabled === "boolean"
+        ? file.desktopEnabled
+        : DEFAULTS.desktopEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY),
   };
@@ -66,7 +73,7 @@ export function loadConfig(): Config {
  * campos de clave. Usado por la skill.
  */
 export function updateConfig(
-  patch: Partial<Pick<Config, "enabled" | "messageMode">>,
+  patch: Partial<Pick<Config, "enabled" | "desktopEnabled" | "messageMode">>,
 ): Config {
   ensureStateDir();
   const current = readFileConfig();
@@ -76,6 +83,11 @@ export function updateConfig(
       (typeof current.enabled === "boolean"
         ? current.enabled
         : DEFAULTS.enabled),
+    desktopEnabled:
+      patch.desktopEnabled ??
+      (typeof current.desktopEnabled === "boolean"
+        ? current.desktopEnabled
+        : DEFAULTS.desktopEnabled),
     messageMode:
       patch.messageMode ??
       (current.messageMode === "llm" ? "llm" : DEFAULTS.messageMode),

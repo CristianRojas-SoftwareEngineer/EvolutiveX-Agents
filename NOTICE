@@ -11,3 +11,17 @@ de la MPL-2.0 con el aviso de copyright; no elimines ni alteres esos avisos
 - Licencia: MPL-2.0 — <https://mozilla.org/MPL/2.0/>
 - Este plugin invoca el motor AI Voice-InterConnector, que se distribuye bajo
   su propia licencia MPL-2.0 (ver su repositorio).
+
+## Componentes de terceros empacados (canal de notificaciones de escritorio)
+
+- **`node-notifier`** (`10.0.1`) — Copyright © 2017 Mikael Brevik. Licencia MIT.
+- **`commander`** (`13.1.0`) — Copyright © 2011 TJ Holowaychuk. Licencia MIT.
+- **`SnoreToast`** (`vendor/snoreToast/`) — Copyright © KDE / Hannah von Reth.
+  Licencia GNU Lesser General Public License v3.0 (ver `vendor/snoreToast/LICENSE`).
+  Se invoca como ejecutable externo separado sin modificaciones.
+- **`notifu`** (`vendor/notifu/`) — Copyright © 2019 Solutions Paralint inc.
+  Licencia BSD de 3 cláusulas (ver `vendor/notifu/LICENSE`).
+- **`terminal-notifier`** (`vendor/mac.noindex/terminal-notifier.app/`) —
+  Copyright © 2012-2016 Eloy Durán, Julien Blanchard. Licencia MIT (ver
+  `vendor/terminal-notifier-LICENSE`). Se excluye de la redistribución el archivo
+  `Terminal.icns` (copyright de Apple).

@@ -1,16 +1,16 @@
 # Agent Voice-InterConnector
 
-Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto — no el texto en bruto del asistente, sino una locución procesada, en español.
+Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) y emite **notificaciones de escritorio nativas** (toasts silenciosos con icono por evento). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto y recibes un aviso visual independiente del motor de voz.
 
 - **Automático**: disparado por hooks; sin intervención del modelo ni tuya.
-- **No intrusivo**: nunca bloquea ni retrasa el turno; falla en silencio si
-  AI Voice-InterConnector no está disponible.
-- **Multiplataforma**: Windows / Linux / macOS, misma experiencia.
+- **No intrusivo**: nunca bloquea ni retrasa el turno; los canales de voz y
+  escritorio son independientes y fallan en silencio.
+- **Multiplataforma**: Windows / Linux / macOS (registro AUMID e icono de cabecera en Windows; en macOS y Linux usa el notificador nativo del SO).
 - **Sin prerequisitos de runtime**: los scripts corren sobre el Node.js que
   Claude Code ya trae; no exige Python.
 - **Costo cero**: los mensajes se generan con el nivel gratuito de Gemini
   (opt-in) y degradan a un modo local determinista.
-- **Controlable**: activa/desactiva la narración sin desinstalar.
+- **Controlable**: activa/desactiva la narración y las notificaciones de escritorio por separado sin desinstalar.
 
 ---
 
@@ -63,12 +63,30 @@ Ejemplo:
 ```json
 {
   "enabled": true,
+  "desktopEnabled": true,
   "messageMode": "local"
 }
 ```
 
-- `enabled`: interruptor global.
+- `enabled`: interruptor del canal de voz.
+- `desktopEnabled`: interruptor del canal de notificaciones de escritorio (independiente de `enabled`).
 - `messageMode`: `"local"` (por defecto, determinista y offline) o `"llm"` (parafraseo con Gemini). Sin `GEMINI_API_KEY`, `llm` degrada a `local`.
+
+### Notificaciones de escritorio (CLI y branding Windows)
+
+El canal visual se ejecuta desde `dist/desktop-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `Agent.VoiceInterConnector`.
+
+- **Control del canal:** `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" desktop-on` / `desktop-off`.
+- **CLI manual (`dist/notification-cli.js`):** conserva todas las opciones (`--event-type`, `--message`, `--title`, `--sound`, `--silent`, `--stdin-json`, `--app-id`, `--icon`):
+  ```bash
+  node "${CLAUDE_PLUGIN_ROOT}/dist/notification-cli.js" --event-type Stop --message "Listo"
+  ```
+- **Branding en Windows (`dist/notification-register.js`):** registra el AUMID `Agent.VoiceInterConnector` y el acceso directo `Agent-VoiceInterConnector.lnk` en el Menú Inicio:
+  ```bash
+  node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
+  node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
+  node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --uninstall
+  ```
 
 ### Clave API (solo modo `llm`)
 

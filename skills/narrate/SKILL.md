@@ -15,15 +15,17 @@ Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya est
 
 ## Comandos
 
-| Intención del usuario            | Comando                                            |
-| -------------------------------- | -------------------------------------------------- |
-| Activar la narración             | `narrate-ctl.js on`                                |
-| Desactivar la narración          | `narrate-ctl.js off`                               |
-| Ver el estado y la configuración | `narrate-ctl.js status`                            |
-| Usar LLM (mensajes elaborados)   | `narrate-ctl.js mode llm`                          |
-| Solo local (sin red, privado)    | `narrate-ctl.js mode local`                        |
-| Narrar un texto ahora            | `narrate-ctl.js say "texto a narrar"`              |
-| Pre-sintetizar los anuncios      | `narrate-ctl.js presynth` (`--force` para re-sync) |
+| Intención del usuario                | Comando                                            |
+| ------------------------------------ | -------------------------------------------------- |
+| Activar la narración                 | `narrate-ctl.js on`                                |
+| Desactivar la narración              | `narrate-ctl.js off`                               |
+| Activar notificaciones de escritorio | `narrate-ctl.js desktop-on`                        |
+| Desactivar notificaciones escritorio | `narrate-ctl.js desktop-off`                       |
+| Ver el estado y la configuración     | `narrate-ctl.js status`                            |
+| Usar LLM (mensajes elaborados)       | `narrate-ctl.js mode llm`                          |
+| Solo local (sin red, privado)        | `narrate-ctl.js mode local`                        |
+| Narrar un texto ahora                | `narrate-ctl.js say "texto a narrar"`              |
+| Pre-sintetizar los anuncios          | `narrate-ctl.js presynth` (`--force` para re-sync) |
 
 Tras `on`/`off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
 

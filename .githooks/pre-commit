@@ -5,5 +5,5 @@ if [ $? -ne 0 ]; then
     echo "[pre-commit] Build failed, aborting commit."
     exit 1
 fi
-git add dist/
-echo "[pre-commit] dist/ updated and staged."
+git add dist/ vendor/
+echo "[pre-commit] dist/ and vendor/ updated and staged."

@@ -25,12 +25,14 @@ import type { HookPayload } from "../src/lib/hook-payload.js";
 
 const LOCAL: Config = {
   enabled: true,
+  desktopEnabled: false,
   messageMode: "local",
   geminiApiKey: undefined,
 };
 
 const LLM: Config = {
   enabled: true,
+  desktopEnabled: false,
   messageMode: "llm",
   geminiApiKey: "dummy",
 };

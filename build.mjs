@@ -4,27 +4,47 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Compila los entry points de src/ a bundles autocontenidos en dist/ con esbuild.
-// Sin --check: escribe dist/. Con --check: verifica que dist/ está sincronizado
-// con src/ (usado por CI) sin tocar el árbol.
+// Compila los entry points de src/ a bundles autocontenidos en dist/ con esbuild
+// y sincroniza los binarios redistribuibles de node-notifier en vendor/.
+// Sin --check: escribe dist/ y vendor/. Con --check: verifica que dist/ y vendor/
+// están sincronizados con src/ (usado por CI) sin tocar el árbol.
 import { build } from "esbuild";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { cp, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, relative } from "node:path";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const distDir = join(root, "dist");
+const vendorSrcDir = join(root, "node_modules", "node-notifier", "vendor");
+const vendorOutDir = join(root, "vendor");
+const excludedAppleIcon = join(
+  vendorOutDir,
+  "mac.noindex",
+  "terminal-notifier.app",
+  "Contents",
+  "Resources",
+  "Terminal.icns",
+);
 
-const ENTRY_POINTS = [
-  "src/narrate-hook.ts",
-  "src/narrate-worker.ts",
-  "src/health-check.ts",
-  "src/narrate-ctl.ts",
-];
+const ENTRY_POINTS = {
+  "narrate-hook": "src/narrate-hook.ts",
+  "narrate-worker": "src/narrate-worker.ts",
+  "health-check": "src/health-check.ts",
+  "narrate-ctl": "src/narrate-ctl.ts",
+  "desktop-hook": "src/notifications/desktop-hook.ts",
+  "notification-cli": "src/notifications/cli.ts",
+  "notification-register": "src/notifications/register.ts",
+};
 
 /** @type {import("esbuild").BuildOptions} */
 const baseOptions = {
-  entryPoints: ENTRY_POINTS.map((e) => join(root, e)),
+  entryPoints: Object.fromEntries(
+    Object.entries(ENTRY_POINTS).map(([name, path]) => [
+      name,
+      join(root, path),
+    ]),
+  ),
   outdir: distDir,
   bundle: true,
   platform: "node",
@@ -32,11 +52,18 @@ const baseOptions = {
   target: "node18",
   minify: false,
   sourcemap: false,
-  // Bundle autocontenido: no hay dependencias de runtime; solo stdlib de Node
-  // (child_process, fs, path, os) y fetch nativo, que esbuild deja como externos
-  // implícitos por platform: "node".
+  // Bundle autocontenido: empaqueta commander y node-notifier dentro de dist/
+  // e inyecta createRequire/__dirname para módulos CJS empacados en ESM.
   banner: {
-    js: "// Generado por build.mjs (esbuild). No editar a mano; editar src/ y recompilar.",
+    js: [
+      "// Generado por build.mjs (esbuild). No editar a mano; editar src/ y recompilar.",
+      'import { createRequire as __createRequire } from "node:module";',
+      'import { fileURLToPath as __fileURLToPath } from "node:url";',
+      'import { dirname as __pathDirname } from "node:path";',
+      "const require = __createRequire(import.meta.url);",
+      "const __filename = __fileURLToPath(import.meta.url);",
+      "const __dirname = __pathDirname(__filename);",
+    ].join("\n"),
   },
 };
 
@@ -60,12 +87,26 @@ if (isCheck) {
       );
     }
   }
+  if (
+    !existsSync(join(vendorOutDir, "snoreToast", "snoretoast-x64.exe")) ||
+    existsSync(excludedAppleIcon)
+  ) {
+    drift = true;
+    console.error("vendor/ desincronizado o contiene recursos excluidos.");
+  }
   if (drift) {
-    console.error("\nEjecuta `npm run build` y commitea dist/.");
+    console.error("\nEjecuta `npm run build` y commitea dist/ y vendor/.");
     process.exit(1);
   }
   console.log("dist/ está sincronizado con src/.");
 } else {
   await build(baseOptions);
-  console.log(`Compilados ${ENTRY_POINTS.length} bundles en dist/.`);
+  if (existsSync(vendorSrcDir)) {
+    await rm(vendorOutDir, { recursive: true, force: true });
+    await cp(vendorSrcDir, vendorOutDir, { recursive: true });
+    await rm(excludedAppleIcon, { force: true });
+  }
+  console.log(
+    `Compilados ${Object.keys(ENTRY_POINTS).length} bundles en dist/.`,
+  );
 }
