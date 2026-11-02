@@ -1,9 +1,9 @@
 # Especificación de diseño: clonado de voz y voz activa
 
 > **Estado**: propuesta, no implementada · **Versión base del plugin**: 0.1.0 ·
-> **Contrato del motor verificado**: v0.41.1 · **Fecha**: 2026-11-02
+> **Contrato del motor verificado**: v0.41.4 · **Fecha**: 2026-11-02
 
-La funcionalidad propuesta requiere como mínimo el motor v0.41.1, el único
+La funcionalidad propuesta requiere como mínimo el motor v0.41.4, el único
 corte contra el que el plugin se verifica; desde v0.39.0 los fallos de
 micrófono y de audio salen con exit 3 y `reason` propio (`no_input_device`,
 `no_output_device`, `audio_backend_unavailable`) en lugar de exit 10. En v0.37.3,
@@ -218,7 +218,7 @@ termina el residente anterior y arranca uno nuevo. Por eso:
 | **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                              |
 | **D-13** | Las operaciones manuales de clonado, activación, borrado, pre-síntesis y escritura de preferencias se coordinan entre procesos del plugin.                               |
 | **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                                   |
-| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.41.1 o posterior.                                                            |
+| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.41.4 o posterior.                                                            |
 
 ## 7. Diseño
 
@@ -476,7 +476,7 @@ consume:
 | `speech say`        | `{status, voice}`                             | `0`; `1` `playback_failed`/`synthesis_failed`; `3` voz o `no_output_device`/`audio_backend_unavailable`; `4`/`5` precondiciones                                                                                                                                                                                                        |
 | `speech play`       | `{status, label, voice}`                      | `0`; `1` `playback_failed`; `2` identificador; `3` `speech_not_found`/`voice_not_found`/`no_output_device`/`audio_backend_unavailable`                                                                                                                                                                                                 |
 
-La feature requiere motor v0.41.1 o posterior. Antes de habilitar la gestión de
+La feature requiere motor v0.41.4 o posterior. Antes de habilitar la gestión de
 voces, el plugin consulta `version --json` y compara la versión; ante una
 versión inferior o ilegible informa que la feature no está disponible y conserva
 las rutas de narración existentes con `default`. La consulta no se añade al
@@ -658,7 +658,7 @@ Casos:
 16. `voice remove --json` reporta `removed_speech`; `voice use` de voz activa con fallo deja estado parcial informado.
 17. operaciones manuales simultáneas, recuperación simultánea de dueño terminado, PID reutilizado, dueño no verificable y liberación sin propiedad; verificar que nunca haya dos dueños.
 18. voz ausente con daemon activo, `degraded`, `warm_failed` y veredicto integral de `doctor`.
-19. versión inferior a v0.41.1 o ilegible no habilita la feature y mantiene narración existente.
+19. versión inferior a v0.41.4 o ilegible no habilita la feature y mantiene narración existente.
 20. `presynth` concurrente con `voice use` y `on/off/mode` concurrente con `voice use`: sin WAV ni preferencias perdidas por carreras del plugin; sin bloqueo reentrante en pre-síntesis interna.
 
 ### 10.3 E2E opcional
@@ -716,7 +716,7 @@ que exista un micrófono de entrada.
 | **AC-24** | Windows, Linux y macOS                                                                                            | Se ejecutan los tests                              | Pasan los mismos casos, incluidas rutas con espacios y shims `.cmd` en Windows.                                                                            |
 | **AC-25** | La implementación termina                                                                                         | Se ejecutan los gates                              | `lint`, `format:check`, `typecheck`, `test` y `check-dist` pasan; `claude plugin validate --strict .` pasa; CI verde.                                      |
 | **AC-26** | La implementación termina                                                                                         | Se revisa la documentación                         | `docs/INTEGRATION.md`, `README.md`, `SECURITY.md`, `CHANGELOG.md` y este documento reflejan la feature y las nuevas superficies.                           |
-| **AC-27** | Un motor anterior a v0.41.1 o versión ilegible                                                                    | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                      |
+| **AC-27** | Un motor anterior a v0.41.4 o versión ilegible                                                                    | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                      |
 | **AC-28** | Una fuente WAV o micrófono                                                                                        | Se clona con `--denoise`                           | Se transmite el flag; ausencia de modelo, saturación o fallo se informan sin clonar audio sin limpiar.                                                     |
 | **AC-29** | Motor corregido, TTY y variable PTT ausente                                                                       | Se clona con `--mic` sin duración                  | El límite es 30 s; la captura real solo se verifica con dispositivo disponible.                                                                            |
 | **AC-30** | Una operación manual tiene el bloqueo                                                                             | Otra intenta clonar, activar o borrar              | No muta y comunica el conflicto; un dueño no verificable no se elimina automáticamente.                                                                    |

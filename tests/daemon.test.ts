@@ -4,7 +4,7 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// `daemon status --json` contra el contrato v0.41.1 (CONTRACT.md tabla por comando): clave
+// `daemon status --json` contra el contrato v0.41.4 (CONTRACT.md tabla por comando): clave
 // `daemon` como cadena ("running"|"stopped"), `degraded` opcional
 // (unresponsive|unregistered|orphan_resident) y `warm` opcional
 // (warming|warm|warm_failed); exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`). getDaemonStatus devuelve un

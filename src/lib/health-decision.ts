@@ -4,7 +4,7 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Decisión pura del hook de SessionStart contra el contrato v0.41.1 de
+// Decisión pura del hook de SessionStart contra el contrato v0.41.4 de
 // `doctor --json` (DOCTOR.md del tag del motor): el comando emite exactamente
 // un objeto JSON con `failed: string[]` y `checks: {name, ok, detail}[]`, y el
 // veredicto sale del exit más el reporte válido —nunca de un campo `status`
@@ -51,7 +51,7 @@ const DOCTOR_JSON_HINT =
   "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
 
 /**
- * Checks de recursos de `doctor` (DOCTOR.md del tag v0.41.1): los únicos que
+ * Checks de recursos de `doctor` (DOCTOR.md del tag v0.41.4): los únicos que
  * impiden calentar el daemon. El resto (`install_receipt`, `path_resolves`,
  * `path_duplicates`, `pending_artifacts` o uno desconocido) es de instalación
  * o ciclo de vida y solo se informa, como pide el §12 del contrato al separar
@@ -100,7 +100,7 @@ export function parseSingleJsonObject(text: string): unknown {
   return undefined;
 }
 
-/** ¿El valor parseado tiene el shape mínimo del reporte v0.41.1? */
+/** ¿El valor parseado tiene el shape mínimo del reporte v0.41.4? */
 function isValidReport(value: unknown): value is DoctorReport {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;

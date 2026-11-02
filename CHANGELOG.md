@@ -63,8 +63,8 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Cambiado
 
-- **Sincronización con AI Voice-InterConnector v0.41.1**: código, tests y
-  documentación contrastados con el tag `v0.41.1` del motor (envelope
+- **Sincronización con AI Voice-InterConnector v0.41.4**: código, tests y
+  documentación contrastados con el tag `v0.41.4` del motor (envelope
   `schema_version: "6"`, seis modelos, descarga anónima de `setup`).
 - **`speech play` y `speech say` con `--json`**: el worker lee el `reason` del
   payload de error y registra en `worker.log` la causa y el remedio

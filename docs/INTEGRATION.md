@@ -3,8 +3,8 @@
 Este documento describe la integración de **Agent Voice-InterConnector** con el motor de síntesis **AI Voice-InterConnector**, desde la perspectiva del **plugin (el consumidor)**.
 
 La contraparte, escrita desde la perspectiva del motor, está en su contrato público:
-[docs/CLI/CONTRACT.md §12 «Contratos externos»](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.41.1/docs/CLI/CONTRACT.md#12-contratos-externos)
-(tag `v0.41.1`).
+[docs/CLI/CONTRACT.md §12 «Contratos externos»](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.41.4/docs/CLI/CONTRACT.md#12-contratos-externos)
+(tag `v0.41.4`).
 
 ## Tabla de contenidos
 
@@ -118,6 +118,6 @@ con `narrate-ctl presynth`. No se recomienda `cleanup --all` ni ningún
 
 ## Estabilidad del contrato
 
-El plugin asume estables los flags y el esquema JSON de las seis superficies de arriba. El contrato del motor (`docs/CLI/CONTRACT.md §12`, contrastado con v0.41.1) publica esas seis superficies: `speech say`, `speech synthesize`, `speech play`, `doctor --json`, `daemon status --json` y `daemon start`. `doctor` es integral: incluye instalación, receipt, PATH, residuos y modelos, también en canal `unmanaged`; no es una comprobación parcial de recursos. Por eso el plugin aplica su propio gate de recursos (`models_provisioned` y `onnx_runtime`) y solo avisa del resto. `degraded` o estado incierto impiden el arranque y `warm_failed` se informa sin reiniciar.
+El plugin asume estables los flags y el esquema JSON de las seis superficies de arriba. El contrato del motor (`docs/CLI/CONTRACT.md §12`, contrastado con v0.41.4) publica esas seis superficies: `speech say`, `speech synthesize`, `speech play`, `doctor --json`, `daemon status --json` y `daemon start`. `doctor` es integral: incluye instalación, receipt, PATH, residuos y modelos, también en canal `unmanaged`; no es una comprobación parcial de recursos. Por eso el plugin aplica su propio gate de recursos (`models_provisioned` y `onnx_runtime`) y solo avisa del resto. `degraded` o estado incierto impiden el arranque y `warm_failed` se informa sin reiniciar.
 
-La [propuesta de clonación de voz](specs/VOICE_CLONING.md) amplía el contrato previsto con `voice clone`, `voice list`, `voice remove`, `--voice`, `--warm-voice` y `--denoise` optativo. Estas superficies **todavía no son consumidas por el plugin**. La propuesta exige como mínimo el motor v0.41.1.
+La [propuesta de clonación de voz](specs/VOICE_CLONING.md) amplía el contrato previsto con `voice clone`, `voice list`, `voice remove`, `--voice`, `--warm-voice` y `--denoise` optativo. Estas superficies **todavía no son consumidas por el plugin**. La propuesta exige como mínimo el motor v0.41.4.

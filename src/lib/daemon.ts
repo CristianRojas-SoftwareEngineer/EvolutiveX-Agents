@@ -7,7 +7,7 @@
 // Consulta y arranque del daemon de AI Voice-InterConnector vía su CLI pública. El daemon
 // mantiene el modelo en memoria: `speech say --daemon` lo requiere corriendo (no
 // lo arranca solo). El health-check lo levanta de forma desanclada al iniciar
-// sesión. El estado sale de `daemon status --json` (contrato v0.41.1: clave
+// sesión. El estado sale de `daemon status --json` (contrato v0.41.4: clave
 // `daemon` como cadena, `degraded` y `warm` opcionales; exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`)).
 import { runCli, spawnCli } from "./resolve-cli.js";
 
@@ -34,7 +34,7 @@ function normalizeDegraded(value: unknown): DaemonStatusResult["degraded"] {
 }
 
 /**
- * Estado del daemon según el contrato v0.41.1. La única rama que significa
+ * Estado del daemon según el contrato v0.41.4. La única rama que significa
  * «en ejecución» es `daemon: "running"` con exit 0; el JSON malformado, la
  * salida vacía, un exit distinto de 0 (1 `daemon_error` o 5 `daemon_unreachable`)
  * o un estado desconocido devuelven `uncertain` —nunca running—.
