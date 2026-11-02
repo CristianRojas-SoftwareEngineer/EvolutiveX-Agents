@@ -23,10 +23,15 @@ Cómo se corta y publica una versión de **Agent Voice-InterConnector**. El proc
   `package.json` y `.claude-plugin/plugin.json`. Un release con los dos números
   distintos es un release inválido.
 - El versionado es **independiente del motor**: cada proyecto numera según su
-  propia historia. Excepción planificada: cuando AI Voice-InterConnector alcance su
-  `v1.0.0`, el plugin avanzará desde la versión que haya alcanzado
-  directamente a `v1.0.0` (ver la nota de versionado en
-  [CHANGELOG.md](../CHANGELOG.md)).
+  propia historia, y lo que se sincroniza entre ambos es el lanzamiento, no el
+  número. Durante el tramo pre-1.0 el plugin publica sus versiones intermedias
+  a su propio ritmo. Cuando AI Voice-InterConnector alcance su `v1.0.0`, el
+  plugin avanzará desde la versión que haya alcanzado directamente a `1.0.0`,
+  en un release que acumule las correcciones implementadas hasta entonces; ese
+  salto es intencional, no un error de versionado.
+- La versión del motor verificada vive en `package.json`
+  (`engine.aiVoiceInterConnector`): soporte exclusivo a ese único corte, que es
+  a la vez el mínimo.
 
 ## Prerequisitos del corte
 
@@ -64,10 +69,11 @@ En orden; cada paso asume el anterior.
    Este paso es el que detecta un `name` de plugin que Anthropic reserva (p. ej. el
    prefijo `claude-`) o que no es kebab-case, requisitos del marketplace de Claude.ai
    que el resto del checklist no mira.
-4. **Verificar la versión del motor declarada**: la versión de
-   AI Voice-InterConnector declarada en el README («Prrequisitos») y en
-   [`docs/INTEGRATION.md`](INTEGRATION.md) («Requisitos sobre el motor») debe
-   ser la que efectivamente se usó en el smoke test del paso 6.
+4. **Verificar la versión del motor declarada**: `engine.aiVoiceInterConnector`
+   de `package.json` coincide con la declarada en `README.md` (línea
+   «Contraparte del motor»), en [`docs/INTEGRATION.md`](INTEGRATION.md)
+   («Requisitos sobre el motor») y en la entrada de `CHANGELOG.md`, y es la que
+   se usó en el smoke test del paso 6.
 5. **Verificar referencias cruzadas en ambos repos**: el motor referencia al
    plugin en `docs/CLI/CONTRACT.md` (§12 «Contratos externos» del tag
    verificado) y su diseño en `docs/DESIGN.md` (del repo del motor);
@@ -106,6 +112,8 @@ En orden; cada paso asume el anterior.
 
 ## Sincronización con un release del motor
 
+El procedimiento está codificado en la skill de desarrollo `/sync-with-engine [tag]` (`.claude/skills/sync-with-engine/SKILL.md`), que lee el corte de `package.json`, lo compara con el último tag publicado del motor y aplica esta sección.
+
 Cuando el release del plugin acompaña a un release del motor, el orden importa — **primero el motor, después el plugin**:
 
 1. El motor corta su tag; su pipeline de CircleCI construye y publica los
@@ -116,8 +124,8 @@ Cuando el release del plugin acompaña a un release del motor, el orden importa 
    plugin declara compatible es lo que un usuario real puede instalar, no un
    estado intermedio del árbol del motor.
 3. Recién entonces se corta el tag del plugin, con la versión del motor
-   verificada declarada en README, `docs/INTEGRATION.md` y la entrada del
-   `CHANGELOG.md`.
+   verificada declarada en `package.json` y propagada a README,
+   `docs/INTEGRATION.md`, la spec y la entrada del `CHANGELOG.md`.
 
 Si el release del plugin **no** acompaña a uno del motor (una corrección propia), basta el checklist normal: el smoke test se corre contra la última versión publicada del motor, que sigue siendo la declarada como mínima.
 
@@ -151,8 +159,8 @@ $PLUGIN_E2E = "$env:TEMP\agent-voice-interconnector-e2e"
 # State dir del plugin (Windows): %LOCALAPPDATA%\agent-voice-interconnector.
 $STATE_DIR = "$env:LOCALAPPDATA\agent-voice-interconnector"
 
-# Versión del motor contra la que se verificará (la publicada).
-$MOTOR_VERSION = "vX.Y.Z"
+# Versión del motor verificada (fuente única: package.json).
+$MOTOR_VERSION = "v" + (Get-Content "$PLUGIN_DEV\package.json" | ConvertFrom-Json).engine.aiVoiceInterConnector
 
 # (Opcional) Árbol del repo del motor, para las comprobaciones cruzadas.
 $ENGINE_ROOT = "C:\ruta\a\AI-Voice-InterConnector"
@@ -404,9 +412,9 @@ Esta fase requiere verificación humana (audible) y no se automatiza por complet
 Confirmado el smoke test de la Fase 2, se ejecuta el [Checklist de release](#checklist-de-release) completo. Se corre en el **árbol de desarrollo**.
 
 ```powershell
-# 1. Confirmar la versión mínima del motor declarada en README e INTEGRATION.md.
-Select-String -Path "$PLUGIN_DEV\README.md","$PLUGIN_DEV\docs\INTEGRATION.md" `
-  -Pattern $MOTOR_VERSION
+# 1. Confirmar la versión del motor declarada en package.json, README, INTEGRATION.md y CHANGELOG.md.
+Select-String -Path "$PLUGIN_DEV\package.json","$PLUGIN_DEV\README.md","$PLUGIN_DEV\docs\INTEGRATION.md","$PLUGIN_DEV\CHANGELOG.md" `
+  -Pattern ($MOTOR_VERSION -replace '^v','')
 
 # 2. Bump de versión doble a X.Y.Z en package.json y .claude-plugin/plugin.json.
 $V = Read-Host "Versión del plugin (ej. 0.2.0)"
