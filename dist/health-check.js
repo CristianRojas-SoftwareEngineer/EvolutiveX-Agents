@@ -330,19 +330,25 @@ async function main() {
   const decision = decideHealthAction({ exitCode, report });
   if (decision.kind === "notify") exitWithSystemMessage(decision.message);
   if (decision.kind === "uncertain") exitSilently();
+  const advisory = decision.advisory;
+  const finish = (daemonMessage) => {
+    const message = [advisory, daemonMessage].filter(Boolean).join("\n");
+    if (message) exitWithSystemMessage(message);
+    exitSilently();
+  };
   const status = getDaemonStatus(cli);
   if (status.kind === "running") {
     if (status.warm === "warm_failed") {
-      exitWithSystemMessage(
+      finish(
         "Agent Voice-InterConnector: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle."
       );
     }
-    exitSilently();
+    finish();
   }
   if (status.kind === "stopped") {
     startDaemonDetached(cli);
-    exitSilently();
+    finish();
   }
-  exitWithSystemMessage(daemonStatusMessage(status));
+  finish(daemonStatusMessage(status));
 }
 main().catch(() => process.exit(0));
