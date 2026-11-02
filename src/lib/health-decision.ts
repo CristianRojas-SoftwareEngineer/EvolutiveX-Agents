@@ -29,7 +29,7 @@ export interface DoctorReport {
  * puede requerir calentar el daemon), aviso al usuario con mensaje acotado, o
  * estado incierto (sin daemon ni remedio inventado).
  */
-export type Decision =
+export type HealthDecision =
   | { kind: "healthy" }
   | { kind: "notify"; message: string }
   | { kind: "uncertain" };
@@ -54,7 +54,7 @@ const DOCTOR_JSON_HINT =
  * de extraer el primer objeto. También devuelve undefined si el texto no
  * empieza por un objeto o el fragmento no parsea.
  */
-export function parseFirstJsonObject(text: string): unknown {
+export function parseSingleJsonObject(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return undefined;
   let depth = 0;
@@ -167,7 +167,7 @@ function buildFailedMessage(report: DoctorReport): string {
 export function decideHealthAction(input: {
   exitCode: number | null;
   report: unknown;
-}): Decision {
+}): HealthDecision {
   const { exitCode, report } = input;
   if (isValidReport(report)) {
     if (exitCode === 0 && report.failed.length === 0) {

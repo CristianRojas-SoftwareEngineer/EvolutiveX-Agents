@@ -21,17 +21,18 @@ import {
   type DaemonStatusResult,
 } from "./lib/daemon.js";
 import {
-  parseFirstJsonObject,
+  parseSingleJsonObject,
   decideHealthAction,
 } from "./lib/health-decision.js";
 
-/** Emite un aviso al usuario y termina la sesión sin bloquearla. */
-function notify(message: string): never {
+/** Emite un aviso systemMessage por stdout al usuario y termina con exit 0. */
+function exitWithSystemMessage(message: string): never {
   process.stdout.write(JSON.stringify({ systemMessage: message }));
   process.exit(0);
 }
 
-function ok(): never {
+/** Termina en silencio con exit 0. */
+function exitSilently(): never {
   process.exit(0);
 }
 
@@ -52,11 +53,11 @@ async function main(): Promise<void> {
   await readStdin(); // drena stdin; el contenido no se usa aquí
 
   const cfg = loadConfig();
-  if (!cfg.enabled) ok();
+  if (!cfg.voiceEnabled) exitSilently();
 
   const cli = resolveCli();
   if (!cli) {
-    notify(
+    exitWithSystemMessage(
       "Agent Voice-InterConnector: AI Voice-InterConnector no está en el PATH. Instálalo y ejecuta " +
         "ai-voice-interconnector setup para habilitar la narración por voz.",
     );
@@ -76,16 +77,18 @@ async function main(): Promise<void> {
 
   // Sin dato accionable (error de ejecución o stdout vacío): incierto, en
   // silencio.
-  if (res.error || typeof res.stdout !== "string" || !res.stdout.trim()) ok();
+  if (res.error || typeof res.stdout !== "string" || !res.stdout.trim()) {
+    exitSilently();
+  }
 
   const exitCode = typeof res.status === "number" ? res.status : null;
-  const report = parseFirstJsonObject(res.stdout);
+  const report = parseSingleJsonObject(res.stdout);
   const decision = decideHealthAction({ exitCode, report });
 
   // notify: aviso por cada check fallido o fallo del diagnóstico, sin tocar el
   // daemon. uncertain: sin daemon ni remedio inventado.
-  if (decision.kind === "notify") notify(decision.message);
-  if (decision.kind === "uncertain") ok();
+  if (decision.kind === "notify") exitWithSystemMessage(decision.message);
+  if (decision.kind === "uncertain") exitSilently();
 
   // Solo un diagnóstico sano consulta el daemon (única rama que puede
   // calentarlo).
@@ -93,7 +96,7 @@ async function main(): Promise<void> {
 
   if (status.kind === "running") {
     if (status.warm === "warm_failed") {
-      notify(
+      exitWithSystemMessage(
         "Agent Voice-InterConnector: el daemon está corriendo pero el calentamiento " +
           "del modelo falló (warm_failed); la primera narración puede tardar o " +
           "fallar. Ejecuta ai-voice-interconnector daemon status --json para " +
@@ -101,19 +104,19 @@ async function main(): Promise<void> {
       );
     }
     // warming, warm o sin warm: no molestar.
-    ok();
+    exitSilently();
   }
 
   if (status.kind === "stopped") {
     // Arranque único, desanclado y best-effort ante el único estado que lo
     // permite.
     startDaemonDetached(cli);
-    ok();
+    exitSilently();
   }
 
-  // degraded o incierto: aviso acotado remitiendo al comando oficial, sin
+  // degraded o uncertain: aviso acotado remitiendo al comando oficial, sin
   // arrancar.
-  notify(daemonStatusMessage(status));
+  exitWithSystemMessage(daemonStatusMessage(status));
 }
 
 main().catch(() => process.exit(0));

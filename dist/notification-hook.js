@@ -7228,8 +7228,8 @@ function configPath() {
 
 // src/lib/config.ts
 var DEFAULTS = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -7237,8 +7237,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, desktopEnabled, messageMode } = parsed;
-      return { enabled, desktopEnabled, messageMode };
+      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
   }
@@ -7247,8 +7247,8 @@ function readFileConfig() {
 function loadConfig() {
   const file = readFileConfig();
   return {
-    enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
+    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
+    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };
@@ -7275,11 +7275,11 @@ function readStdin() {
   });
 }
 
-// src/notifications/desktop-hook.ts
+// src/notifications/notification-hook.ts
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { basename as basename2, resolve } from "node:path";
 
-// src/notifications/DesktopNotificationAdapter.ts
+// src/notifications/desktop-notification-adapter.ts
 var import_node_notifier = __toESM(require_node_notifier(), 1);
 var DesktopNotificationAdapter = class {
   notifyFn;
@@ -7291,19 +7291,19 @@ var DesktopNotificationAdapter = class {
   /**
    * Traduce `silent: true` a `sound: false` para silenciar el toast.
    * Copia `appId` (dominio, camelCase) → `appID` (node-notifier, con
-   * mayúsculas) SOLO si está presente en el evento (degradación con
+   * mayúsculas) SOLO si está presente en el payload (degradación con
    * gracia). Copia `icon` con el mismo criterio. Cualquier otro campo
-   * del evento se ignora intencionalmente.
+   * del payload se ignora intencionalmente.
    */
-  notify(event) {
+  notify(payload) {
     const options = {
-      title: event.title,
-      message: event.message,
-      sound: event.silent === true ? false : event.sound ?? false,
+      title: payload.title,
+      message: payload.message,
+      sound: payload.silent === true ? false : payload.sound ?? false,
       wait: false
     };
-    if (event.appId !== void 0) options.appID = event.appId;
-    if (event.icon !== void 0) options.icon = event.icon;
+    if (payload.appId !== void 0) options.appID = payload.appId;
+    if (payload.icon !== void 0) options.icon = payload.icon;
     return new Promise((resolve2, reject) => {
       this.notifyFn(options, (err) => {
         if (err) reject(err);
@@ -7332,7 +7332,6 @@ var {
 
 // src/notifications/cli.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { stdin as processStdin } from "node:process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { resolve as resolvePath2, basename, join as join3 } from "node:path";
 
@@ -7433,17 +7432,17 @@ function resolvePluginRoot(metaUrl = import.meta.url) {
   }
   return resolvePath(dirname(fileURLToPath(metaUrl)), "..");
 }
-var repoEventsDirProvider = {
+var eventIconsDirProvider = {
   get() {
     return join2(resolvePluginRoot(), "assets", "notifications", "events");
   }
 };
-function getRepoEventsDir() {
-  return repoEventsDirProvider.get();
+function getEventIconsDir() {
+  return eventIconsDirProvider.get();
 }
 function resolveEventImagePath(filename) {
-  const repoPath = join2(getRepoEventsDir(), filename);
-  return existsSync(repoPath) ? repoPath : void 0;
+  const iconPath = join2(getEventIconsDir(), filename);
+  return existsSync(iconPath) ? iconPath : void 0;
 }
 
 // src/notifications/hook-payload-notification-message.ts
@@ -7645,16 +7644,6 @@ function resolveGlobalFallbackIconPath() {
   const p = globalFallbackIconProvider.get();
   return existsSync2(p) ? p : void 0;
 }
-async function readStdinBuffer() {
-  const chunks = [];
-  for await (const chunk of processStdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
-}
-function readStdin2() {
-  return readStdinBuffer().then((buf) => buf.toString("utf-8"));
-}
 function normalizeStdinJsonText(raw) {
   return raw.replace(/^\uFEFF/, "").trim();
 }
@@ -7723,7 +7712,7 @@ function resolveNotificationMessage(options, eventKey, stdinPayload) {
   }
   return void 0;
 }
-function buildEvent(options, stdinPayload, platform2 = process.platform) {
+function buildNotificationPayload(options, stdinPayload, platform2 = process.platform) {
   if (options.stdinJson && !stdinPayload) {
     return { error: "No se recibi\xF3 payload por stdin con --stdin-json" };
   }
@@ -7750,7 +7739,7 @@ function buildEvent(options, stdinPayload, platform2 = process.platform) {
 }
 async function main() {
   const program2 = new Command();
-  program2.name("claude-notify").description("Emite un toast nativo del SO desde un hook de Claude Code").option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)").option(
+  program2.name("notification-cli").description("Emite un toast nativo del SO desde un hook de Claude Code").option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)").option(
     "--message <msg>",
     "Cuerpo del toast (override; por defecto cat\xE1logo o formatter stdin)"
   ).option(
@@ -7782,7 +7771,7 @@ async function main() {
   if (options.stdinJson) {
     let raw;
     try {
-      raw = await readStdin2();
+      raw = await readStdin();
     } catch (err) {
       process.stderr.write(`Error leyendo stdin: ${err.message}
 `);
@@ -7805,7 +7794,7 @@ async function main() {
       return 1;
     }
   }
-  const built = buildEvent(options, stdinPayload);
+  const built = buildNotificationPayload(options, stdinPayload);
   if ("error" in built) {
     process.stderr.write(`${built.error}
 `);
@@ -7837,8 +7826,8 @@ if (isEntryPoint) {
   );
 }
 
-// src/notifications/desktop-hook.ts
-var DIRECT_DESKTOP_EVENTS = /* @__PURE__ */ new Set([
+// src/notifications/notification-hook.ts
+var DIRECT_NOTIFICATION_EVENTS = /* @__PURE__ */ new Set([
   "UserPromptSubmit",
   "SubagentStart",
   "SubagentStop",
@@ -7859,10 +7848,10 @@ function notificationEventKey(payload) {
     const input = payload.tool_input;
     return payload.tool_name === "TaskUpdate" && input !== null && typeof input === "object" && input.status === "in_progress" ? "TaskInProgress" : void 0;
   }
-  return typeof event === "string" && DIRECT_DESKTOP_EVENTS.has(event) ? event : void 0;
+  return typeof event === "string" && DIRECT_NOTIFICATION_EVENTS.has(event) ? event : void 0;
 }
-async function runDesktopHookFromRaw(raw, adapter = new DesktopNotificationAdapter()) {
-  if (!loadConfig().desktopEnabled) return false;
+async function runNotificationHookFromRaw(raw, adapter = new DesktopNotificationAdapter()) {
+  if (!loadConfig().notificationsEnabled) return false;
   const normalized = normalizeStdinJsonText(raw);
   if (!normalized) return false;
   let parsed;
@@ -7884,7 +7873,7 @@ async function runDesktopHookFromRaw(raw, adapter = new DesktopNotificationAdapt
       return false;
     }
   }
-  const built = buildEvent(
+  const built = buildNotificationPayload(
     {
       eventType: event,
       sound: false,
@@ -7899,13 +7888,15 @@ async function runDesktopHookFromRaw(raw, adapter = new DesktopNotificationAdapt
 }
 async function main2() {
   const raw = await readStdin();
-  await runDesktopHookFromRaw(raw);
+  await runNotificationHookFromRaw(raw);
 }
-if (process.argv[1] && ["desktop-hook.js", "desktop-hook.ts"].includes(basename2(process.argv[1])) && fileURLToPath3(import.meta.url) === resolve(process.argv[1])) {
+if (process.argv[1] && ["notification-hook.js", "notification-hook.ts"].includes(
+  basename2(process.argv[1])
+) && fileURLToPath3(import.meta.url) === resolve(process.argv[1])) {
   main2().catch(() => {
   }).finally(() => process.exit(0));
 }
 export {
   notificationEventKey,
-  runDesktopHookFromRaw
+  runNotificationHookFromRaw
 };

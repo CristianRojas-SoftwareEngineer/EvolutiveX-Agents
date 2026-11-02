@@ -40,8 +40,8 @@ function configPath() {
 
 // src/lib/config.ts
 var DEFAULTS = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -49,8 +49,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, desktopEnabled, messageMode } = parsed;
-      return { enabled, desktopEnabled, messageMode };
+      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
   }
@@ -59,8 +59,8 @@ function readFileConfig() {
 function loadConfig() {
   const file = readFileConfig();
   return {
-    enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
+    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
+    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };
@@ -69,8 +69,8 @@ function updateConfig(patch) {
   ensureStateDir();
   const current = readFileConfig();
   const next = {
-    enabled: patch.enabled ?? (typeof current.enabled === "boolean" ? current.enabled : DEFAULTS.enabled),
-    desktopEnabled: patch.desktopEnabled ?? (typeof current.desktopEnabled === "boolean" ? current.desktopEnabled : DEFAULTS.desktopEnabled),
+    voiceEnabled: patch.voiceEnabled ?? (typeof current.voiceEnabled === "boolean" ? current.voiceEnabled : DEFAULTS.voiceEnabled),
+    notificationsEnabled: patch.notificationsEnabled ?? (typeof current.notificationsEnabled === "boolean" ? current.notificationsEnabled : DEFAULTS.notificationsEnabled),
     messageMode: patch.messageMode ?? (current.messageMode === "llm" ? "llm" : DEFAULTS.messageMode)
   };
   writeFileSync(configPath(), JSON.stringify(next, null, 2) + "\n", {
@@ -154,12 +154,12 @@ var ANNOUNCEMENTS = {
 function printStatus() {
   const cfg = loadConfig();
   const lines = [
-    `enabled:      ${cfg.enabled}`,
-    `desktop:      ${cfg.desktopEnabled}`,
-    `messageMode:  ${cfg.messageMode}`,
-    `gemini key:   ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
-    `config:       ${configPath()}`,
-    `state dir:    ${stateDir()}`
+    `voice:          ${cfg.voiceEnabled}`,
+    `notifications:  ${cfg.notificationsEnabled}`,
+    `messageMode:    ${cfg.messageMode}`,
+    `gemini key:     ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
+    `config:         ${configPath()}`,
+    `state dir:      ${stateDir()}`
   ];
   console.log(lines.join("\n"));
 }
@@ -186,7 +186,7 @@ function presynth(force) {
     return 1;
   }
   let failed = false;
-  for (const [evento, { text, label }] of Object.entries(ANNOUNCEMENTS)) {
+  for (const [eventKey, { text, label }] of Object.entries(ANNOUNCEMENTS)) {
     const args = ["speech", "synthesize", "--text", text, "--label", label];
     if (force) args.push("--force");
     args.push("--daemon");
@@ -197,14 +197,14 @@ function presynth(force) {
     const code = res.status ?? 1;
     if (code === 0)
       console.log(
-        `${evento}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`
+        `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`
       );
     else if (code === 6)
-      console.log(`${evento}: ya pre-sintetizado (${label})`);
+      console.log(`${eventKey}: ya pre-sintetizado (${label})`);
     else {
       failed = true;
-      const motivo = code === 5 ? " \u2014 daemon ca\xEDdo; lev\xE1ntalo con `ai-voice-interconnector daemon start`" : code === 4 ? " \u2014 modelo ausente; provisi\xF3nalo con `ai-voice-interconnector setup`" : "";
-      console.error(`${evento}: fallo (exit ${code})${motivo}`);
+      const reason = code === 5 ? " \u2014 daemon ca\xEDdo; lev\xE1ntalo con `ai-voice-interconnector daemon start`" : code === 4 ? " \u2014 modelo ausente; provisi\xF3nalo con `ai-voice-interconnector setup`" : "";
+      console.error(`${eventKey}: fallo (exit ${code})${reason}`);
     }
   }
   return failed ? 1 : 0;
@@ -212,20 +212,20 @@ function presynth(force) {
 function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
-    case "on":
-      updateConfig({ enabled: true });
+    case "voice-on":
+      updateConfig({ voiceEnabled: true });
       console.log("Narraci\xF3n activada.");
       return 0;
-    case "off":
-      updateConfig({ enabled: false });
+    case "voice-off":
+      updateConfig({ voiceEnabled: false });
       console.log("Narraci\xF3n desactivada.");
       return 0;
-    case "desktop-on":
-      updateConfig({ desktopEnabled: true });
+    case "notifications-on":
+      updateConfig({ notificationsEnabled: true });
       console.log("Notificaciones de escritorio activadas.");
       return 0;
-    case "desktop-off":
-      updateConfig({ desktopEnabled: false });
+    case "notifications-off":
+      updateConfig({ notificationsEnabled: false });
       console.log("Notificaciones de escritorio desactivadas.");
       return 0;
     case "mode": {

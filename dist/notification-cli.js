@@ -7219,11 +7219,28 @@ var {
 
 // src/notifications/cli.ts
 import { existsSync as existsSync2 } from "node:fs";
-import { stdin as processStdin } from "node:process";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 import { resolve as resolvePath2, basename, join as join2 } from "node:path";
 
-// src/notifications/DesktopNotificationAdapter.ts
+// src/lib/hook-payload.ts
+function readStdin() {
+  return new Promise((resolve) => {
+    const chunks = [];
+    const stdin = process.stdin;
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    stdin.on("data", (c) => chunks.push(c));
+    stdin.on("end", done);
+    stdin.on("error", done);
+    stdin.on("close", done);
+  });
+}
+
+// src/notifications/desktop-notification-adapter.ts
 var import_node_notifier = __toESM(require_node_notifier(), 1);
 var DesktopNotificationAdapter = class {
   notifyFn;
@@ -7235,19 +7252,19 @@ var DesktopNotificationAdapter = class {
   /**
    * Traduce `silent: true` a `sound: false` para silenciar el toast.
    * Copia `appId` (dominio, camelCase) → `appID` (node-notifier, con
-   * mayúsculas) SOLO si está presente en el evento (degradación con
+   * mayúsculas) SOLO si está presente en el payload (degradación con
    * gracia). Copia `icon` con el mismo criterio. Cualquier otro campo
-   * del evento se ignora intencionalmente.
+   * del payload se ignora intencionalmente.
    */
-  notify(event) {
+  notify(payload) {
     const options = {
-      title: event.title,
-      message: event.message,
-      sound: event.silent === true ? false : event.sound ?? false,
+      title: payload.title,
+      message: payload.message,
+      sound: payload.silent === true ? false : payload.sound ?? false,
       wait: false
     };
-    if (event.appId !== void 0) options.appID = event.appId;
-    if (event.icon !== void 0) options.icon = event.icon;
+    if (payload.appId !== void 0) options.appID = payload.appId;
+    if (payload.icon !== void 0) options.icon = payload.icon;
     return new Promise((resolve, reject) => {
       this.notifyFn(options, (err) => {
         if (err) reject(err);
@@ -7354,17 +7371,17 @@ function resolvePluginRoot(metaUrl = import.meta.url) {
   }
   return resolvePath(dirname(fileURLToPath(metaUrl)), "..");
 }
-var repoEventsDirProvider = {
+var eventIconsDirProvider = {
   get() {
     return join(resolvePluginRoot(), "assets", "notifications", "events");
   }
 };
-function getRepoEventsDir() {
-  return repoEventsDirProvider.get();
+function getEventIconsDir() {
+  return eventIconsDirProvider.get();
 }
 function resolveEventImagePath(filename) {
-  const repoPath = join(getRepoEventsDir(), filename);
-  return existsSync(repoPath) ? repoPath : void 0;
+  const iconPath = join(getEventIconsDir(), filename);
+  return existsSync(iconPath) ? iconPath : void 0;
 }
 
 // src/notifications/hook-payload-notification-message.ts
@@ -7566,16 +7583,6 @@ function resolveGlobalFallbackIconPath() {
   const p = globalFallbackIconProvider.get();
   return existsSync2(p) ? p : void 0;
 }
-async function readStdinBuffer() {
-  const chunks = [];
-  for await (const chunk of processStdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
-}
-function readStdin() {
-  return readStdinBuffer().then((buf) => buf.toString("utf-8"));
-}
 function normalizeStdinJsonText(raw) {
   return raw.replace(/^\uFEFF/, "").trim();
 }
@@ -7644,7 +7651,7 @@ function resolveNotificationMessage(options, eventKey, stdinPayload) {
   }
   return void 0;
 }
-function buildEvent(options, stdinPayload, platform = process.platform) {
+function buildNotificationPayload(options, stdinPayload, platform = process.platform) {
   if (options.stdinJson && !stdinPayload) {
     return { error: "No se recibi\xF3 payload por stdin con --stdin-json" };
   }
@@ -7671,7 +7678,7 @@ function buildEvent(options, stdinPayload, platform = process.platform) {
 }
 async function main() {
   const program2 = new Command();
-  program2.name("claude-notify").description("Emite un toast nativo del SO desde un hook de Claude Code").option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)").option(
+  program2.name("notification-cli").description("Emite un toast nativo del SO desde un hook de Claude Code").option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)").option(
     "--message <msg>",
     "Cuerpo del toast (override; por defecto cat\xE1logo o formatter stdin)"
   ).option(
@@ -7726,7 +7733,7 @@ async function main() {
       return 1;
     }
   }
-  const built = buildEvent(options, stdinPayload);
+  const built = buildNotificationPayload(options, stdinPayload);
   if ("error" in built) {
     process.stderr.write(`${built.error}
 `);
@@ -7759,7 +7766,7 @@ if (isEntryPoint) {
 }
 export {
   DEFAULT_APP_ID,
-  buildEvent,
+  buildNotificationPayload,
   globalFallbackIconProvider,
   normalizeStdinJsonText,
   resolveBranding,

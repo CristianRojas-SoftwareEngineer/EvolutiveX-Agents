@@ -123,9 +123,9 @@ export function pruneQueue(options: { max?: number; maxAgeMs?: number }): void {
   }
   // Si aún supera el tope, elimina los más viejos (ya están ordenados).
   const remaining = listPending();
-  const exceso = remaining.length - max;
-  if (exceso > 0) {
-    for (let i = 0; i < exceso; i++) {
+  const excess = remaining.length - max;
+  if (excess > 0) {
+    for (let i = 0; i < excess; i++) {
       try {
         rmSync(join(queueDir(), remaining[i]), { force: true });
       } catch {

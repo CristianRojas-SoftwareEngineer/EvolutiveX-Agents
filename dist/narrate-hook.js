@@ -51,8 +51,8 @@ function queueDir() {
 
 // src/lib/config.ts
 var DEFAULTS = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -60,8 +60,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, desktopEnabled, messageMode } = parsed;
-      return { enabled, desktopEnabled, messageMode };
+      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
   }
@@ -70,8 +70,8 @@ function readFileConfig() {
 function loadConfig() {
   const file = readFileConfig();
   return {
-    enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
+    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
+    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };
@@ -176,7 +176,7 @@ function isAlive(pid) {
 async function main() {
   const raw = await readStdin();
   const cfg = loadConfig();
-  if (!cfg.enabled) return;
+  if (!cfg.voiceEnabled) return;
   const payload = parsePayload(raw);
   enqueuePayload(payload);
   const owner = readOwnerPid();

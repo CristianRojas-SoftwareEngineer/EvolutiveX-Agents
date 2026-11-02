@@ -12,8 +12,8 @@
 // a `appID` ocurre aquí para preservar la API pública idiomática
 // (`appId` camelCase) sin acoplar el dominio al quirk de `node-notifier`.
 import notifier from "node-notifier";
-import type { INotificationService } from "./INotificationService.js";
-import type { NotificationEvent } from "./types.js";
+import type { NotificationService } from "./notification-service.js";
+import type { NotificationPayload } from "./types.js";
 
 export interface NodeNotifierOptions {
   title: string;
@@ -30,7 +30,7 @@ export type NotifyFn = (
   cb: NotifyCallback,
 ) => void;
 
-export class DesktopNotificationAdapter implements INotificationService {
+export class DesktopNotificationAdapter implements NotificationService {
   private readonly notifyFn: NotifyFn;
 
   constructor(notifyFn?: NotifyFn) {
@@ -44,19 +44,19 @@ export class DesktopNotificationAdapter implements INotificationService {
   /**
    * Traduce `silent: true` a `sound: false` para silenciar el toast.
    * Copia `appId` (dominio, camelCase) → `appID` (node-notifier, con
-   * mayúsculas) SOLO si está presente en el evento (degradación con
+   * mayúsculas) SOLO si está presente en el payload (degradación con
    * gracia). Copia `icon` con el mismo criterio. Cualquier otro campo
-   * del evento se ignora intencionalmente.
+   * del payload se ignora intencionalmente.
    */
-  notify(event: NotificationEvent): Promise<void> {
+  notify(payload: NotificationPayload): Promise<void> {
     const options: NodeNotifierOptions = {
-      title: event.title,
-      message: event.message,
-      sound: event.silent === true ? false : (event.sound ?? false),
+      title: payload.title,
+      message: payload.message,
+      sound: payload.silent === true ? false : (payload.sound ?? false),
       wait: false,
     };
-    if (event.appId !== undefined) options.appID = event.appId;
-    if (event.icon !== undefined) options.icon = event.icon;
+    if (payload.appId !== undefined) options.appID = payload.appId;
+    if (payload.icon !== undefined) options.icon = payload.icon;
     return new Promise<void>((resolve, reject) => {
       this.notifyFn(options, (err) => {
         if (err) reject(err);

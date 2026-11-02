@@ -18,7 +18,7 @@ import { SUMMARY_SYSTEM_PROMPT } from "./prompts.js";
 // Modelo del Orchestrator (§5.4): gemini-3.1-flash-lite, probado en
 // producción. Verificar vigencia si Gemini cambia su catálogo.
 const MODEL = "gemini-3.1-flash-lite";
-const ENDPOINT = (model: string) =>
+const buildEndpointUrl = (model: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 interface GeminiResponse {
@@ -48,7 +48,7 @@ export class GeminiProvider {
       },
     };
 
-    const res = await fetch(ENDPOINT(MODEL), {
+    const res = await fetch(buildEndpointUrl(MODEL), {
       method: "POST",
       headers: {
         "content-type": "application/json",

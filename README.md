@@ -48,7 +48,7 @@ El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (op
 
 ### Estado (`config.json`)
 
-`config.json` solo guarda preferencias no secretas (`enabled`, `desktopEnabled` y `messageMode`). La API key **nunca** se escribe en este archivo.
+`config.json` solo guarda preferencias no secretas (`voiceEnabled`, `notificationsEnabled` y `messageMode`). La API key **nunca** se escribe en este archivo.
 
 Ubicación por SO:
 
@@ -62,21 +62,21 @@ Ejemplo:
 
 ```json
 {
-  "enabled": true,
-  "desktopEnabled": true,
+  "voiceEnabled": true,
+  "notificationsEnabled": true,
   "messageMode": "local"
 }
 ```
 
-- `enabled`: interruptor del canal de voz.
-- `desktopEnabled`: interruptor del canal de notificaciones de escritorio (independiente de `enabled`).
+- `voiceEnabled`: interruptor del canal de narración por voz.
+- `notificationsEnabled`: interruptor del canal de notificaciones de escritorio (independiente de `voiceEnabled`).
 - `messageMode`: `"local"` (por defecto, determinista y offline) o `"llm"` (parafraseo con Gemini). Sin `GEMINI_API_KEY`, `llm` degrada a `local`.
 
 ### Notificaciones de escritorio (CLI y branding Windows)
 
-El canal visual se ejecuta desde `dist/desktop-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `Agent.VoiceInterConnector`.
+El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `Agent.VoiceInterConnector`.
 
-- **Control del canal:** `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" desktop-on` / `desktop-off`.
+- **Control del canal:** `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" notifications-on` / `notifications-off`.
 - **CLI manual (`dist/notification-cli.js`):** conserva todas las opciones (`--event-type`, `--message`, `--title`, `--sound`, `--silent`, `--stdin-json`, `--app-id`, `--icon`):
   ```bash
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-cli.js" --event-type Stop --message "Listo"

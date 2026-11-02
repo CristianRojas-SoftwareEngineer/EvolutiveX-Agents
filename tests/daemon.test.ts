@@ -8,10 +8,9 @@
 // `daemon` como cadena ("running"|"stopped"), `degraded` opcional
 // (unresponsive|unregistered|orphan_resident) y `warm` opcional
 // (warming|warm|warm_failed); exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`). getDaemonStatus devuelve un
-// resultado discriminado (running|stopped|degraded|incierto) que conserva exit
-// y JSON, y el esquema antiguo {"running": true} (booleano) se trata como
-// incierto, nunca como «running». Usa un shim `ai-voice-interconnector` falso
-// en disco, invocado por su ruta directa.
+// resultado discriminado (running|stopped|degraded|uncertain) que conserva exit
+// y JSON. Usa un shim `ai-voice-interconnector` falso en disco, invocado por su
+// ruta directa.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, writeFileSync } from "node:fs";
@@ -198,64 +197,64 @@ test("stopped + degraded orphan_resident ⇒ degraded conserva el código", () =
   }
 });
 
-test("binario inexistente ⇒ incierto, sin exit que conservar", () => {
+test("binario inexistente ⇒ uncertain, sin exit que conservar", () => {
   const dir = makeTempDir("narrator-daemon-none-");
   try {
     const result = daemon.getDaemonStatus(join(dir, "no-existe"));
-    assert.equal(result.kind, "incierto");
+    assert.equal(result.kind, "uncertain");
     assert.equal(result.exitCode, null);
   } finally {
     removeDir(dir);
   }
 });
 
-test("stdout vacío ⇒ incierto", () => {
+test("stdout vacío ⇒ uncertain", () => {
   const { cliPath, cleanup } = makeFakeCli("");
   try {
-    assert.equal(daemon.getDaemonStatus(cliPath).kind, "incierto");
+    assert.equal(daemon.getDaemonStatus(cliPath).kind, "uncertain");
   } finally {
     cleanup();
   }
 });
 
-test("JSON inválido ⇒ incierto", () => {
+test("JSON inválido ⇒ uncertain", () => {
   const { cliPath, cleanup } = makeFakeCli("esto no es json");
   try {
-    assert.equal(daemon.getDaemonStatus(cliPath).kind, "incierto");
+    assert.equal(daemon.getDaemonStatus(cliPath).kind, "uncertain");
   } finally {
     cleanup();
   }
 });
 
-test('esquema antiguo {"running":true} ⇒ incierto, nunca running (bloquea regresión)', () => {
+test('objeto sin campo daemon válido (p. ej. {"running":true}) ⇒ uncertain, nunca running', () => {
   const { cliPath, cleanup } = makeFakeCli(JSON.stringify({ running: true }));
   try {
     const result = daemon.getDaemonStatus(cliPath);
-    assert.equal(result.kind, "incierto");
+    assert.equal(result.kind, "uncertain");
   } finally {
     cleanup();
   }
 });
 
-test('estado desconocido {"daemon":"banana"} ⇒ incierto', () => {
+test('estado desconocido {"daemon":"banana"} ⇒ uncertain', () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({ schema_version: "5", daemon: "banana" }),
   );
   try {
-    assert.equal(daemon.getDaemonStatus(cliPath).kind, "incierto");
+    assert.equal(daemon.getDaemonStatus(cliPath).kind, "uncertain");
   } finally {
     cleanup();
   }
 });
 
-test("exit no cero con JSON running ⇒ incierto (combinación incoherente), exit conservado", () => {
+test("exit no cero con JSON running ⇒ uncertain (combinación incoherente), exit conservado", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({ schema_version: "5", daemon: "running" }),
     1,
   );
   try {
     const result = daemon.getDaemonStatus(cliPath);
-    assert.equal(result.kind, "incierto");
+    assert.equal(result.kind, "uncertain");
     assert.equal(result.exitCode, 1);
   } finally {
     cleanup();

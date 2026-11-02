@@ -10,9 +10,10 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { writeFileSync, chmodSync, readFileSync } from "node:fs";
+import { writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { enqueuePayload } from "../src/lib/queue.js";
+import { enqueuePayload, listPending } from "../src/lib/queue.js";
+import { ensureStateDir, workerPidPath } from "../src/lib/state-dir.js";
 import { withEnv, makeTempDir, removeDir } from "./helpers.js";
 
 const WORKER = join(process.cwd(), "dist", "narrate-worker.js");
@@ -133,4 +134,88 @@ test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
 
   const res = runWorker(env);
   assert.equal(res.status, 0);
+});
+
+test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola", () => {
+  const dir = makeTempDir("narrator-worker-stale-");
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir("narrator-cli-stale-");
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir);
+
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+
+  ensureStateDir();
+  writeFileSync(workerPidPath(), "999999", "utf8");
+  enqueuePayload({
+    session_id: "s-stale",
+    hook_event_name: "Stop",
+    last_assistant_message: "recuperado tras caída",
+  });
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
+
+  const res = runWorker(env);
+  assert.equal(res.status, 0);
+  assert.equal(existsSync(workerPidPath()), false);
+  assert.equal(listPending().length, 0);
+
+  const calls = readFileSync(join(cliDir, "argv.log"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as string[]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], [
+    "speech",
+    "say",
+    "--text",
+    "recuperado tras caída",
+    "--daemon",
+  ]);
+});
+
+test("worker respeta lock activo (PID vivo en worker.pid) y sale sin drenar", () => {
+  const dir = makeTempDir("narrator-worker-live-");
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir("narrator-cli-live-");
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir);
+
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+
+  ensureStateDir();
+  // process.pid está vivo durante toda la ejecución del test.
+  writeFileSync(workerPidPath(), String(process.pid), "utf8");
+  enqueuePayload({
+    session_id: "s-live",
+    hook_event_name: "Stop",
+    last_assistant_message: "no debe narrarse por segundo worker",
+  });
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
+
+  const res = runWorker(env);
+  assert.equal(res.status, 0);
+  assert.equal(
+    readFileSync(workerPidPath(), "utf8").trim(),
+    String(process.pid),
+  );
+  assert.equal(listPending().length, 1);
+  assert.equal(existsSync(join(cliDir, "argv.log")), false);
 });

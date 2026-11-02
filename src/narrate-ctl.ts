@@ -4,16 +4,16 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Superficie de control de la narración (para la skill opcional y uso manual).
+// Superficie de control de la narración y las notificaciones (para la skill y uso manual).
 // Lee y escribe config.json en el state dir: solo preferencias no secretas
-// (enabled, desktopEnabled y messageMode). La API key se lee del entorno. No participa en el
-// flujo de hooks.
+// (voiceEnabled, notificationsEnabled y messageMode). La API key se lee del entorno.
+// No participa en el flujo de hooks.
 //
 // Uso: node dist/narrate-ctl.js <comando> [args]
-//   on                 activa la narración
-//   off                desactiva la narración
-//   desktop-on         activa las notificaciones de escritorio
-//   desktop-off        desactiva las notificaciones de escritorio
+//   voice-on           activa la narración por voz
+//   voice-off          desactiva la narración por voz
+//   notifications-on   activa las notificaciones de escritorio
+//   notifications-off  desactiva las notificaciones de escritorio
 //   mode <llm|local>   fija el modo de generación
 //   status             muestra el estado (sin revelar las claves)
 //   say "<texto>"      narra un texto a demanda vía ai-voice-interconnector
@@ -26,12 +26,12 @@ import { ANNOUNCEMENTS } from "./message/static-announcements.js";
 function printStatus(): void {
   const cfg = loadConfig();
   const lines = [
-    `enabled:      ${cfg.enabled}`,
-    `desktop:      ${cfg.desktopEnabled}`,
-    `messageMode:  ${cfg.messageMode}`,
-    `gemini key:   ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
-    `config:       ${configPath()}`,
-    `state dir:    ${stateDir()}`,
+    `voice:          ${cfg.voiceEnabled}`,
+    `notifications:  ${cfg.notificationsEnabled}`,
+    `messageMode:    ${cfg.messageMode}`,
+    `gemini key:     ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
+    `config:         ${configPath()}`,
+    `state dir:      ${stateDir()}`,
   ];
   console.log(lines.join("\n"));
 }
@@ -69,7 +69,7 @@ function presynth(force: boolean): number {
     return 1;
   }
   let failed = false;
-  for (const [evento, { text, label }] of Object.entries(ANNOUNCEMENTS)) {
+  for (const [eventKey, { text, label }] of Object.entries(ANNOUNCEMENTS)) {
     const args = ["speech", "synthesize", "--text", text, "--label", label];
     if (force) args.push("--force");
     args.push("--daemon");
@@ -80,19 +80,19 @@ function presynth(force: boolean): number {
     const code = res.status ?? 1;
     if (code === 0)
       console.log(
-        `${evento}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
+        `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
       );
     else if (code === 6)
-      console.log(`${evento}: ya pre-sintetizado (${label})`);
+      console.log(`${eventKey}: ya pre-sintetizado (${label})`);
     else {
       failed = true;
-      const motivo =
+      const reason =
         code === 5
           ? " — daemon caído; levántalo con `ai-voice-interconnector daemon start`"
           : code === 4
             ? " — modelo ausente; provisiónalo con `ai-voice-interconnector setup`"
             : "";
-      console.error(`${evento}: fallo (exit ${code})${motivo}`);
+      console.error(`${eventKey}: fallo (exit ${code})${reason}`);
     }
   }
   return failed ? 1 : 0;
@@ -101,20 +101,20 @@ function presynth(force: boolean): number {
 function main(): number {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
-    case "on":
-      updateConfig({ enabled: true });
+    case "voice-on":
+      updateConfig({ voiceEnabled: true });
       console.log("Narración activada.");
       return 0;
-    case "off":
-      updateConfig({ enabled: false });
+    case "voice-off":
+      updateConfig({ voiceEnabled: false });
       console.log("Narración desactivada.");
       return 0;
-    case "desktop-on":
-      updateConfig({ desktopEnabled: true });
+    case "notifications-on":
+      updateConfig({ notificationsEnabled: true });
       console.log("Notificaciones de escritorio activadas.");
       return 0;
-    case "desktop-off":
-      updateConfig({ desktopEnabled: false });
+    case "notifications-off":
+      updateConfig({ notificationsEnabled: false });
       console.log("Notificaciones de escritorio desactivadas.");
       return 0;
     case "mode": {

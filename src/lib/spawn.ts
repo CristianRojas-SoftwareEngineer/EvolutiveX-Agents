@@ -75,13 +75,3 @@ export function killProcessTree(
     // Ya terminó o no tenemos permiso.
   }
 }
-
-/**
- * Termina el árbol de procesos de un worker anterior (incluye su `speak` hijo).
- * POSIX: mata el process group completo (posible porque se lanzó con
- * detached: true). Windows: taskkill del árbol. Idempotente y silenciosa: si el
- * PID ya no existe, no hace nada.
- */
-export function killWorkerTree(pid: number): void {
-  killProcessTree(pid, { killGraceMs: 0 });
-}

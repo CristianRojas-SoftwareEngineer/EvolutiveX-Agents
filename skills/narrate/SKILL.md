@@ -17,17 +17,17 @@ Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya est
 
 | Intención del usuario                | Comando                                            |
 | ------------------------------------ | -------------------------------------------------- |
-| Activar la narración                 | `narrate-ctl.js on`                                |
-| Desactivar la narración              | `narrate-ctl.js off`                               |
-| Activar notificaciones de escritorio | `narrate-ctl.js desktop-on`                        |
-| Desactivar notificaciones escritorio | `narrate-ctl.js desktop-off`                       |
+| Activar la narración por voz         | `narrate-ctl.js voice-on`                          |
+| Desactivar la narración por voz      | `narrate-ctl.js voice-off`                         |
+| Activar notificaciones de escritorio | `narrate-ctl.js notifications-on`                  |
+| Desactivar notificaciones escritorio | `narrate-ctl.js notifications-off`                 |
 | Ver el estado y la configuración     | `narrate-ctl.js status`                            |
 | Usar LLM (mensajes elaborados)       | `narrate-ctl.js mode llm`                          |
 | Solo local (sin red, privado)        | `narrate-ctl.js mode local`                        |
 | Narrar un texto ahora                | `narrate-ctl.js say "texto a narrar"`              |
 | Pre-sintetizar los anuncios          | `narrate-ctl.js presynth` (`--force` para re-sync) |
 
-Tras `on`/`off`/`desktop-on`/`desktop-off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
+Tras `voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
 
 `presynth` pre-sintetiza de una vez los anuncios estáticos del plugin (acuse de `UserPromptSubmit` y fallbacks por evento) con `speech synthesize`, para que luego se reproduzcan al instante con `speech play`. Es **idempotente** (un anuncio ya pre-sintetizado no se re-sintetiza) y **requiere el daemon caliente**; normalmente lo ejecuta la instalación guiada, y solo hay que re-ejecutarlo tras borrar la caché del motor. Como los labels son slugs fijos, un **cambio de frase** de un anuncio no cambia su label, así que `presynth` a secas no lo detecta: para forzar la re-síntesis usa `presynth --force`, que pasa `--force` al motor y sobrescribe el WAV existente.
 

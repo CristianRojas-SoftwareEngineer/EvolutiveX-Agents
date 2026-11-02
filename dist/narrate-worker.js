@@ -8,7 +8,6 @@ const __dirname = __pathDirname(__filename);
 
 // src/narrate-worker.ts
 import { appendFileSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join4 } from "node:path";
 
 // src/lib/config.ts
 import { readFileSync, writeFileSync } from "node:fs";
@@ -53,8 +52,8 @@ function workerLogPath() {
 
 // src/lib/config.ts
 var DEFAULTS = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -62,8 +61,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, desktopEnabled, messageMode } = parsed;
-      return { enabled, desktopEnabled, messageMode };
+      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
   }
@@ -72,8 +71,8 @@ function readFileConfig() {
 function loadConfig() {
   const file = readFileConfig();
   return {
-    enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
+    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
+    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };
@@ -147,9 +146,9 @@ function pruneQueue(options) {
     }
   }
   const remaining = listPending();
-  const exceso = remaining.length - max;
-  if (exceso > 0) {
-    for (let i = 0; i < exceso; i++) {
+  const excess = remaining.length - max;
+  if (excess > 0) {
+    for (let i = 0; i < excess; i++) {
       try {
         rmSync(join2(queueDir(), remaining[i]), { force: true });
       } catch {
@@ -176,6 +175,14 @@ import { delimiter, join as join3 } from "node:path";
 
 // src/lib/spawn.ts
 import { spawn, spawnSync } from "node:child_process";
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err.code === "EPERM";
+  }
+}
 function killProcessTree(pid, opts = {}) {
   if (!Number.isInteger(pid) || pid <= 0) return;
   const graceMs = opts.killGraceMs ?? 2e3;
@@ -286,7 +293,7 @@ ${SUMMARY_CLOSING}`;
 
 // src/message/gemini-provider.ts
 var MODEL = "gemini-3.1-flash-lite";
-var ENDPOINT = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+var buildEndpointUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 var GeminiProvider = class {
   constructor(apiKey) {
     this.apiKey = apiKey;
@@ -306,7 +313,7 @@ var GeminiProvider = class {
         thinkingConfig: { thinkingBudget: 0 }
       }
     };
-    const res = await fetch(ENDPOINT(MODEL), {
+    const res = await fetch(buildEndpointUrl(MODEL), {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -368,8 +375,7 @@ function toPlainText(input) {
   return t;
 }
 function sanitizeForSpeech(input) {
-  const plain = toPlainText(input);
-  return plain ? plain.replace(/\s+/g, " ").trim() : "";
+  return toPlainText(input);
 }
 
 // src/message/clamp.ts
@@ -489,14 +495,26 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 function acquireLock() {
+  const pidPath = workerPidPath();
   try {
-    writeFileSync3(workerPidPath(), String(process.pid), {
+    writeFileSync3(pidPath, String(process.pid), {
       encoding: "utf8",
       flag: "wx"
     });
     return true;
   } catch {
-    return false;
+    try {
+      const owner = Number.parseInt(readFileSync3(pidPath, "utf8").trim(), 10);
+      if (Number.isInteger(owner) && isAlive(owner)) return false;
+      rmSync2(pidPath, { force: true });
+      writeFileSync3(pidPath, String(process.pid), {
+        encoding: "utf8",
+        flag: "wx"
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 function releaseLock() {
@@ -544,10 +562,6 @@ async function main() {
   ensureStateDir();
   if (!acquireLock()) return;
   try {
-    try {
-      rmSync2(join4(stateDir(), "payload.json"), { force: true });
-    } catch {
-    }
     pruneQueue({ max: 64, maxAgeMs: 60 * 60 * 1e3 });
     let lastActivity = Date.now();
     while (true) {
@@ -559,7 +573,7 @@ async function main() {
       }
       lastActivity = Date.now();
       const cfg = loadConfig();
-      if (!cfg.enabled) {
+      if (!cfg.voiceEnabled) {
         clearQueue();
         return;
       }

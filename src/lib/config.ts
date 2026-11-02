@@ -5,30 +5,30 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Lee y escribe config.json en el state dir. El archivo solo guarda preferencias
-// no secretas (enabled, desktopEnabled y messageMode). La API key se lee únicamente de la
-// variable de entorno GEMINI_API_KEY y nunca se persiste en disco.
+// no secretas (voiceEnabled, notificationsEnabled y messageMode). La API key se lee
+// únicamente de la variable de entorno GEMINI_API_KEY y nunca se persiste en disco.
 import { readFileSync, writeFileSync } from "node:fs";
 import { configPath, ensureStateDir } from "./state-dir.js";
 
 export type MessageMode = "llm" | "local";
 
 export interface Config {
-  enabled: boolean;
-  desktopEnabled: boolean;
+  voiceEnabled: boolean;
+  notificationsEnabled: boolean;
   messageMode: MessageMode;
   /** Campo de tiempo de ejecución: proviene solo de GEMINI_API_KEY. */
   geminiApiKey?: string;
 }
 
 interface FileConfig {
-  enabled?: boolean;
-  desktopEnabled?: boolean;
+  voiceEnabled?: boolean;
+  notificationsEnabled?: boolean;
   messageMode?: MessageMode;
 }
 
 const DEFAULTS: Config = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local",
 };
 
@@ -38,9 +38,10 @@ function readFileConfig(): FileConfig {
     const parsed = JSON.parse(raw) as unknown;
     if (parsed && typeof parsed === "object") {
       // Solo se conservan preferencias no secretas; cualquier campo de clave
-      // presente en un archivo antiguo se ignora.
-      const { enabled, desktopEnabled, messageMode } = parsed as FileConfig;
-      return { enabled, desktopEnabled, messageMode };
+      // presente en un archivo se ignora.
+      const { voiceEnabled, notificationsEnabled, messageMode } =
+        parsed as FileConfig;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
     // Sin archivo o JSON inválido: se usan defaults.
@@ -56,12 +57,14 @@ function readFileConfig(): FileConfig {
 export function loadConfig(): Config {
   const file = readFileConfig();
   return {
-    enabled:
-      typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled:
-      typeof file.desktopEnabled === "boolean"
-        ? file.desktopEnabled
-        : DEFAULTS.desktopEnabled,
+    voiceEnabled:
+      typeof file.voiceEnabled === "boolean"
+        ? file.voiceEnabled
+        : DEFAULTS.voiceEnabled,
+    notificationsEnabled:
+      typeof file.notificationsEnabled === "boolean"
+        ? file.notificationsEnabled
+        : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY),
   };
@@ -73,21 +76,23 @@ export function loadConfig(): Config {
  * campos de clave. Usado por la skill.
  */
 export function updateConfig(
-  patch: Partial<Pick<Config, "enabled" | "desktopEnabled" | "messageMode">>,
+  patch: Partial<
+    Pick<Config, "voiceEnabled" | "notificationsEnabled" | "messageMode">
+  >,
 ): Config {
   ensureStateDir();
   const current = readFileConfig();
   const next = {
-    enabled:
-      patch.enabled ??
-      (typeof current.enabled === "boolean"
-        ? current.enabled
-        : DEFAULTS.enabled),
-    desktopEnabled:
-      patch.desktopEnabled ??
-      (typeof current.desktopEnabled === "boolean"
-        ? current.desktopEnabled
-        : DEFAULTS.desktopEnabled),
+    voiceEnabled:
+      patch.voiceEnabled ??
+      (typeof current.voiceEnabled === "boolean"
+        ? current.voiceEnabled
+        : DEFAULTS.voiceEnabled),
+    notificationsEnabled:
+      patch.notificationsEnabled ??
+      (typeof current.notificationsEnabled === "boolean"
+        ? current.notificationsEnabled
+        : DEFAULTS.notificationsEnabled),
     messageMode:
       patch.messageMode ??
       (current.messageMode === "llm" ? "llm" : DEFAULTS.messageMode),

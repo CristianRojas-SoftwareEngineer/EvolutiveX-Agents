@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import {
   DesktopNotificationAdapter,
   type NodeNotifierOptions,
-} from "../src/notifications/DesktopNotificationAdapter.js";
+} from "../src/notifications/desktop-notification-adapter.js";
 import {
   EVENT_NOTIFICATION_PROFILES,
   NOTIFICATION_BRAND_TITLE,
@@ -24,7 +24,7 @@ import {
 } from "../src/notifications/event-notification-profile.js";
 import { resolveNotificationSound } from "../src/notifications/resolve-notification-sound.js";
 import {
-  repoEventsDirProvider,
+  eventIconsDirProvider,
   resolveEventImagePath,
 } from "../src/notifications/event-image-paths.js";
 import {
@@ -39,7 +39,7 @@ import {
 } from "../src/notifications/hook-payload-notification-message.js";
 import {
   DEFAULT_APP_ID,
-  buildEvent,
+  buildNotificationPayload,
   globalFallbackIconProvider,
   normalizeStdinJsonText,
   resolveBranding,
@@ -50,8 +50,6 @@ import {
   type CliOptions,
 } from "../src/notifications/cli.js";
 import {
-  buildShortcutBytes,
-  parseAppUserModelId,
   parseIconLocation,
   patchIconLocation,
 } from "../src/notifications/lnk-format.js";
@@ -69,7 +67,6 @@ import {
   getIconPngPath,
   getLnkPath,
   installAction,
-  isValidAumid,
   registryProvider,
   snoreToastProvider,
   statusAction,
@@ -77,8 +74,8 @@ import {
 } from "../src/notifications/register.js";
 import {
   notificationEventKey,
-  runDesktopHookFromRaw,
-} from "../src/notifications/desktop-hook.js";
+  runNotificationHookFromRaw,
+} from "../src/notifications/notification-hook.js";
 import { updateConfig } from "../src/lib/config.js";
 import { isolateStateDir, makeTempDir, removeDir } from "./helpers.js";
 
@@ -184,17 +181,17 @@ test("resolveNotificationSound: traduce tokens por plataforma", () => {
   assert.equal(resolveNotificationSound(undefined, "win32"), false);
 });
 
-test("resolveEventImagePath: respeta repoEventsDirProvider y devuelve undefined si falta", () => {
+test("resolveEventImagePath: respeta eventIconsDirProvider y devuelve undefined si falta", () => {
   const tmp = makeTempDir("event-img-");
-  const prev = repoEventsDirProvider.get;
+  const prev = eventIconsDirProvider.get;
   try {
     const p = join(tmp, "stop.png");
     writeFileSync(p, "data");
-    repoEventsDirProvider.get = () => tmp;
+    eventIconsDirProvider.get = () => tmp;
     assert.equal(resolveEventImagePath("stop.png"), p);
     assert.equal(resolveEventImagePath("missing.png"), undefined);
   } finally {
-    repoEventsDirProvider.get = prev;
+    eventIconsDirProvider.get = prev;
     removeDir(tmp);
   }
 });
@@ -336,10 +333,13 @@ test("CLI: branding Agent.VoiceInterConnector, precedencias, overrides y degrada
     "Override",
   );
 
-  const errNoEvent = buildEvent({ ...baseCliOptions, eventType: undefined });
+  const errNoEvent = buildNotificationPayload({
+    ...baseCliOptions,
+    eventType: undefined,
+  });
   assert.ok("error" in errNoEvent);
 
-  const errNoStdin = buildEvent({
+  const errNoStdin = buildNotificationPayload({
     ...baseCliOptions,
     stdinJson: true,
     eventType: undefined,
@@ -348,40 +348,59 @@ test("CLI: branding Agent.VoiceInterConnector, precedencias, overrides y degrada
   assert.ok("error" in errNoStdin);
 
   // Degradación cuando ni la imagen del evento ni el fallback global existen
-  const prevEvents = repoEventsDirProvider.get;
+  const prevEvents = eventIconsDirProvider.get;
   const prevGlobal = globalFallbackIconProvider.get;
   try {
-    repoEventsDirProvider.get = () => "/no/existe/events";
+    eventIconsDirProvider.get = () => "/no/existe/events";
     globalFallbackIconProvider.get = () => "/no/existe/ai-assistant.png";
-    const built = buildEvent(baseCliOptions, undefined, "win32");
+    const built = buildNotificationPayload(baseCliOptions, undefined, "win32");
     assert.ok(!("error" in built));
     assert.equal(built.appId, "Agent.VoiceInterConnector");
     assert.equal(built.icon, undefined);
   } finally {
-    repoEventsDirProvider.get = prevEvents;
+    eventIconsDirProvider.get = prevEvents;
     globalFallbackIconProvider.get = prevGlobal;
   }
 });
 
 // --- Formato MS-SHLLINK (.lnk) ---
 
-test("lnk-format: round-trip de AUMID e IconLocation y parcheo", () => {
-  const bytes = buildShortcutBytes({
-    target: "C:\\Program Files\\nodejs\\node.exe",
-    icon: "C:\\repo\\assets\\notifications\\ai-assistant.ico,0",
-    name: DISPLAY_NAME,
-    aumid: AUMID,
-  });
-  assert.equal(bytes.readUInt32LE(0), 0x4c);
-  assert.equal(parseAppUserModelId(bytes), AUMID);
-  assert.equal(
-    parseIconLocation(bytes),
+/**
+ * Construye un buffer `.lnk` Unicode sintético mínimo (76 bytes de cabecera +
+ * `IconLocation` opcional + terminador de 4 bytes) para ejercitar `parseIconLocation`
+ * y `patchIconLocation` sin depender de ejecutables de Windows.
+ */
+function buildTestLnkBytes(iconLocation?: string): Buffer {
+  const header = Buffer.alloc(0x4c);
+  header.writeUInt32LE(0x4c, 0x00);
+  Buffer.from([
+    0x01, 0x14, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x46,
+  ]).copy(header, 0x04);
+  // IsUnicode (0x80) y opcionalmente HasIconLocation (0x40)
+  header.writeUInt32LE(iconLocation ? 0x80 | 0x40 : 0x80, 0x14);
+  const terminator = Buffer.from([0, 0, 0, 0]);
+  const base = Buffer.concat([header, terminator]);
+  return iconLocation ? patchIconLocation(base, iconLocation) : base;
+}
+
+test("lnk-format: inserción, reemplazo y lectura de IconLocation", () => {
+  const withoutIcon = buildTestLnkBytes();
+  assert.equal(withoutIcon.readUInt32LE(0), 0x4c);
+  assert.equal(parseIconLocation(withoutIcon), undefined);
+
+  const inserted = patchIconLocation(
+    withoutIcon,
     "C:\\repo\\assets\\notifications\\ai-assistant.ico,0",
   );
-  const patched = patchIconLocation(bytes, "C:\\nuevo\\ai-assistant.ico,1");
-  assert.equal(parseIconLocation(patched), "C:\\nuevo\\ai-assistant.ico,1");
-  assert.equal(parseAppUserModelId(patched), AUMID);
-  assert.equal(parseAppUserModelId(Buffer.alloc(20)), undefined);
+  assert.equal(
+    parseIconLocation(inserted),
+    "C:\\repo\\assets\\notifications\\ai-assistant.ico,0",
+  );
+
+  const replaced = patchIconLocation(inserted, "C:\\nuevo\\ai-assistant.ico,1");
+  assert.equal(parseIconLocation(replaced), "C:\\nuevo\\ai-assistant.ico,1");
+  assert.equal(parseIconLocation(Buffer.alloc(20)), undefined);
 });
 
 // --- Registro Windows y helper register.ts (con proveedores simulados) ---
@@ -430,7 +449,6 @@ test("registry: readRegistry, writeRegistry y deleteRegistry usan reg.exe", asyn
 });
 
 test("register: installAction, statusAction, uninstallAction y dispatch multiplataforma", async () => {
-  assert.equal(isValidAumid(AUMID), true);
   const tmpAppData = makeTempDir("register-test-");
   const prevAppData = process.env.APPDATA;
   const prevReg = { ...registryProvider };
@@ -449,17 +467,14 @@ test("register: installAction, statusAction, uninstallAction y dispatch multipla
     registryProvider.deleteRegistry = async () => {};
     snoreToastProvider.getSnoreToastPath = () => "C:\\fake\\snoretoast-x64.exe";
     snoreToastProvider.installSnoreToastShortcut = async (
-      name,
-      target,
-      aumid,
+      _name,
+      _target,
+      _aumid,
       dest,
       iconLoc,
     ) => {
       snoreInstalls++;
-      writeFileSync(
-        dest,
-        buildShortcutBytes({ target, icon: iconLoc, name, aumid }),
-      );
+      writeFileSync(dest, buildTestLnkBytes(iconLoc));
     };
 
     assert.equal(await installAction(), 0);
@@ -492,9 +507,9 @@ test("register: installAction, statusAction, uninstallAction y dispatch multipla
   }
 });
 
-// --- Independencia entre canales y filtros de desktop-hook ---
+// --- Independencia entre canales y filtros de notification-hook ---
 
-test("desktop-hook: filtra eventos y funciona con voz desactivada sin bloquear", async () => {
+test("notification-hook: filtra eventos y funciona con voz desactivada sin bloquear", async () => {
   const state = isolateStateDir();
   try {
     assert.equal(
@@ -528,8 +543,8 @@ test("desktop-hook: filtra eventos y funciona con voz desactivada sin bloquear",
       undefined,
     );
 
-    // Con voz desactivada (enabled: false) y escritorio activo (desktopEnabled: true)
-    updateConfig({ enabled: false, desktopEnabled: true });
+    // Con voz desactivada (voiceEnabled: false) y notificaciones activas (notificationsEnabled: true)
+    updateConfig({ voiceEnabled: false, notificationsEnabled: true });
     const received: unknown[] = [];
     const adapter = {
       notify(ev: unknown) {
@@ -537,7 +552,7 @@ test("desktop-hook: filtra eventos y funciona con voz desactivada sin bloquear",
       },
     };
 
-    const emitted = await runDesktopHookFromRaw(
+    const emitted = await runNotificationHookFromRaw(
       JSON.stringify({
         hook_event_name: "Stop",
         last_assistant_message: "Respuesta lista",
@@ -548,7 +563,7 @@ test("desktop-hook: filtra eventos y funciona con voz desactivada sin bloquear",
     assert.equal(received.length, 1);
 
     // PreToolUse AskUserQuestion sin questions no emite toast
-    const skippedAsk = await runDesktopHookFromRaw(
+    const skippedAsk = await runNotificationHookFromRaw(
       JSON.stringify({
         hook_event_name: "PreToolUse",
         tool_name: "AskUserQuestion",
@@ -558,9 +573,9 @@ test("desktop-hook: filtra eventos y funciona con voz desactivada sin bloquear",
     );
     assert.equal(skippedAsk, false);
 
-    // Si desktopEnabled se apaga, no emite aunque voz esté encendida
-    updateConfig({ enabled: true, desktopEnabled: false });
-    const blocked = await runDesktopHookFromRaw(
+    // Si notificationsEnabled se apaga, no emite aunque voz esté encendida
+    updateConfig({ voiceEnabled: true, notificationsEnabled: false });
+    const blocked = await runNotificationHookFromRaw(
       JSON.stringify({
         hook_event_name: "Stop",
         last_assistant_message: "No debe salir",

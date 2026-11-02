@@ -7,7 +7,7 @@
 // Tipos del servicio de notificaciones de escritorio.
 
 /**
- * Evento que el adaptador concreto recibe y traduce a un toast del SO.
+ * Payload de notificación que el adaptador concreto recibe y traduce a un toast del SO.
  * Forma mínima: además de los campos base (`title`, `message`, `sound?`,
  * `silent?`), admite dos campos opcionales de branding (`appId?`, `icon?`).
  * El contrato del puerto no expone otros campos de personalización
@@ -15,7 +15,7 @@
  * `urgency`, `timeout`, `wait`, `open`, `closeLabel`, `actions`,
  * `heroImage`) en v1.
  */
-export interface NotificationEvent {
+export interface NotificationPayload {
   title: string;
   message: string;
   /** `boolean` (Linux / flag CLI) o token/nombre del SO (`string` en Windows/macOS). */

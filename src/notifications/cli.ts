@@ -7,11 +7,11 @@
 // Entry point CLI standalone. Delega en DesktopNotificationAdapter.
 import { Command, Option } from "commander";
 import { existsSync } from "node:fs";
-import { stdin as processStdin } from "node:process";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath, basename, join } from "node:path";
-import { DesktopNotificationAdapter } from "./DesktopNotificationAdapter.js";
-import type { NotificationEvent } from "./types.js";
+import { readStdin } from "../lib/hook-payload.js";
+import { DesktopNotificationAdapter } from "./desktop-notification-adapter.js";
+import type { NotificationPayload } from "./types.js";
 import {
   getProfileForEvent,
   NOTIFICATION_BRAND_TITLE,
@@ -57,19 +57,6 @@ export interface CliOptions {
   stdinJson: boolean;
   appId?: string;
   icon?: string;
-}
-
-async function readStdinBuffer(): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of processStdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
-}
-
-/** Lee stdin como UTF-8. */
-function readStdin(): Promise<string> {
-  return readStdinBuffer().then((buf) => buf.toString("utf-8"));
 }
 
 /** Quita BOM UTF-8 y espacios (común en stdin de hooks en Windows / PowerShell). */
@@ -170,11 +157,11 @@ export function resolveNotificationMessage(
   return undefined;
 }
 
-export function buildEvent(
+export function buildNotificationPayload(
   options: CliOptions,
   stdinPayload?: Record<string, unknown>,
   platform: NodeJS.Platform = process.platform,
-): NotificationEvent | { error: string } {
+): NotificationPayload | { error: string } {
   if (options.stdinJson && !stdinPayload) {
     return { error: "No se recibió payload por stdin con --stdin-json" };
   }
@@ -208,7 +195,7 @@ export function buildEvent(
 async function main(): Promise<number> {
   const program = new Command();
   program
-    .name("claude-notify")
+    .name("notification-cli")
     .description("Emite un toast nativo del SO desde un hook de Claude Code")
     .option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)")
     .option(
@@ -275,7 +262,7 @@ async function main(): Promise<number> {
     }
   }
 
-  const built = buildEvent(options, stdinPayload);
+  const built = buildNotificationPayload(options, stdinPayload);
   if ("error" in built) {
     process.stderr.write(`${built.error}\n`);
     return 1;

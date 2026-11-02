@@ -21,15 +21,15 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 ### Añadido
 
 - **Canal de notificaciones de escritorio nativas** (`src/notifications/`,
-  `dist/desktop-hook.js`, `dist/notification-cli.js`,
+  `dist/notification-hook.js`, `dist/notification-cli.js`,
   `dist/notification-register.js`): emite toasts silenciosos por defecto con
   icono específico por evento (`assets/notifications/`) para los 12 perfiles del
   ciclo de vida (`UserPromptSubmit`, `PreToolUse[AskUserQuestion]`,
   `PostToolUse[TaskUpdate+in_progress]`, `SubagentStart`, `SubagentStop`,
   `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`,
   `TaskCreated`, `TaskCompleted`). Canal independiente del motor de voz,
-  controlado por `desktopEnabled` en `config.json` y por los subcomandos
-  `narrate-ctl desktop-on` / `desktop-off`, con registro idempotente del AUMID
+  controlado por `notificationsEnabled` en `config.json` y por los subcomandos
+  `narrate-ctl notifications-on` / `notifications-off`, con registro idempotente del AUMID
   `Agent.VoiceInterConnector` en Windows (`notification-register.js --install` /
   `--status` / `--uninstall`) y empaquetado autocontenido en `dist/` y
   `vendor/`.
@@ -65,7 +65,7 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 - **La API key de Gemini vive solo en el entorno** (`GEMINI_API_KEY`).
   `config.json` deja de almacenar claves y solo persiste preferencias no
-  secretas (`enabled`, `desktopEnabled` y `messageMode`); `loadConfig` ya no lee
+  secretas (`voiceEnabled`, `notificationsEnabled` y `messageMode`); `loadConfig` ya no lee
   claves del archivo y `updateConfig` nunca las escribe. Sin `GEMINI_API_KEY`,
   el modo `llm` degrada a `local`.
 - **`messageMode` por defecto es `local`** (antes el código usaba `llm`), en

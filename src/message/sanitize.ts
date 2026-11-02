@@ -62,6 +62,5 @@ export function toPlainText(input: string): string {
  * descartado. Devuelve "" si no queda nada utilizable.
  */
 export function sanitizeForSpeech(input: string): string {
-  const plain = toPlainText(input);
-  return plain ? plain.replace(/\s+/g, " ").trim() : "";
+  return toPlainText(input);
 }

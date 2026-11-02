@@ -1,6 +1,6 @@
 # Proceso de release
 
-Cómo se corta y publica una versión de **Agent Voice-InterConnector**. El proceso es deliberadamente más simple que el del motor ([AI-Voice-InterConnector/docs/RELEASING.md](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/main/docs/RELEASING.md)): aquí no hay CI de publicación ni artefactos binarios por plataforma — el plugin se distribuye clonando el repo con `dist/` commiteado, y **el release es un tag de git precedido por este checklist**. El CI de CircleCI corre en cada push como verificación continua (no participa del corte); el marketplace de plugins de Claude Code resuelve las versiones desde los tags del repo.
+Cómo se corta y publica una versión de **Agent Voice-InterConnector**. El proceso es deliberadamente más simple que el del motor ([AI-Voice-InterConnector/docs/RELEASING.md](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/main/docs/RELEASING.md)): aquí no hay CI de publicación ni artefactos binarios por plataforma — el plugin se distribuye clonando el repo con `dist/` y `vendor/` commiteados, y **el release es un tag de git precedido por este checklist**. El CI de CircleCI corre en cada push como verificación continua (no participa del corte); el marketplace de plugins de Claude Code resuelve las versiones desde los tags del repo.
 
 ## Tabla de contenidos
 
@@ -47,14 +47,14 @@ En orden; cada paso asume el anterior.
    (incluida la versión del motor contra la que se verificó, ver la sección
    de sincronización). Crear una nueva sección `## [No publicado]` vacía encima
    y actualizar las referencias de enlaces del pie.
-3. **Verificar `dist/`** (el pre-commit hook lo regenera automáticamente al commitear):
+3. **Verificar `dist/` y `vendor/`** (el pre-commit hook los regenera automáticamente al commitear):
    ```bash
    npm run check-dist
    npm run typecheck
    npm test
    ```
-   `check-dist` en verde es obligatorio: lo que ejecutan los usuarios es el `dist/` del árbol de git.
-   El hook en `.githooks/pre-commit` corre `npm run build` y staggea `dist/` en cada commit, así que no
+   `check-dist` en verde es obligatorio: lo que ejecutan los usuarios es el `dist/` y `vendor/` del árbol de git.
+   El hook en `.githooks/pre-commit` corre `npm run build` y staggea `dist/` y `vendor/` en cada commit, así que no
    hace falta invocarlo manualmente.
    La identidad pública del plugin se verifica aparte, con el mismo gate que el CI
    (job `validate-manifest`):
@@ -79,12 +79,16 @@ En orden; cada paso asume el anterior.
    nuevo (no usar el árbol de desarrollo), cargar el plugin en una sesión real
    de Claude Code y verificar, con el motor **instalado desde sus artefactos
    publicados** (no desde su árbol de desarrollo):
-   - narración de **todas** las superficies del contrato (los cinco hooks
-     registrados en `hooks/hooks.json`: `UserPromptSubmit`, `Stop`,
+   - narración de **todas** las superficies del contrato de voz (los cinco hooks
+     de voz registrados en `hooks/hooks.json`: `UserPromptSubmit`, `Stop`,
      `SubagentStop`, `StopFailure` y `Notification`) en modo `local` (sin
      clave) y con `Stop` en modo `llm` (con `GEMINI_API_KEY` definida); no
      basta con `Stop` — una superficie no probada puede liberarse con un bug;
-   - `narrate-ctl status` reporta el estado sin exponer claves;
+   - emisión de toasts silenciosos del canal de notificaciones de escritorio
+     (`dist/notification-hook.js`), funcionamiento de los toggles `notifications-on` /
+     `notifications-off` y registro idempotente del AUMID en Windows
+     (`dist/notification-register.js --install` y `--status`);
+   - `narrate-ctl status` reporta el estado (`voice` y `notifications`) sin exponer claves;
    - el aviso de `SessionStart` cuando el motor no está en el `PATH`.
 7. **Commit, tag y push**:
    ```bash
@@ -254,25 +258,30 @@ if (-not (Test-Path $PLUGIN_E2E)) {
 }
 # Comprobación: el dist/ compilado existe (es lo que ejecutan los hooks).
 Test-Path "$PLUGIN_E2E\dist\narrate-ctl.js"
+Test-Path "$PLUGIN_E2E\dist\notification-hook.js"
 ```
 
 #### Paso 4 — Comprobación base (sin sesión de Claude)
 
-Valida el pipeline TTS + daemon de forma aislada. No requiere claves.
+Valida el pipeline TTS + daemon y el canal de notificaciones de escritorio de forma aislada. No requiere claves.
 
 ```powershell
-narrate-ctl on                        # activa la narración
+narrate-ctl voice-on                  # activa la narración por voz
+narrate-ctl notifications-on          # activa las notificaciones de escritorio
 narrate-ctl mode local                # modo local (determinista, offline)
-narrate-ctl status                    # enabled: true, messageMode: local
+narrate-ctl status                    # voice: true, notifications: true, messageMode: local
+node "$PLUGIN_E2E\dist\notification-register.js" --install
+node "$PLUGIN_E2E\dist\notification-register.js" --status
+node "$PLUGIN_E2E\dist\notification-cli.js" --event-type SessionStart --message "Prueba visual E2E" --silent
 # La clave es la cadena "daemon"; "stopped" con exit 0 no es error; un exit 1/5 sí lo es: el sondeo falló (ver paso 2).
 ai-voice-interconnector daemon status --json | ConvertFrom-Json | ForEach-Object { $_.daemon -eq "running" }
 narrate-ctl say "Prueba de audio local"
-# Comprobación AUDIBLE: se escucha la frase en español.
+# Comprobación AUDIBLE y VISUAL: se escucha la frase en español y aparece el toast con branding Agent-VoiceInterConnector.
 ```
 
-#### Paso 5 — Verificación completa por superficie del contrato (audible)
+#### Paso 5 — Verificación completa por superficie del contrato (audible y visual)
 
-Cada ítem deja el entorno en la condición indicada, dispara la narración y **escucha** el resultado. El plugin registra **cinco hooks de narración** (todos vía `dist/narrate-hook.js`, ver `hooks/hooks.json`): `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`. Solo `Stop` cambia entre modos (única ruta dinámica que enruta al LLM); las otras cuatro superficies reproducen siempre su aviso pre-sintetizado, en `local` y en `llm` por igual. El smoke test debe ejercitar **las cinco** en modo `local` y, en `llm`, confirmar que `Stop` se oye distinto (parafraseado) y que el resto suena idéntico a `local`.
+Cada ítem deja el entorno en la condición indicada, dispara la narración y los toasts de escritorio, y **escucha y observa** el resultado. El plugin registra **cinco hooks de narración** (vía `dist/narrate-hook.js`) y **doce perfiles de notificación de escritorio** (vía `dist/notification-hook.js`, ver `hooks/hooks.json`). En voz, solo `Stop` cambia entre modos (única ruta dinámica que enruta al LLM); las otras cuatro superficies reproducen siempre su aviso pre-sintetizado, en `local` y en `llm` por igual. El smoke test debe ejercitar **las cinco superficies de voz** en modo `local`, confirmar los toasts visuales silenciosos y, en `llm`, verificar que `Stop` se oye distinto (parafraseado) y que el resto suena idéntico a `local`.
 
 ```powershell
 # Lanzar Claude Code con el plugin del clon limpio (se abre por ítem).

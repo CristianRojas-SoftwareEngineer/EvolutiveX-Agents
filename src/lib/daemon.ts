@@ -12,7 +12,7 @@
 import { runCli, spawnCli } from "./resolve-cli.js";
 
 export interface DaemonStatusResult {
-  kind: "running" | "stopped" | "degraded" | "incierto";
+  kind: "running" | "stopped" | "degraded" | "uncertain";
   exitCode: number | null;
   degraded?: "unresponsive" | "unregistered" | "orphan_resident";
   warm?: "warming" | "warm" | "warm_failed";
@@ -35,9 +35,9 @@ function normalizeDegraded(value: unknown): DaemonStatusResult["degraded"] {
 
 /**
  * Estado del daemon según el contrato v0.36.2. La única rama que significa
- * «en ejecución» es `daemon: "running"` con exit 0; el esquema antiguo
- * `{"running": true}` (booleano), el JSON malformado, la salida vacía, un exit
- * distinto de 0 (1 `daemon_error` o 5 `daemon_unreachable`) o un estado desconocido devuelven `incierto` —nunca running—.
+ * «en ejecución» es `daemon: "running"` con exit 0; el JSON malformado, la
+ * salida vacía, un exit distinto de 0 (1 `daemon_error` o 5 `daemon_unreachable`)
+ * o un estado desconocido devuelven `uncertain` —nunca running—.
  * Conserva exit y JSON crudo para que el health-check pueda diagnosticar sin
  * re-ejecutar el CLI.
  */
@@ -57,28 +57,28 @@ export function getDaemonStatus(cliPath: string): DaemonStatusResult {
     spawnError = res.error;
     status = typeof res.status === "number" ? res.status : null;
   } catch {
-    return { kind: "incierto", exitCode: null };
+    return { kind: "uncertain", exitCode: null };
   }
   const exitCode = status;
   if (spawnError || typeof stdout !== "string" || !stdout.trim()) {
-    return { kind: "incierto", exitCode };
+    return { kind: "uncertain", exitCode };
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    return { kind: "incierto", exitCode };
+    return { kind: "uncertain", exitCode };
   }
-  // El contrato admite 0, 1 (`daemon_error`) y 5 (`daemon_unreachable`); cualquier exit distinto de 0 se trata como incierto.
+  // El contrato admite 0, 1 (`daemon_error`) y 5 (`daemon_unreachable`); cualquier exit distinto de 0 se trata como uncertain.
   if (exitCode !== 0) {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   const record = parsed as Record<string, unknown>;
   if (record.daemon !== "running" && record.daemon !== "stopped") {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   if (record.daemon === "running") {
     const warm = normalizeWarm(record.warm);

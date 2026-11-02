@@ -9,16 +9,15 @@
 // no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI.
 // Degrada en silencio; los errores van a worker.log.
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { loadConfig } from "./lib/config.js";
 import {
   ensureStateDir,
-  stateDir,
   workerLogPath,
   workerPidPath,
 } from "./lib/state-dir.js";
 import { claimNext, clearQueue, pruneQueue } from "./lib/queue.js";
 import { resolveCli, runCliWithTimeout } from "./lib/resolve-cli.js";
+import { isAlive } from "./lib/spawn.js";
 import { buildMessage } from "./message/build-message.js";
 
 function log(msg: string): void {
@@ -48,15 +47,27 @@ function sleepSync(ms: number): void {
 
 /** Intenta adquirir el lock exclusivo del worker mediante worker.pid. Devuelve true si lo consiguió. */
 function acquireLock(): boolean {
+  const pidPath = workerPidPath();
   try {
-    writeFileSync(workerPidPath(), String(process.pid), {
+    writeFileSync(pidPath, String(process.pid), {
       encoding: "utf8",
       flag: "wx",
     });
     return true;
   } catch {
-    // Otro worker ya es dueño de la plaza.
-    return false;
+    // Si worker.pid ya existe, verificar si pertenece a un proceso muerto (huérfano).
+    try {
+      const owner = Number.parseInt(readFileSync(pidPath, "utf8").trim(), 10);
+      if (Number.isInteger(owner) && isAlive(owner)) return false;
+      rmSync(pidPath, { force: true });
+      writeFileSync(pidPath, String(process.pid), {
+        encoding: "utf8",
+        flag: "wx",
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -122,13 +133,6 @@ async function main(): Promise<void> {
   if (!acquireLock()) return;
 
   try {
-    // Limpieza de legado: eliminar payload.json si quedó de versiones previas.
-    try {
-      rmSync(join(stateDir(), "payload.json"), { force: true });
-    } catch {
-      // No existía o no se pudo borrar: seguir.
-    }
-
     // Podar cola expirada y sobrante antes de empezar.
     pruneQueue({ max: 64, maxAgeMs: 60 * 60 * 1000 });
 
@@ -146,7 +150,7 @@ async function main(): Promise<void> {
       lastActivity = Date.now();
 
       const cfg = loadConfig();
-      if (!cfg.enabled) {
+      if (!cfg.voiceEnabled) {
         // Narración desactivada: descartar el resto de la cola y salir.
         clearQueue();
         return;

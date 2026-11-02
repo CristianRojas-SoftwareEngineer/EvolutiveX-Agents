@@ -26,13 +26,29 @@ const excludedAppleIcon = join(
   "Resources",
   "Terminal.icns",
 );
+const REQUIRED_VENDOR_FILES = [
+  join("snoreToast", "snoretoast-x64.exe"),
+  join("snoreToast", "snoretoast-x86.exe"),
+  join("snoreToast", "LICENSE"),
+  join("notifu", "notifu.exe"),
+  join("notifu", "notifu64.exe"),
+  join("notifu", "LICENSE"),
+  join(
+    "mac.noindex",
+    "terminal-notifier.app",
+    "Contents",
+    "MacOS",
+    "terminal-notifier",
+  ),
+  "terminal-notifier-LICENSE",
+];
 
 const ENTRY_POINTS = {
   "narrate-hook": "src/narrate-hook.ts",
   "narrate-worker": "src/narrate-worker.ts",
   "health-check": "src/health-check.ts",
   "narrate-ctl": "src/narrate-ctl.ts",
-  "desktop-hook": "src/notifications/desktop-hook.ts",
+  "notification-hook": "src/notifications/notification-hook.ts",
   "notification-cli": "src/notifications/cli.ts",
   "notification-register": "src/notifications/register.ts",
 };
@@ -87,10 +103,10 @@ if (isCheck) {
       );
     }
   }
-  if (
-    !existsSync(join(vendorOutDir, "snoreToast", "snoretoast-x64.exe")) ||
-    existsSync(excludedAppleIcon)
-  ) {
+  const missingVendor = REQUIRED_VENDOR_FILES.filter(
+    (relPath) => !existsSync(join(vendorOutDir, relPath)),
+  );
+  if (missingVendor.length > 0 || existsSync(excludedAppleIcon)) {
     drift = true;
     console.error("vendor/ desincronizado o contiene recursos excluidos.");
   }

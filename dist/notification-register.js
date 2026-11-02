@@ -3533,11 +3533,6 @@ var LINK_CLSID_BYTES = Buffer.from([
   0,
   70
 ]);
-var LINK_FLAGS = 2 | // HasLinkInfo
-4 | // HasName
-64 | // HasIconLocation
-128;
-var LINK_INFO_FLAGS = 1 | 128;
 function encodeUtf16Le(s) {
   const buf = Buffer.alloc(s.length * 2);
   for (let i = 0; i < s.length; i++) {
@@ -3734,7 +3729,6 @@ async function installSnoreToastShortcut(lnkFileName, targetExe, aumid, lnkAbsol
 var AUMID = "Agent.VoiceInterConnector";
 var DISPLAY_NAME = "Agent-VoiceInterConnector";
 var LNK_FILENAME = `${DISPLAY_NAME}.lnk`;
-var AUMID_REGEX = /^[A-Za-z0-9.-]{1,129}$/;
 var registryProvider = {
   readRegistry,
   writeRegistry,
@@ -3744,12 +3738,6 @@ var snoreToastProvider = {
   getSnoreToastPath,
   installSnoreToastShortcut
 };
-function getAumid() {
-  return process.env["AI_ASSISTANT_AUMID"] ?? AUMID;
-}
-function isValidAumid(value) {
-  return AUMID_REGEX.test(value);
-}
 function getLnkPath() {
   const appData = process.env["APPDATA"] ?? "";
   return join3(
@@ -3796,14 +3784,6 @@ async function checkInstallState(aumid, iconIcoPath, iconUriPath) {
   return { lnkOk, registryOk };
 }
 async function installAction() {
-  const aumid = getAumid();
-  if (!isValidAumid(aumid)) {
-    process.stderr.write(
-      `AUMID inv\xE1lido: "${aumid}". Debe coincidir con /^[A-Za-z0-9.\\-]{1,129}$/
-`
-    );
-    return 1;
-  }
   const lnkPath = getLnkPath();
   const iconIcoPath = getIconIcoPath();
   const iconUriPath = getIconPngPath();
@@ -3812,12 +3792,12 @@ async function installAction() {
 `);
     return 1;
   }
-  const state = await checkInstallState(aumid, iconIcoPath, iconUriPath);
+  const state = await checkInstallState(AUMID, iconIcoPath, iconUriPath);
   const needsRegistry = !state.registryOk;
   const needsLnk = !state.lnkOk;
   if (!needsRegistry && !needsLnk) {
     process.stdout.write(
-      `AUMID ya registrado (AppUserModelID="${aumid}"): registro OK + .lnk OK. No-op.
+      `AUMID ya registrado (AppUserModelID="${AUMID}"): registro OK + .lnk OK. No-op.
 `
     );
     return 0;
@@ -3825,7 +3805,7 @@ async function installAction() {
   if (needsRegistry) {
     try {
       await registryProvider.writeRegistry(
-        aumid,
+        AUMID,
         DISPLAY_NAME,
         iconIcoPath,
         iconUriPath
@@ -3844,7 +3824,7 @@ async function installAction() {
       await snoreToastProvider.installSnoreToastShortcut(
         LNK_FILENAME,
         snoreToast,
-        aumid,
+        AUMID,
         lnkPath,
         buildIconLocation(iconIcoPath)
       );
@@ -3857,13 +3837,12 @@ async function installAction() {
     }
   }
   process.stdout.write(
-    `Registrado: AppUserModelID="${aumid}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${lnkPath}, icono=${iconIcoPath}).
+    `Registrado: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${lnkPath}, icono=${iconIcoPath}).
 `
   );
   return 0;
 }
 async function uninstallAction() {
-  const aumid = getAumid();
   const lnkPath = getLnkPath();
   try {
     unlinkSync2(lnkPath);
@@ -3879,8 +3858,8 @@ async function uninstallAction() {
     }
   }
   try {
-    await registryProvider.deleteRegistry(aumid);
-    process.stdout.write(`Eliminado registro: ${aumid}
+    await registryProvider.deleteRegistry(AUMID);
+    process.stdout.write(`Eliminado registro: ${AUMID}
 `);
   } catch (err) {
     process.stderr.write(
@@ -3896,13 +3875,12 @@ async function uninstallAction() {
   return 0;
 }
 async function statusAction() {
-  const aumid = getAumid();
   const lnkPath = getLnkPath();
   const iconIcoPath = getIconIcoPath();
   const lnkExists = existsSync3(lnkPath);
   let registry;
   try {
-    registry = await registryProvider.readRegistry(aumid);
+    registry = await registryProvider.readRegistry(AUMID);
   } catch (err) {
     process.stderr.write(`Error leyendo registro: ${err.message}
 `);
@@ -3914,7 +3892,7 @@ async function statusAction() {
     );
   } else if (registry.exists && registry.displayName === DISPLAY_NAME && registry.icon === iconIcoPath && registry.iconUri === getIconPngPath() && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST && lnkExists && parseIconLocation(readFileSync2(lnkPath)) === buildIconLocation(iconIcoPath)) {
     process.stdout.write(
-      `registered: AppUserModelID="${aumid}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)
+      `registered: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)
 `
     );
   } else {
@@ -3932,7 +3910,7 @@ async function statusAction() {
 }
 async function main() {
   const program2 = new Command();
-  program2.name("notifications-register").description(
+  program2.name("notification-register").description(
     "Registra, desregistra o consulta el AUMID de Agent-VoiceInterConnector en Windows (idempotente, opt-in)."
   ).allowExcessArguments(false).option(
     "--install",
@@ -3980,7 +3958,6 @@ export {
   getIconPngPath,
   getLnkPath,
   installAction,
-  isValidAumid,
   registryProvider,
   snoreToastProvider,
   statusAction,

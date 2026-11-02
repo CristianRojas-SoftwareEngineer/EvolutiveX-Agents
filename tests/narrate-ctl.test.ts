@@ -65,26 +65,26 @@ function readConfigFile(): Record<string, unknown> {
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 
-test("on activa la narración y lo persiste", () => {
-  const res = runCtl(["on"]);
+test("voice-on activa la narración y lo persiste", () => {
+  const res = runCtl(["voice-on"]);
   assert.equal(res.status, 0);
   assert.match(res.stdout, /activada/);
-  assert.equal(readConfigFile().enabled, true);
+  assert.equal(readConfigFile().voiceEnabled, true);
 });
 
-test("off desactiva la narración y lo persiste", () => {
-  const res = runCtl(["off"]);
+test("voice-off desactiva la narración y lo persiste", () => {
+  const res = runCtl(["voice-off"]);
   assert.equal(res.status, 0);
   assert.match(res.stdout, /desactivada/);
-  assert.equal(readConfigFile().enabled, false);
+  assert.equal(readConfigFile().voiceEnabled, false);
 });
 
-test("desktop-off y desktop-on controlan las notificaciones de escritorio sin alterar voz", () => {
-  assert.equal(runCtl(["desktop-off"]).status, 0);
-  assert.equal(readConfigFile().desktopEnabled, false);
-  assert.equal(readConfigFile().enabled, true);
-  assert.equal(runCtl(["desktop-on"]).status, 0);
-  assert.equal(readConfigFile().desktopEnabled, true);
+test("notifications-off y notifications-on controlan las notificaciones sin alterar voz", () => {
+  assert.equal(runCtl(["notifications-off"]).status, 0);
+  assert.equal(readConfigFile().notificationsEnabled, false);
+  assert.equal(readConfigFile().voiceEnabled, true);
+  assert.equal(runCtl(["notifications-on"]).status, 0);
+  assert.equal(readConfigFile().notificationsEnabled, true);
 });
 
 test("mode fija llm o local; un valor inválido devuelve 2 con uso", () => {
@@ -102,10 +102,10 @@ test("status reporta el estado y jamás imprime el valor de una clave", () => {
   const sentinel = "sk-CLAVE-QUE-NO-DEBE-APARECER";
   const res = runCtl(["status"], { GEMINI_API_KEY: sentinel });
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /enabled:/);
-  assert.match(res.stdout, /messageMode: {2}local/);
-  assert.match(res.stdout, /gemini key: {3}configurada/);
-  assert.ok(!/openrouter/i.test(res.stdout));
+  assert.match(res.stdout, /voice:/);
+  assert.match(res.stdout, /notifications:/);
+  assert.match(res.stdout, /messageMode: {4}local/);
+  assert.match(res.stdout, /gemini key: {5}configurada/);
   assert.ok(!res.stdout.includes(sentinel));
   assert.ok(!res.stderr.includes(sentinel));
 });
@@ -113,28 +113,28 @@ test("status reporta el estado y jamás imprime el valor de una clave", () => {
 test("status sin GEMINI_API_KEY reporta la clave ausente", () => {
   const res = runCtl(["status"]);
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /messageMode: {2}local/);
-  assert.match(res.stdout, /gemini key: {3}ausente/);
+  assert.match(res.stdout, /messageMode: {4}local/);
+  assert.match(res.stdout, /gemini key: {5}ausente/);
 });
 
 test("config.json solo persiste preferencias no secretas", () => {
-  assert.equal(runCtl(["on"]).status, 0);
+  assert.equal(runCtl(["voice-on"]).status, 0);
   assert.equal(runCtl(["mode", "llm"]).status, 0);
-  assert.equal(runCtl(["off"]).status, 0);
+  assert.equal(runCtl(["voice-off"]).status, 0);
   const raw = readConfigFile();
   assert.deepEqual(Object.keys(raw).sort(), [
-    "desktopEnabled",
-    "enabled",
     "messageMode",
+    "notificationsEnabled",
+    "voiceEnabled",
   ]);
-  assert.equal(raw.enabled, false);
+  assert.equal(raw.voiceEnabled, false);
   assert.equal(raw.messageMode, "llm");
 });
 
 test("sin comando equivale a status", () => {
   const res = runCtl([]);
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /enabled:/);
+  assert.match(res.stdout, /voice:/);
 });
 
 test("un comando desconocido devuelve 2", () => {

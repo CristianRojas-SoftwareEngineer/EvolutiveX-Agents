@@ -22,9 +22,9 @@ import { readStdin, parsePayload } from "./lib/hook-payload.js";
 async function main(): Promise<void> {
   const raw = await readStdin();
 
-  // Toggle global: si está desactivado, salir sin efectos.
+  // Toggle del canal de voz: si está desactivado, salir sin efectos.
   const cfg = loadConfig();
-  if (!cfg.enabled) return;
+  if (!cfg.voiceEnabled) return;
 
   const payload = parsePayload(raw);
 

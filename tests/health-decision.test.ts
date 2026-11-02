@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   decideHealthAction,
-  parseFirstJsonObject,
+  parseSingleJsonObject,
   NOT_PROVISIONED_MESSAGE,
 } from "../src/lib/health-decision.js";
 
@@ -153,38 +153,38 @@ for (const [name, input] of uncertainCases) {
   });
 }
 
-test("parseFirstJsonObject: objeto único válido ⇒ lo devuelve", () => {
+test("parseSingleJsonObject: objeto único válido ⇒ lo devuelve", () => {
   const report = healthyReport();
-  assert.deepEqual(parseFirstJsonObject(JSON.stringify(report)), report);
+  assert.deepEqual(parseSingleJsonObject(JSON.stringify(report)), report);
 });
 
-test("parseFirstJsonObject: objeto único con espacios finales ⇒ lo devuelve", () => {
+test("parseSingleJsonObject: objeto único con espacios finales ⇒ lo devuelve", () => {
   const report = healthyReport();
   assert.deepEqual(
-    parseFirstJsonObject(JSON.stringify(report) + "  \n"),
+    parseSingleJsonObject(JSON.stringify(report) + "  \n"),
     report,
   );
 });
 
-test("parseFirstJsonObject: dos objetos concatenados ⇒ undefined (salida inválida)", () => {
+test("parseSingleJsonObject: dos objetos concatenados ⇒ undefined (salida inválida)", () => {
   const text =
     JSON.stringify(healthyReport()) +
     "\n" +
     JSON.stringify({ error: "x", reason: "doctor_failed" });
-  assert.equal(parseFirstJsonObject(text), undefined);
+  assert.equal(parseSingleJsonObject(text), undefined);
 });
 
-test("parseFirstJsonObject: contenido tras el cierre del objeto ⇒ undefined", () => {
+test("parseSingleJsonObject: contenido tras el cierre del objeto ⇒ undefined", () => {
   assert.equal(
-    parseFirstJsonObject(JSON.stringify(healthyReport()) + " basura"),
+    parseSingleJsonObject(JSON.stringify(healthyReport()) + " basura"),
     undefined,
   );
 });
 
-test("parseFirstJsonObject: texto sin objeto ⇒ undefined", () => {
-  assert.equal(parseFirstJsonObject("sin json aquí"), undefined);
+test("parseSingleJsonObject: texto sin objeto ⇒ undefined", () => {
+  assert.equal(parseSingleJsonObject("sin json aquí"), undefined);
 });
 
-test("parseFirstJsonObject: fragmento malformado ⇒ undefined", () => {
-  assert.equal(parseFirstJsonObject('{"failed": '), undefined);
+test("parseSingleJsonObject: fragmento malformado ⇒ undefined", () => {
+  assert.equal(parseSingleJsonObject('{"failed": '), undefined);
 });

@@ -25,9 +25,6 @@ export const AUMID = "Agent.VoiceInterConnector";
 export const DISPLAY_NAME = "Agent-VoiceInterConnector";
 const LNK_FILENAME = `${DISPLAY_NAME}.lnk`;
 
-// Validación defensiva del AUMID (override por env `AI_ASSISTANT_AUMID`).
-const AUMID_REGEX = /^[A-Za-z0-9.-]{1,129}$/;
-
 export const registryProvider = {
   readRegistry,
   writeRegistry,
@@ -38,14 +35,6 @@ export const snoreToastProvider = {
   getSnoreToastPath,
   installSnoreToastShortcut,
 };
-
-function getAumid(): string {
-  return process.env["AI_ASSISTANT_AUMID"] ?? AUMID;
-}
-
-export function isValidAumid(value: string): boolean {
-  return AUMID_REGEX.test(value);
-}
 
 // Resolver la ruta del `.lnk` en el Menú Inicio del usuario.
 export function getLnkPath(): string {
@@ -117,13 +106,6 @@ async function checkInstallState(
 }
 
 export async function installAction(): Promise<number> {
-  const aumid = getAumid();
-  if (!isValidAumid(aumid)) {
-    process.stderr.write(
-      `AUMID inválido: "${aumid}". Debe coincidir con /^[A-Za-z0-9.\\-]{1,129}$/\n`,
-    );
-    return 1;
-  }
   const lnkPath = getLnkPath();
   const iconIcoPath = getIconIcoPath();
   const iconUriPath = getIconPngPath();
@@ -133,14 +115,14 @@ export async function installAction(): Promise<number> {
     return 1;
   }
 
-  const state = await checkInstallState(aumid, iconIcoPath, iconUriPath);
+  const state = await checkInstallState(AUMID, iconIcoPath, iconUriPath);
   const needsRegistry = !state.registryOk;
   const needsLnk = !state.lnkOk;
 
   // Idempotencia: no-op solo si registro y .lnk están al día.
   if (!needsRegistry && !needsLnk) {
     process.stdout.write(
-      `AUMID ya registrado (AppUserModelID="${aumid}"): registro OK + .lnk OK. No-op.\n`,
+      `AUMID ya registrado (AppUserModelID="${AUMID}"): registro OK + .lnk OK. No-op.\n`,
     );
     return 0;
   }
@@ -149,7 +131,7 @@ export async function installAction(): Promise<number> {
   if (needsRegistry) {
     try {
       await registryProvider.writeRegistry(
-        aumid,
+        AUMID,
         DISPLAY_NAME,
         iconIcoPath,
         iconUriPath,
@@ -169,7 +151,7 @@ export async function installAction(): Promise<number> {
       await snoreToastProvider.installSnoreToastShortcut(
         LNK_FILENAME,
         snoreToast,
-        aumid,
+        AUMID,
         lnkPath,
         buildIconLocation(iconIcoPath),
       );
@@ -182,13 +164,12 @@ export async function installAction(): Promise<number> {
   }
 
   process.stdout.write(
-    `Registrado: AppUserModelID="${aumid}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${lnkPath}, icono=${iconIcoPath}).\n`,
+    `Registrado: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${lnkPath}, icono=${iconIcoPath}).\n`,
   );
   return 0;
 }
 
 export async function uninstallAction(): Promise<number> {
-  const aumid = getAumid();
   const lnkPath = getLnkPath();
 
   try {
@@ -204,8 +185,8 @@ export async function uninstallAction(): Promise<number> {
   }
 
   try {
-    await registryProvider.deleteRegistry(aumid);
-    process.stdout.write(`Eliminado registro: ${aumid}\n`);
+    await registryProvider.deleteRegistry(AUMID);
+    process.stdout.write(`Eliminado registro: ${AUMID}\n`);
   } catch (err) {
     process.stderr.write(
       `Error eliminando registro: ${(err as Error).message}\n`,
@@ -220,7 +201,6 @@ export async function uninstallAction(): Promise<number> {
 }
 
 export async function statusAction(): Promise<number> {
-  const aumid = getAumid();
   const lnkPath = getLnkPath();
   const iconIcoPath = getIconIcoPath();
 
@@ -228,7 +208,7 @@ export async function statusAction(): Promise<number> {
 
   let registry;
   try {
-    registry = await registryProvider.readRegistry(aumid);
+    registry = await registryProvider.readRegistry(AUMID);
   } catch (err) {
     process.stderr.write(`Error leyendo registro: ${(err as Error).message}\n`);
     registry = { exists: false };
@@ -248,7 +228,7 @@ export async function statusAction(): Promise<number> {
     parseIconLocation(readFileSync(lnkPath)) === buildIconLocation(iconIcoPath)
   ) {
     process.stdout.write(
-      `registered: AppUserModelID="${aumid}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)\n`,
+      `registered: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)\n`,
     );
   } else {
     const parts: string[] = [];
@@ -268,7 +248,7 @@ export async function statusAction(): Promise<number> {
 async function main(): Promise<number> {
   const program = new Command();
   program
-    .name("notifications-register")
+    .name("notification-register")
     .description(
       "Registra, desregistra o consulta el AUMID de Agent-VoiceInterConnector en Windows (idempotente, opt-in).",
     )

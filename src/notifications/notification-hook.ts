@@ -11,11 +11,11 @@ import { loadConfig } from "../lib/config.js";
 import { readStdin } from "../lib/hook-payload.js";
 import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
-import { DesktopNotificationAdapter } from "./DesktopNotificationAdapter.js";
-import type { INotificationService } from "./INotificationService.js";
-import { buildEvent, normalizeStdinJsonText } from "./cli.js";
+import { DesktopNotificationAdapter } from "./desktop-notification-adapter.js";
+import type { NotificationService } from "./notification-service.js";
+import { buildNotificationPayload, normalizeStdinJsonText } from "./cli.js";
 
-const DIRECT_DESKTOP_EVENTS = new Set([
+const DIRECT_NOTIFICATION_EVENTS = new Set([
   "UserPromptSubmit",
   "SubagentStart",
   "SubagentStop",
@@ -44,16 +44,16 @@ export function notificationEventKey(
       ? "TaskInProgress"
       : undefined;
   }
-  return typeof event === "string" && DIRECT_DESKTOP_EVENTS.has(event)
+  return typeof event === "string" && DIRECT_NOTIFICATION_EVENTS.has(event)
     ? event
     : undefined;
 }
 
-export async function runDesktopHookFromRaw(
+export async function runNotificationHookFromRaw(
   raw: string,
-  adapter: INotificationService = new DesktopNotificationAdapter(),
+  adapter: NotificationService = new DesktopNotificationAdapter(),
 ): Promise<boolean> {
-  if (!loadConfig().desktopEnabled) return false;
+  if (!loadConfig().notificationsEnabled) return false;
   const normalized = normalizeStdinJsonText(raw);
   if (!normalized) return false;
   let parsed: unknown;
@@ -69,7 +69,7 @@ export async function runDesktopHookFromRaw(
   const event = notificationEventKey(payload);
   if (!event) return false;
   // Para PreToolUse (AskUserQuestion) exigimos que el formatter produzca texto
-  // (es decir, que tool_input.questions no esté vacío), igual que el gateway.
+  // (es decir, que tool_input.questions no esté vacío).
   if (event === "PreToolUse") {
     const ti = payload.tool_input;
     const questions =
@@ -80,7 +80,7 @@ export async function runDesktopHookFromRaw(
       return false;
     }
   }
-  const built = buildEvent(
+  const built = buildNotificationPayload(
     {
       eventType: event,
       sound: false,
@@ -96,12 +96,14 @@ export async function runDesktopHookFromRaw(
 
 async function main(): Promise<void> {
   const raw = await readStdin();
-  await runDesktopHookFromRaw(raw);
+  await runNotificationHookFromRaw(raw);
 }
 
 if (
   process.argv[1] &&
-  ["desktop-hook.js", "desktop-hook.ts"].includes(basename(process.argv[1])) &&
+  ["notification-hook.js", "notification-hook.ts"].includes(
+    basename(process.argv[1]),
+  ) &&
   fileURLToPath(import.meta.url) === resolve(process.argv[1])
 ) {
   main()

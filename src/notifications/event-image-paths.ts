@@ -25,18 +25,18 @@ export function resolvePluginRoot(metaUrl: string = import.meta.url): string {
   return resolvePath(dirname(fileURLToPath(metaUrl)), "..");
 }
 
-/** Permite sustituir el directorio repo en tests (ESM no intercepta llamadas internas a exports). */
-export const repoEventsDirProvider = {
+/** Permite sustituir el directorio de iconos de eventos en tests (ESM no intercepta llamadas internas). */
+export const eventIconsDirProvider = {
   get(): string {
     return join(resolvePluginRoot(), "assets", "notifications", "events");
   },
 };
 
-export function getRepoEventsDir(): string {
-  return repoEventsDirProvider.get();
+export function getEventIconsDir(): string {
+  return eventIconsDirProvider.get();
 }
 
 export function resolveEventImagePath(filename: string): string | undefined {
-  const repoPath = join(getRepoEventsDir(), filename);
-  return existsSync(repoPath) ? repoPath : undefined;
+  const iconPath = join(getEventIconsDir(), filename);
+  return existsSync(iconPath) ? iconPath : undefined;
 }

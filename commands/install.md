@@ -1,11 +1,11 @@
 ---
-description: Instala y configura AI Voice-InterConnector (binario + modelo + daemon) y activa la narración por voz de este plugin. Procedimiento guiado, multiplataforma e idempotente.
+description: Instala y configura AI Voice-InterConnector (binario + modelo + daemon) y activa la narración por voz y las notificaciones de escritorio de este plugin. Procedimiento guiado, multiplataforma e idempotente.
 argument-hint: "(sin argumentos)"
 ---
 
-# Instalación guiada de AI Voice-InterConnector para la narración por voz
+# Instalación guiada de Agent Voice-InterConnector (narración por voz y notificaciones de escritorio)
 
-Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`): instalar el motor **AI Voice-InterConnector**, descargar su modelo, dejar el daemon listo y activar la narración. Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
+Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`): instalar el motor **AI Voice-InterConnector**, descargar su modelo, dejar el daemon listo y activar tanto la narración por voz como las notificaciones de escritorio (incluido el registro del AUMID en Windows). Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
 
 ## Reglas de conducta (obligatorias)
 
@@ -123,21 +123,31 @@ Interpreta el resultado:
     y re-ejecuta `presynth`. No uses `cleanup --all` ni `cleanup --synthetic-speech`
     como primer remedio.
 
-## Paso 5 — Activar la narración y, opcionalmente, el modo LLM
+## Paso 5 — Activar la narración, las notificaciones de escritorio y, opcionalmente, el modo LLM
 
-1. Asegura que la narración está activa y revisa el estado:
+1. Asegura que tanto la narración por voz como las notificaciones de escritorio están activas y revisa el estado:
 
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" on
+   node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice-on
+   node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" notifications-on
    node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" status
    ```
 
-2. **Modo de mensajes** (pregunta al usuario su preferencia):
+2. **En Windows**, registra de forma idempotente el AUMID `Agent.VoiceInterConnector` y el acceso directo en el Menú Inicio para que los toasts muestren el nombre `Agent-VoiceInterConnector` y su icono en la cabecera (a nivel de usuario en `HKCU` y `%APPDATA%`, sin `sudo` ni privilegios de administrador):
+
+   ```powershell
+   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
+   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
+   ```
+
+   En Linux y macOS este paso no es necesario (el notificador nativo aplica el icono directamente).
+
+3. **Modo de mensajes de voz** (pregunta al usuario su preferencia):
    - `local` (por defecto, 100 % offline, mensajes simples):
      `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode local`
    - `llm` (mensajes más elaborados vía Gemini free tier):
      `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode llm`
-3. Si elige `llm`, **advierte sobre privacidad**: contenido de la sesión sale
+4. Si elige `llm`, **advierte sobre privacidad**: contenido de la sesión sale
    hacia Google (Gemini). La clave es del usuario; guíalo a definirla por
    variable de entorno, sin escribirla en el chat:
    - `GEMINI_API_KEY` (Gemini free tier). Se lee solo del entorno; el plugin no
@@ -173,13 +183,19 @@ Interpreta el resultado:
    Debe sonar el anuncio con exit `0`. Un exit `3` significa que el anuncio no está
    pre-sintetizado: repite el **Paso 4**.
 
-   Pregunta al usuario si escuchó las locuciones. Si no:
+4. Notificación de escritorio de prueba (verifica el canal visual nativo):
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-cli.js" --event-type SessionStart --message "Notificaciones de escritorio listas" --silent
+   ```
+
+   Pregunta al usuario si escuchó las locuciones y vio la notificación de escritorio. Si el audio no sonó:
    - Reconfirma que el daemon está `running` (Paso 3).
    - Revisa `worker.log` en el state dir (`narrate-ctl.js status` da la ruta) por
      errores de dispositivo de audio o CLI.
 
 ## Cierre
 
-Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; luego **cada evento registrado** (`UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`) genera y reproduce una locución corta. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/agent-voice-interconnector:narrate` (`on`/`off`/`mode`/`status`/`say`/`presynth`).
+Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/agent-voice-interconnector:narrate` (`voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`/`status`/`say`/`presynth`).
 
 Menciona también el mantenimiento de los anuncios pre-sintetizados: si se borran las locuciones del almacén del motor (`<data_dir>/speech/<voz>/<etiqueta>.wav`), basta re-ejecutar `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth` con el daemon caliente (es idempotente; los anuncios vigentes no se re-sintetizan). Ten en cuenta que `--synthetic-speech` es una categoría de `cleanup`, no una carpeta. Como los labels son slugs fijos, si en una actualización del plugin **cambia la frase** de un anuncio, `presynth` a secas no lo detecta (el label no cambió): hay que forzar la sobreescritura con `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --force`.

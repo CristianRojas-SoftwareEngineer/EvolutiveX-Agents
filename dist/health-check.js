@@ -34,8 +34,8 @@ function configPath() {
 
 // src/lib/config.ts
 var DEFAULTS = {
-  enabled: true,
-  desktopEnabled: true,
+  voiceEnabled: true,
+  notificationsEnabled: true,
   messageMode: "local"
 };
 function readFileConfig() {
@@ -43,8 +43,8 @@ function readFileConfig() {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object") {
-      const { enabled, desktopEnabled, messageMode } = parsed;
-      return { enabled, desktopEnabled, messageMode };
+      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
+      return { voiceEnabled, notificationsEnabled, messageMode };
     }
   } catch {
   }
@@ -53,8 +53,8 @@ function readFileConfig() {
 function loadConfig() {
   const file = readFileConfig();
   return {
-    enabled: typeof file.enabled === "boolean" ? file.enabled : DEFAULTS.enabled,
-    desktopEnabled: typeof file.desktopEnabled === "boolean" ? file.desktopEnabled : DEFAULTS.desktopEnabled,
+    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
+    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
     messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
     geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
   };
@@ -150,27 +150,27 @@ function getDaemonStatus(cliPath) {
     spawnError = res.error;
     status = typeof res.status === "number" ? res.status : null;
   } catch {
-    return { kind: "incierto", exitCode: null };
+    return { kind: "uncertain", exitCode: null };
   }
   const exitCode = status;
   if (spawnError || typeof stdout !== "string" || !stdout.trim()) {
-    return { kind: "incierto", exitCode };
+    return { kind: "uncertain", exitCode };
   }
   let parsed;
   try {
     parsed = JSON.parse(stdout);
   } catch {
-    return { kind: "incierto", exitCode };
+    return { kind: "uncertain", exitCode };
   }
   if (exitCode !== 0) {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   const record = parsed;
   if (record.daemon !== "running" && record.daemon !== "stopped") {
-    return { kind: "incierto", exitCode, raw: parsed };
+    return { kind: "uncertain", exitCode, raw: parsed };
   }
   if (record.daemon === "running") {
     const warm = normalizeWarm(record.warm);
@@ -198,7 +198,7 @@ function startDaemonDetached(cliPath) {
 var NOT_PROVISIONED_MESSAGE = "Agent Voice-InterConnector: el entorno de voz no est\xE1 provisionado. Ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz.";
 var DOCTOR_FAILED_MESSAGE = "Agent Voice-InterConnector: el diagn\xF3stico del motor (doctor) fall\xF3 y no produjo un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
 var DOCTOR_JSON_HINT = "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
-function parseFirstJsonObject(text) {
+function parseSingleJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return void 0;
   let depth = 0;
@@ -288,11 +288,11 @@ function decideHealthAction(input) {
 }
 
 // src/health-check.ts
-function notify(message) {
+function exitWithSystemMessage(message) {
   process.stdout.write(JSON.stringify({ systemMessage: message }));
   process.exit(0);
 }
-function ok() {
+function exitSilently() {
   process.exit(0);
 }
 function daemonStatusMessage(status) {
@@ -302,10 +302,10 @@ function daemonStatusMessage(status) {
 async function main() {
   await readStdin();
   const cfg = loadConfig();
-  if (!cfg.enabled) ok();
+  if (!cfg.voiceEnabled) exitSilently();
   const cli = resolveCli();
   if (!cli) {
-    notify(
+    exitWithSystemMessage(
       "Agent Voice-InterConnector: AI Voice-InterConnector no est\xE1 en el PATH. Inst\xE1lalo y ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz."
     );
   }
@@ -314,25 +314,27 @@ async function main() {
     timeout: 2e4,
     windowsHide: true
   });
-  if (res.error || typeof res.stdout !== "string" || !res.stdout.trim()) ok();
+  if (res.error || typeof res.stdout !== "string" || !res.stdout.trim()) {
+    exitSilently();
+  }
   const exitCode = typeof res.status === "number" ? res.status : null;
-  const report = parseFirstJsonObject(res.stdout);
+  const report = parseSingleJsonObject(res.stdout);
   const decision = decideHealthAction({ exitCode, report });
-  if (decision.kind === "notify") notify(decision.message);
-  if (decision.kind === "uncertain") ok();
+  if (decision.kind === "notify") exitWithSystemMessage(decision.message);
+  if (decision.kind === "uncertain") exitSilently();
   const status = getDaemonStatus(cli);
   if (status.kind === "running") {
     if (status.warm === "warm_failed") {
-      notify(
+      exitWithSystemMessage(
         "Agent Voice-InterConnector: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle."
       );
     }
-    ok();
+    exitSilently();
   }
   if (status.kind === "stopped") {
     startDaemonDetached(cli);
-    ok();
+    exitSilently();
   }
-  notify(daemonStatusMessage(status));
+  exitWithSystemMessage(daemonStatusMessage(status));
 }
 main().catch(() => process.exit(0));
