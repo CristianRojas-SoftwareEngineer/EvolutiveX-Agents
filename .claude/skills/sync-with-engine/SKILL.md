@@ -42,17 +42,17 @@ All user-facing output is in **Spanish**, per `<language_policy>` in `.claude/sk
 Commands (read-only, `git show`/`diff`/`log` only):
 
 - `git -C ../AI-Voice-InterConnector log --oneline v<cut>..<target>`
-- `git -C ../AI-Voice-InterConnector diff --stat v<cut> <target> -- docs/CLI crates/avi-core/src/exit_codes.rs src/main.rs`, then the full diff of those paths.
+- `git -C ../AI-Voice-InterConnector diff --stat v<cut> <target> -- docs/CLI crates/avi-core/src/exit_codes.rs src/main.rs`, then the full diff of those paths (if the engine moved them, locate the CLI docs, exit codes and entry point first).
 - The engine `CHANGELOG.md` section of each intermediate version via `git show <target>:CHANGELOG.md`.
 
 Classify the jump into one of four levels:
 
-| Level        | Criterion                                                     | Real example                                                        |
-| ------------ | ------------------------------------------------------------- | ------------------------------------------------------------------- |
-| no effect    | Only CI or the `VERSION` constant changed                     | v0.41.2, v0.41.4                                                    |
-| internal     | Implementation changed; no change in shape, exits or `reason` | v0.41.3 (review the plugin's budgets and timeouts)                  |
-| semantic     | Same shape, different meaning                                 | v0.41.1 (integral `doctor`, `reason` on exit 3, anonymous download) |
-| incompatible | Incompatible shape, flags, exit codes or `reason`             | —                                                                   |
+| Level        | Criterion                                                     | Typical evidence                                                                                |
+| ------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| no effect    | Only CI or the `VERSION` constant changed                     | Release diff touches only CI workflows and the `VERSION` constant                               |
+| internal     | Implementation changed; no change in shape, exits or `reason` | Same CLI docs; code changes in probes or timings (review the plugin's budgets and timeouts)     |
+| semantic     | Same shape, different meaning                                 | Same JSON keys, but a check, exit code or `reason` means something new (read the CLI docs diff) |
+| incompatible | Incompatible shape, flags, exit codes or `reason`             | Removed or renamed flags, keys, exits or `reason` values in the CLI docs diff                   |
 
 For _semantic_ and _incompatible_, delegate the diagnosis to the `investigate` skill (Level 1 invocation of `<sub_invocation_protocol>` in `artifact-structuring`: read its `SKILL.md` first and pass the full context).
 <!-- </drift_analysis> -->
@@ -99,10 +99,10 @@ Closed list of what carries the number:
 - `package.json` (`engine.aiVoiceInterConnector`).
 - `README.md` (link `blob/<tag>/docs/CLI/CONTRACT.md` and "verificado contra").
 - `docs/INTEGRATION.md` (header link and tag, "Requisitos sobre el motor", "Estabilidad del contrato").
-- `docs/specs/VOICE_CLONING.md` (header with date, minimum in the opening paragraph, D-15, §7.10, case 19, AC-27).
+- `docs/specs/VOICE_CLONING.md` (every place that states the verified or minimum version, plus the header date; locate them with `git grep -n -F "<previous cut>" docs/specs/VOICE_CLONING.md`).
 - `CHANGELOG.md` (the "Verificado contra" line).
 
-Final sweep: `git grep -n -F "<previous cut without v>" -- ':!package-lock.json' ':!dist' ':!vendor'` must return nothing except this skill's own classification examples. Never introduce versions in comments of `src/` or `tests/`; fixtures use `ENGINE_VERSION` from `tests/helpers.ts`.
+Final sweep: `git grep -n -F "<previous cut without v>" -- ':!package-lock.json' ':!dist' ':!vendor'` must return nothing. Never introduce versions in comments of `src/` or `tests/`; fixtures use `ENGINE_VERSION` from `tests/helpers.ts`.
 <!-- </propagation> -->
 
 <!-- <engine_reinstall> -->
@@ -118,7 +118,7 @@ Checks:
 - `daemon start` and `daemon status --json` until `warm`.
 - `speech play --label voice-stop --json`; on `speech_not_found`, run `node dist/narrate-ctl.js presynth` and repeat.
 
-Warn the user beforehand: the reinstall may start from zero (up to 5.9 GB of models), may modify `PATH` (open terminals do not see it) and stops the daemon.
+Warn the user beforehand: the reinstall may start from zero (several GB of models; check `setup` in the target tag's CLI docs), may modify `PATH` (open terminals do not see it) and stops the daemon.
 <!-- </engine_reinstall> -->
 
 <!-- <constraints> -->
@@ -129,7 +129,7 @@ Warn the user beforehand: the reinstall may start from zero (up to 5.9 GB of mod
 - Never tag, publish or push without an explicit order.
 - Never run `doctor --repair` or `cleanup`, and never touch engine pidfiles or data.
 - Never create scripts or automation in the repo.
-- The audible smoke test (Phase 2, items A–F of `docs/RELEASING.md`) is recommended and recorded, but never claimed as executed without the user's confirmation.
+- The audible smoke test (the audible items of Phase 2 in `docs/RELEASING.md`) is recommended and recorded, but never claimed as executed without the user's confirmation.
 
 <!-- </constraints> -->
 
