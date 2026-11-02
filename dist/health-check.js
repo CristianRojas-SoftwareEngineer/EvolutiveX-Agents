@@ -198,6 +198,10 @@ function startDaemonDetached(cliPath) {
 var NOT_PROVISIONED_MESSAGE = "Agent Voice-InterConnector: el entorno de voz no est\xE1 provisionado. Ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz.";
 var DOCTOR_FAILED_MESSAGE = "Agent Voice-InterConnector: el diagn\xF3stico del motor (doctor) fall\xF3 y no produjo un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
 var DOCTOR_JSON_HINT = "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
+var RESOURCE_CHECKS = [
+  "models_provisioned",
+  "onnx_runtime"
+];
 function parseSingleJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return void 0;
@@ -256,19 +260,22 @@ function isValidReport(value) {
   return true;
 }
 function buildFailedMessage(report) {
-  const parts = report.failed.map((name) => {
-    const check = report.checks.find((c) => c.name === name);
-    if (name === "models_provisioned") {
-      const missing = Array.isArray(report.models?.missing) ? report.models.missing.filter(
-        (m) => typeof m === "string"
-      ) : [];
-      const missingNote = missing.length > 0 ? ` Modelos sin provisionar: ${missing.join(", ")}.` : "";
-      return `${name}: ${NOT_PROVISIONED_MESSAGE}${missingNote}`;
-    }
-    const detail = check ? check.detail : "";
-    return detail ? `${name}: ${detail}.` : `${name}.`;
-  });
+  const parts = report.failed.map((name) => describeCheck(report, name));
   return `Agent Voice-InterConnector: el diagn\xF3stico del motor reporta chequeos fallidos. ${parts.join(" ")} ${DOCTOR_JSON_HINT}`;
+}
+function describeCheck(report, name) {
+  const check = report.checks.find((c) => c.name === name);
+  if (name === "models_provisioned") {
+    const missing = Array.isArray(report.models?.missing) ? report.models.missing.filter((m) => typeof m === "string") : [];
+    const missingNote = missing.length > 0 ? ` Modelos sin provisionar: ${missing.join(", ")}.` : "";
+    return `${name}: ${NOT_PROVISIONED_MESSAGE}${missingNote}`;
+  }
+  const detail = check ? check.detail : "";
+  return detail ? `${name}: ${detail}.` : `${name}.`;
+}
+function buildAdvisoryMessage(report) {
+  const parts = report.failed.map((name) => describeCheck(report, name));
+  return `Agent Voice-InterConnector: el diagn\xF3stico del motor reporta chequeos de instalaci\xF3n fallidos que no impiden la narraci\xF3n. ${parts.join(" ")} ` + DOCTOR_JSON_HINT;
 }
 function decideHealthAction(input) {
   const { exitCode, report } = input;
@@ -277,7 +284,7 @@ function decideHealthAction(input) {
       return { kind: "healthy" };
     }
     if (exitCode === 1 && report.failed.length > 0) {
-      return { kind: "notify", message: buildFailedMessage(report) };
+      return report.failed.some((name) => RESOURCE_CHECKS.includes(name)) ? { kind: "notify", message: buildFailedMessage(report) } : { kind: "healthy", advisory: buildAdvisoryMessage(report) };
     }
     return { kind: "uncertain" };
   }

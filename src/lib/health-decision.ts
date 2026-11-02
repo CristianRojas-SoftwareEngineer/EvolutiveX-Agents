@@ -4,13 +4,15 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Decisión pura del hook de SessionStart contra el contrato v0.36.2 de
+// Decisión pura del hook de SessionStart contra el contrato v0.41.1 de
 // `doctor --json` (DOCTOR.md del tag del motor): el comando emite exactamente
 // un objeto JSON con `failed: string[]` y `checks: {name, ok, detail}[]`, y el
 // veredicto sale del exit más el reporte válido —nunca de un campo `status`
-// que el motor no emite. Concentra el tipo del reporte, el parser de un único
-// objeto completo y el criterio, de modo que main() quede como cableado
-// delgado y la lógica sea verificable en aislado. Sin efectos ni I/O.
+// que el motor no emite. Como `doctor` es integral, la decisión aplica un gate
+// de recursos: solo `models_provisioned` y `onnx_runtime` bloquean el daemon;
+// el resto se informa sin bloquear. Concentra el tipo del reporte, el parser
+// de un único objeto completo y el criterio, de modo que main() quede como
+// cableado delgado y la lógica sea verificable en aislado. Sin efectos ni I/O.
 
 export interface DoctorCheck {
   name: string;
@@ -25,12 +27,13 @@ export interface DoctorReport {
 }
 
 /**
- * Veredicto discriminado del health-check: diagnóstico sano (única rama que
- * puede requerir calentar el daemon), aviso al usuario con mensaje acotado, o
+ * Veredicto discriminado del health-check: recursos sanos (única rama que
+ * puede requerir calentar el daemon; puede traer un aviso no bloqueante con
+ * los checks de instalación fallidos), aviso al usuario con mensaje acotado, o
  * estado incierto (sin daemon ni remedio inventado).
  */
 export type HealthDecision =
-  | { kind: "healthy" }
+  | { kind: "healthy"; advisory?: string }
   | { kind: "notify"; message: string }
   | { kind: "uncertain" };
 
@@ -46,6 +49,18 @@ const DOCTOR_FAILED_MESSAGE =
 
 const DOCTOR_JSON_HINT =
   "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
+
+/**
+ * Checks de recursos de `doctor` (DOCTOR.md del tag v0.41.1): los únicos que
+ * impiden calentar el daemon. El resto (`install_receipt`, `path_resolves`,
+ * `path_duplicates`, `pending_artifacts` o uno desconocido) es de instalación
+ * o ciclo de vida y solo se informa, como pide el §12 del contrato al separar
+ * las gates de bootstrap del diagnóstico integral.
+ */
+const RESOURCE_CHECKS: readonly string[] = [
+  "models_provisioned",
+  "onnx_runtime",
+];
 
 /**
  * Extrae el ÚNICO objeto JSON de la salida y lo parsea. El motor emite
@@ -85,7 +100,7 @@ export function parseSingleJsonObject(text: string): unknown {
   return undefined;
 }
 
-/** ¿El valor parseado tiene el shape mínimo del reporte v0.36.2? */
+/** ¿El valor parseado tiene el shape mínimo del reporte v0.41.1? */
 function isValidReport(value: unknown): value is DoctorReport {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return false;
@@ -133,33 +148,49 @@ function isValidReport(value: unknown): value is DoctorReport {
  * inventado.
  */
 function buildFailedMessage(report: DoctorReport): string {
-  const parts = report.failed.map((name) => {
-    const check = report.checks.find((c) => c.name === name);
-    if (name === "models_provisioned") {
-      const missing = Array.isArray(report.models?.missing)
-        ? report.models.missing.filter(
-            (m): m is string => typeof m === "string",
-          )
-        : [];
-      const missingNote =
-        missing.length > 0
-          ? ` Modelos sin provisionar: ${missing.join(", ")}.`
-          : "";
-      return `${name}: ${NOT_PROVISIONED_MESSAGE}${missingNote}`;
-    }
-    const detail = check ? check.detail : "";
-    return detail ? `${name}: ${detail}.` : `${name}.`;
-  });
+  const parts = report.failed.map((name) => describeCheck(report, name));
   return (
     "Agent Voice-InterConnector: el diagnóstico del motor reporta chequeos " +
     `fallidos. ${parts.join(" ")} ${DOCTOR_JSON_HINT}`
   );
 }
 
+/** Fragmento del aviso para un check fallido (`name: detail.` o `name.`). */
+function describeCheck(report: DoctorReport, name: string): string {
+  const check = report.checks.find((c) => c.name === name);
+  if (name === "models_provisioned") {
+    const missing = Array.isArray(report.models?.missing)
+      ? report.models.missing.filter((m): m is string => typeof m === "string")
+      : [];
+    const missingNote =
+      missing.length > 0
+        ? ` Modelos sin provisionar: ${missing.join(", ")}.`
+        : "";
+    return `${name}: ${NOT_PROVISIONED_MESSAGE}${missingNote}`;
+  }
+  const detail = check ? check.detail : "";
+  return detail ? `${name}: ${detail}.` : `${name}.`;
+}
+
 /**
- * Decisión pura y total del health-check sobre exit + reporte. Cuatro filas:
+ * Aviso no bloqueante cuando solo fallan checks informativos: el motor puede
+ * narrar y el daemon se calienta igual; se nombran todos sin ocultar ninguno.
+ */
+function buildAdvisoryMessage(report: DoctorReport): string {
+  const parts = report.failed.map((name) => describeCheck(report, name));
+  return (
+    "Agent Voice-InterConnector: el diagnóstico del motor reporta chequeos " +
+    `de instalación fallidos que no impiden la narración. ${parts.join(" ")} ` +
+    DOCTOR_JSON_HINT
+  );
+}
+
+/**
+ * Decisión pura y total del health-check sobre exit + reporte. Filas:
  * (exit 0 + reporte válido + failed vacío) → sano; (exit 1 + reporte válido +
- * failed no vacío) → aviso por cada check fallido; (exit 1 + objeto de error
+ * algún check de recursos fallido) → aviso bloqueante con todos los fallidos;
+ * (exit 1 + reporte válido + solo checks informativos fallidos) → sano con
+ * aviso no bloqueante; (exit 1 + objeto de error
  * `doctor_failed`) → aviso de fallo del diagnóstico; cualquier otra
  * combinación (exit incoherente, shape inválido, JSON malformado, timeout o
  * error de ejecución) → incierto, sin daemon ni remedio inventado.
@@ -174,7 +205,9 @@ export function decideHealthAction(input: {
       return { kind: "healthy" };
     }
     if (exitCode === 1 && report.failed.length > 0) {
-      return { kind: "notify", message: buildFailedMessage(report) };
+      return report.failed.some((name) => RESOURCE_CHECKS.includes(name))
+        ? { kind: "notify", message: buildFailedMessage(report) }
+        : { kind: "healthy", advisory: buildAdvisoryMessage(report) };
     }
     return { kind: "uncertain" };
   }
