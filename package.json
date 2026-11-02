@@ -6,6 +6,9 @@
   "description": "Plugin de Claude Code: narración por voz con AI Voice-InterConnector y notificaciones de escritorio nativas.",
   "author": "Cristián Rojas Arredondo",
   "license": "MPL-2.0",
+  "engine": {
+    "aiVoiceInterConnector": "0.41.4"
+  },
   "scripts": {
     "build": "node build.mjs",
     "check-dist": "node build.mjs --check",

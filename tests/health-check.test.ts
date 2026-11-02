@@ -6,7 +6,7 @@
 
 // Hook de SessionStart (dist/health-check.js) como subproceso real, con un CLI
 // `ai-voice-interconnector` falso en el PATH parametrizado por caso: `doctor
-// --json` con su exit y payload (contrato v0.41.4: reporte con failed/checks o
+// --json` con su exit y payload (contrato vigente del motor: reporte con failed/checks o
 // objeto de error), y `daemon status --json` con su exit y payload (running/
 // stopped/degraded o basura). Fija por contrato el flujo nuevo: consultar el
 // daemon solo tras recursos sanos, arrancarlo a lo sumo una vez y solo con
@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
-import { makeTempDir, removeDir, waitFor } from "./helpers.js";
+import { ENGINE_VERSION, makeTempDir, removeDir, waitFor } from "./helpers.js";
 
 const HEALTH = join(process.cwd(), "dist", "health-check.js");
 
@@ -164,11 +164,11 @@ function startCount(argvLog: string): number {
   ).length;
 }
 
-/** Reporte sano del contrato v0.41.4: failed vacío y checks correctos. */
+/** Reporte sano del contrato vigente del motor: failed vacío y checks correctos. */
 function healthyDoctorJson(): string {
   return JSON.stringify({
     schema_version: "6",
-    version: "0.41.4",
+    version: ENGINE_VERSION,
     failed: [],
     checks: [{ name: "install_receipt", ok: true, detail: "recibo válido" }],
     models: { missing: [] },
@@ -182,7 +182,7 @@ function healthyDoctorJson(): string {
 function informativeDoctorJson(): string {
   return JSON.stringify({
     schema_version: "6",
-    version: "0.41.4",
+    version: ENGINE_VERSION,
     channel: "unmanaged",
     failed: ["install_receipt", "path_resolves"],
     checks: [

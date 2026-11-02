@@ -36,7 +36,7 @@ const KILL_GRACE_MS = 2_000;
 
 /**
  * Pista por `reason` del payload de error de `speech play|say --json`
- * (contrato v0.41.4: toda salida ≠ 0 emite `{error, reason}` por stdout).
+ * (contrato del motor: toda salida ≠ 0 emite `{error, reason}` por stdout).
  * Un `reason` fuera de esta tabla se trata como ausente y el log conserva
  * solo el código, como exige la regla de consumo aditivo del motor.
  */

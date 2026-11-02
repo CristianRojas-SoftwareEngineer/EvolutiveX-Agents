@@ -10,6 +10,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import pkg from "../package.json" with { type: "json" };
+
+/** Versión del motor verificada por el plugin (fuente única: package.json). */
+export const ENGINE_VERSION: string = pkg.engine.aiVoiceInterConnector;
 
 /**
  * Redefine process.platform (os.platform() lo refleja). Permite ejercitar las
