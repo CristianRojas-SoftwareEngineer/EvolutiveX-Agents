@@ -6,10 +6,7 @@
 La funcionalidad propuesta requiere como mínimo el motor v0.41.4, el único
 corte contra el que el plugin se verifica; desde v0.39.0 los fallos de
 micrófono y de audio salen con exit 3 y `reason` propio (`no_input_device`,
-`no_output_device`, `audio_backend_unavailable`) en lugar de exit 10. En v0.37.3,
-para usar push-to-talk sin duración hay que configurar
-`AVI_PUSH_TO_TALK_MAX_SECS` con un valor no superior a 30; desde v0.37.4 el
-motor usa 30 s cuando la variable está ausente.
+`no_output_device`, `audio_backend_unavailable`) en lugar de exit 10.
 
 Este documento analiza el requerimiento de exponer el clonado de voz del motor
 AI Voice-InterConnector a través del plugin, fija el diseño y define los
@@ -480,8 +477,7 @@ La feature requiere motor v0.41.4 o posterior. Antes de habilitar la gestión de
 voces, el plugin consulta `version --json` y compara la versión; ante una
 versión inferior o ilegible informa que la feature no está disponible y conserva
 las rutas de narración existentes con `default`. La consulta no se añade al
-launcher. En v0.37.3 el push-to-talk sin duración exige configurar el techo
-explícito; desde v0.37.4 el valor ausente usa 30 s.
+launcher.
 Los envelopes CLI incluyen `schema_version: "6"`; claves adicionales se toleran.
 `voice list`, `voice remove` y `speech play` son locales y no aceptan `--daemon`.
 `speech say` y `speech synthesize` admiten hasta 500 caracteres Unicode.
@@ -521,7 +517,7 @@ y ejecuta `voice use`. Si no acepta, `default` queda lista para la narración.
 - `voice use` es una operación manual; puede convivir con un worker en curso.
   Un ítem ya reclamado puede narrarse con la voz anterior; el siguiente lee la
   configuración nueva. Es una ventana aceptable.
-- El motor serializa síntesis, pero no la secuencia completa del plugin. Por cada directorio de estado, el plugin coordina `voice clone`, `voice use`, `voice remove`, `presynth` y las escrituras de preferencias `on`, `off` y `mode`, desde antes de leer la configuración relevante hasta completar las mutaciones. Las operaciones externas no participan.
+- El motor serializa síntesis, pero no la secuencia completa del plugin. Por cada directorio de estado, el plugin coordina `voice clone`, `voice use`, `voice remove`, `presynth` y las escrituras de preferencias `voice-on`, `voice-off`, `notifications-on`, `notifications-off` y `mode`, desde antes de leer la configuración relevante hasta completar las mutaciones. Las operaciones externas no participan.
 - La coordinación usa dos directorios hermanos dentro de `stateDir()`: `voice-operation.lock` es el bloqueo principal y `voice-operation.gate` es la compuerta de sus cambios. Ambos se crean mediante `mkdir` exclusivo, sin `recursive`: `EEXIST` nunca concede propiedad. Todos los procesos del plugin adquieren la compuerta antes de crear, examinar, recuperar o liberar el bloqueo principal; nadie opera sobre este fuera de ella.
 - Bajo la compuerta, el dueño del bloqueo principal escribe un registro con su PID, identidad de proceso verificable y token aleatorio único. Solo comienza a modificar configuración o locuciones después de escribir el registro completo y liberar la compuerta. Si la publicación falla, no ejecuta la operación y conserva cualquier estado que no pueda retirar con seguridad.
 - Antes de despachar cada operación del motor que pueda modificar voces o locuciones, el dueño marca de forma persistente y bajo la compuerta que existe trabajo delegado pendiente; solo elimina esa marca tras recibir y procesar el resultado terminal. Si el dueño desaparece con la marca presente, el bloqueo se conserva para intervención manual: en particular, el daemon puede completar un clonado después de que el cliente se desconecte. La muerte del proceso del plugin por sí sola no prueba que haya cesado el trabajo delegado.
@@ -659,7 +655,7 @@ Casos:
 17. operaciones manuales simultáneas, recuperación simultánea de dueño terminado, PID reutilizado, dueño no verificable y liberación sin propiedad; verificar que nunca haya dos dueños.
 18. voz ausente con daemon activo, `degraded`, `warm_failed` y veredicto integral de `doctor`.
 19. versión inferior a v0.41.4 o ilegible no habilita la feature y mantiene narración existente.
-20. `presynth` concurrente con `voice use` y `on/off/mode` concurrente con `voice use`: sin WAV ni preferencias perdidas por carreras del plugin; sin bloqueo reentrante en pre-síntesis interna.
+20. `presynth` concurrente con `voice use` y `voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode` concurrentes con `voice use`: sin WAV ni preferencias perdidas por carreras del plugin; sin bloqueo reentrante en pre-síntesis interna.
 
 ### 10.3 E2E opcional
 
@@ -764,7 +760,6 @@ que exista un micrófono de entrada.
 - **Modelo Base**: el clonado y las voces clonadas requieren
   `qwen3-tts-0.6b-base`; sin él, el motor sale con exit 4.
 - **Permisos de micrófono**: al clonar con `--mic`, si el sistema operativo no concede permisos al proceso del motor, sale con exit 3 (`no_input_device` o `audio_backend_unavailable`) cuando falta el dispositivo o el backend, o con exit 10 (`transcription_failed`) ante otro fallo de captura. La UX debe informar con claridad cómo conceder permisos o usar un archivo WAV alternativo.
-- **PTT en v0.37.3**: sin duración y con variable ausente, esa versión rechaza su default general; la corrección está publicada en v0.37.4.
 - **Concurrencia externa y recuperación**: el bloqueo del plugin no controla invocaciones externas; una interrupción puede dejar locuciones parciales o temporales para barrido.
 - **Denoise**: `denoise_busy` comparte exit 6 con otros conflictos; no se ha validado en evaluación humana controlada la preservación de identidad.
 
