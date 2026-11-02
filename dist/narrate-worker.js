@@ -81,6 +81,38 @@ function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
+// src/lib/health-decision.ts
+function parseSingleJsonObject(text) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("{")) return void 0;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        if (trimmed.slice(i + 1).trim() !== "") return void 0;
+        try {
+          return JSON.parse(trimmed.slice(0, i + 1));
+        } catch {
+          return void 0;
+        }
+      }
+    }
+  }
+  return void 0;
+}
+
 // src/lib/queue.ts
 import {
   mkdirSync as mkdirSync2,
@@ -503,6 +535,24 @@ function log(msg) {
 var PLAY_TIMEOUT_MS = 1e4;
 var SAY_TIMEOUT_MS = 45e3;
 var KILL_GRACE_MS = 2e3;
+var REASON_HINTS = {
+  speech_not_found: "locuci\xF3n no pre-sintetizada; ejecuta narrate-ctl presynth",
+  voice_not_found: "voz no encontrada en el motor; ejecuta ai-voice-interconnector setup y luego narrate-ctl presynth",
+  no_output_device: "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
+  audio_backend_unavailable: "backend de audio del sistema no disponible (en Linux, ALSA/libasound.so.2)",
+  playback_failed: "fallo de reproducci\xF3n del audio",
+  daemon_unreachable: "daemon ca\xEDdo; SessionStart lo levanta o ejecuta ai-voice-interconnector daemon start",
+  model_missing: "modelo no provisionado; ejecuta ai-voice-interconnector setup"
+};
+function failureDetail(stdout) {
+  const payload = parseSingleJsonObject(stdout);
+  if (typeof payload !== "object" || payload === null) return "";
+  const reason = payload.reason;
+  if (typeof reason !== "string" || !Object.hasOwn(REASON_HINTS, reason)) {
+    return "";
+  }
+  return ` (${reason}: ${REASON_HINTS[reason]})`;
+}
 var NARRATION_GAP_MS = 1e3;
 var IDLE_MS = 5e3;
 var IDLE_POLL_MS = 100;
@@ -543,9 +593,8 @@ function releaseLock() {
   }
 }
 async function runPlay(cliPath, label) {
-  const args = ["speech", "play", "--label", label];
+  const args = ["speech", "play", "--label", label, "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
-    stdio: "ignore",
     windowsHide: true,
     timeoutMs: PLAY_TIMEOUT_MS,
     killGraceMs: KILL_GRACE_MS
@@ -554,15 +603,12 @@ async function runPlay(cliPath, label) {
     log(`speech play timeout tras ${PLAY_TIMEOUT_MS} ms; proceso terminado`);
     return;
   }
-  if (res.code !== 0) {
-    const hint = res.code === 3 ? " (locuci\xF3n o voz no disponible; ejecuta narrate-ctl presynth)" : "";
-    log(`speech play sali\xF3 con c\xF3digo ${res.code}${hint}`);
-  }
+  if (res.code !== 0)
+    log(`speech play sali\xF3 con c\xF3digo ${res.code}${failureDetail(res.stdout)}`);
 }
 async function runSay(cliPath, text) {
-  const args = ["speech", "say", "--text", text, "--daemon"];
+  const args = ["speech", "say", "--text", text, "--daemon", "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
-    stdio: "ignore",
     windowsHide: true,
     timeoutMs: SAY_TIMEOUT_MS,
     killGraceMs: KILL_GRACE_MS
@@ -571,7 +617,8 @@ async function runSay(cliPath, text) {
     log(`speech say timeout tras ${SAY_TIMEOUT_MS} ms; proceso terminado`);
     return;
   }
-  if (res.code !== 0) log(`speech say sali\xF3 con c\xF3digo ${res.code}`);
+  if (res.code !== 0)
+    log(`speech say sali\xF3 con c\xF3digo ${res.code}${failureDetail(res.stdout)}`);
 }
 async function main() {
   ensureStateDir();

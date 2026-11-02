@@ -10,6 +10,7 @@
 // Degrada en silencio; los errores van a worker.log.
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { loadConfig } from "./lib/config.js";
+import { parseSingleJsonObject } from "./lib/health-decision.js";
 import {
   ensureStateDir,
   workerLogPath,
@@ -32,6 +33,38 @@ function log(msg: string): void {
 const PLAY_TIMEOUT_MS = 10_000;
 const SAY_TIMEOUT_MS = 45_000;
 const KILL_GRACE_MS = 2_000;
+
+/**
+ * Pista por `reason` del payload de error de `speech play|say --json`
+ * (contrato v0.41.1: toda salida ≠ 0 emite `{error, reason}` por stdout).
+ * Un `reason` fuera de esta tabla se trata como ausente y el log conserva
+ * solo el código, como exige la regla de consumo aditivo del motor.
+ */
+const REASON_HINTS: Record<string, string> = {
+  speech_not_found: "locución no pre-sintetizada; ejecuta narrate-ctl presynth",
+  voice_not_found:
+    "voz no encontrada en el motor; ejecuta ai-voice-interconnector setup y luego narrate-ctl presynth",
+  no_output_device:
+    "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
+  audio_backend_unavailable:
+    "backend de audio del sistema no disponible (en Linux, ALSA/libasound.so.2)",
+  playback_failed: "fallo de reproducción del audio",
+  daemon_unreachable:
+    "daemon caído; SessionStart lo levanta o ejecuta ai-voice-interconnector daemon start",
+  model_missing:
+    "modelo no provisionado; ejecuta ai-voice-interconnector setup",
+};
+
+/** Sufijo de diagnóstico ` (<reason>: <pista>)` o "" si el reason no es conocido. */
+function failureDetail(stdout: string): string {
+  const payload = parseSingleJsonObject(stdout);
+  if (typeof payload !== "object" || payload === null) return "";
+  const reason = (payload as Record<string, unknown>).reason;
+  if (typeof reason !== "string" || !Object.hasOwn(REASON_HINTS, reason)) {
+    return "";
+  }
+  return ` (${reason}: ${REASON_HINTS[reason]})`;
+}
 
 // Pausa de respiración entre narraciones: evita que dos locuciones suenen pegadas.
 const NARRATION_GAP_MS = 1_000;
@@ -85,14 +118,15 @@ function releaseLock(): void {
 }
 
 /**
- * Ejecuta `speech play --label <label>` con timeout. Política de fallo: cualquier
- * exit ≠ 0 (incluido el `3` de cache miss) se registra en worker.log y el turno
- * queda sin audio — sin re-sintetizado ni fallback a `speech say`.
+ * Ejecuta `speech play --label <label> --json` con timeout. Política de fallo:
+ * cualquier exit ≠ 0 se registra en worker.log con su `reason` y su pista
+ * cuando el envelope `--json` trae uno conocido (exit 3: `speech_not_found`,
+ * `voice_not_found`, `no_output_device` o `audio_backend_unavailable`) y el
+ * turno queda sin audio — sin re-sintetizado ni fallback a `speech say`.
  */
 async function runPlay(cliPath: string, label: string): Promise<void> {
-  const args = ["speech", "play", "--label", label];
+  const args = ["speech", "play", "--label", label, "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
-    stdio: "ignore",
     windowsHide: true,
     timeoutMs: PLAY_TIMEOUT_MS,
     killGraceMs: KILL_GRACE_MS,
@@ -101,20 +135,17 @@ async function runPlay(cliPath: string, label: string): Promise<void> {
     log(`speech play timeout tras ${PLAY_TIMEOUT_MS} ms; proceso terminado`);
     return;
   }
-  if (res.code !== 0) {
-    const hint =
-      res.code === 3
-        ? " (locución o voz no disponible; ejecuta narrate-ctl presynth)"
-        : "";
-    log(`speech play salió con código ${res.code}${hint}`);
-  }
+  if (res.code !== 0)
+    log(`speech play salió con código ${res.code}${failureDetail(res.stdout)}`);
 }
 
-/** Ejecuta `speech say --text <texto> --daemon` con timeout. Resuelve al terminar. */
+/**
+ * Ejecuta `speech say --text <texto> --daemon --json` con timeout; un exit ≠ 0
+ * se registra con su `reason` y su pista si es conocido.
+ */
 async function runSay(cliPath: string, text: string): Promise<void> {
-  const args = ["speech", "say", "--text", text, "--daemon"];
+  const args = ["speech", "say", "--text", text, "--daemon", "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
-    stdio: "ignore",
     windowsHide: true,
     timeoutMs: SAY_TIMEOUT_MS,
     killGraceMs: KILL_GRACE_MS,
@@ -123,7 +154,8 @@ async function runSay(cliPath: string, text: string): Promise<void> {
     log(`speech say timeout tras ${SAY_TIMEOUT_MS} ms; proceso terminado`);
     return;
   }
-  if (res.code !== 0) log(`speech say salió con código ${res.code}`);
+  if (res.code !== 0)
+    log(`speech say salió con código ${res.code}${failureDetail(res.stdout)}`);
 }
 
 async function main(): Promise<void> {
