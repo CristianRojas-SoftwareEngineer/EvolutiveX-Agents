@@ -10,7 +10,7 @@ import type { NotificationSoundProfile } from "./event-notification-profile.js";
 /**
  * Tokens del catálogo (paridad BurntToast) → sonido WinRT que SnoreToast entiende.
  * node-notifier (`mapToWin8`) sustituye cualquier string sin prefijo `Notification.`
- * por `Notification.Default`, por eso todos sonaban igual.
+ * por `Notification.Default`; por eso cada token se traduce aquí a su nombre WinRT completo.
  * @see https://learn.microsoft.com/en-us/uwp/schemas/tiles/toastschema/element-audio
  */
 const WIN32_NOTIFICATION_SOUND: Record<string, string> = {

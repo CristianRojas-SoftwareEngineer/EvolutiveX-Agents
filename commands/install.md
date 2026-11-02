@@ -1,11 +1,11 @@
 ---
-description: Instala y configura AI Voice-InterConnector (binario + modelo + daemon) y activa la narración por voz y las notificaciones de escritorio de este plugin. Procedimiento guiado, multiplataforma e idempotente.
+description: Instala y configura AI Voice-InterConnector (binario + modelos + daemon) y activa la narración por voz y las notificaciones de escritorio de este plugin. Procedimiento guiado, multiplataforma e idempotente.
 argument-hint: "(sin argumentos)"
 ---
 
 # Instalación guiada de Agent Voice-InterConnector (narración por voz y notificaciones de escritorio)
 
-Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`): instalar el motor **AI Voice-InterConnector**, descargar su modelo, dejar el daemon listo y activar tanto la narración por voz como las notificaciones de escritorio (incluido el registro del AUMID en Windows). Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
+Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`): instalar el motor **AI Voice-InterConnector**, descargar sus modelos, dejar el daemon listo y activar tanto la narración por voz como las notificaciones de escritorio (incluido el registro del AUMID en Windows). Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
 
 ## Reglas de conducta (obligatorias)
 
@@ -73,7 +73,7 @@ automáticamente:
 
 Tras instalar por cualquier vía, **verifica**: `ai-voice-interconnector version`. Si el comando no se encuentra, probablemente el PATH aún no se recargó: indica al usuario abrir una terminal nueva (o reiniciar Claude Code) y reanuda.
 
-## Paso 2 — Descargar el modelo de voz
+## Paso 2 — Descargar los modelos
 
 ```bash
 ai-voice-interconnector setup

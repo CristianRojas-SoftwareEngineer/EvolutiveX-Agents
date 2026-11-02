@@ -79,7 +79,7 @@ La resolución del ejecutable la hace `lib/resolve-cli.ts`, que escanea el `PATH
 
 ## Requisitos sobre el motor
 
-Para que la narración funcione, en la máquina del usuario debe existir:
+El plugin está verificado contra **AI Voice-InterConnector v0.41.4** (soporte exclusivo a ese corte; fuente única: `engine.aiVoiceInterConnector` en `package.json`). Para que la narración funcione, en la máquina del usuario debe existir:
 
 1. `ai-voice-interconnector` en el `PATH`, instalado con el instalador publicado en
    la release del tag (`install.sh` para Linux/macOS e `install.ps1` para Windows).

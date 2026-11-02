@@ -21,7 +21,6 @@ invisible cuando todo va bien y fácil de reparar cuando no.
   (`model_missing`, exit 4) y daemon inalcanzable (`daemon_unreachable`, exit 5).
 - Revisar el timeout de la ruta LLM (hoy 8 s) para que la caída a `local` sea más
   rápida cuando no hay conectividad.
-- Mantener el arranque del daemon como best-effort y nunca bloquear la sesión.
 
 ### Diagnóstico y control
 
@@ -76,9 +75,10 @@ perder la fidelidad al turno ni la privacidad por defecto.
 ## Gobernanza del motor
 
 - Consultar `ai-voice-interconnector version` en `SessionStart` y avisar —sin
-  bloquear— si el motor instalado es más viejo que el verificado con el plugin.
-- Detectar deriva del contrato de las seis superficies CLI antes de que se
-  convierta en un fallo silencioso.
+  bloquear— si el motor instalado es distinto del verificado (`engine.aiVoiceInterConnector` de `package.json`).
+- Automatizar en CI la detección de un release del motor más nuevo que
+  `engine.aiVoiceInterConnector` (hoy se detecta bajo demanda con la skill de
+  desarrollo `/sync-with-engine`).
 
 ## Ideas en incubación
 
@@ -99,16 +99,10 @@ perder la fidelidad al turno ni la privacidad por defecto.
 - Publicación en el marketplace de Claude.ai con validación estricta.
 - Changelog limpio, con cada entrada vinculada a su PR o issue.
 
-## Versionado
-
-El plugin y el motor llevan versionados independientes. Durante el tramo pre-1.0
-el plugin publica sus versiones intermedias a su propio ritmo; cuando AI
-Voice-InterConnector alcance `v1.0.0`, el plugin avanzará desde la versión que
-haya alcanzado hasta `1.0.0` en un release que acumule las correcciones
-implementadas. Ese salto será intencional, no un error de versionado.
-
 ## Mantenimiento
 
 Cada release revisa este documento según `docs/RELEASING.md` §Después del tag:
 las ideas implementadas o descartadas se retiran (su historial queda en git) y
 las nuevas que surjan del uso real se incorporan a la sección correspondiente.
+
+La política de versionado y el corte verificado del motor viven en `docs/RELEASING.md` (§Modelo de versionado).
