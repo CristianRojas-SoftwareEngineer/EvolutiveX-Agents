@@ -17,8 +17,8 @@ Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Vo
   a nivel de usuario.
 - **No manejes claves de API en el chat** (quedarían en el transcript). Para la
   clave, guía al usuario a definir la variable de entorno `GEMINI_API_KEY`.
-- Si un paso requiere una acción manual del usuario (instalador gráfico, aceptar
-  la licencia del modelo en HuggingFace, reiniciar la terminal para el PATH),
+- Si un paso requiere una acción manual del usuario (instalador gráfico,
+  reiniciar la terminal para el PATH),
   **detente y explica** con claridad qué debe hacer antes de continuar.
 - Al final, **verifica** que todo funciona con una narración de prueba real.
 
@@ -35,10 +35,18 @@ Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Vo
    - **Exit `0`** con `failed` vacío → todos los checks pasan: el motor ya está listo;
      salta al **Paso 3** (daemon) y luego al **Paso 4** (pre-síntesis) y al
      **Paso 6** (verificación).
-   - **Exit `1`** con `failed` no vacío → falta algo; revisa `failed`/`checks` y
-     instala o ejecuta `setup` según el caso (normalmente salta al **Paso 2**; si el
-     propio binario está dañado, al **Paso 1**). Este fallo imprime el MISMO reporte,
-     sin objeto de error detrás.
+   - **Exit `1`** con `failed` no vacío → revisa qué checks fallan (el reporte es
+     el MISMO, sin objeto de error detrás):
+     - **Recursos**: `models_provisioned` → salta al **Paso 2** (`setup`);
+       `onnx_runtime` → reinstala con el **Paso 1**. Sin ellos la narración no
+       funciona y el hook `SessionStart` no levanta el daemon.
+     - **Instalación o ciclo de vida**: `install_receipt`, `path_resolves`,
+       `path_duplicates`, `pending_artifacts` o un check desconocido → el motor
+       puede narrar; informa al usuario los nombres y el `detail`, remite a
+       `ai-voice-interconnector doctor --json` y continúa con el **Paso 3**.
+       Nunca ejecutes `doctor --repair` por tu cuenta. Mientras sigan fallando,
+       `SessionStart` mostrará un aviso en cada sesión, sin bloquearla y
+       levantando igual el daemon.
    - **Exit `1`** con un objeto `reason: "doctor_failed"` → falló el comando doctor
      (no el veredicto): re-ejecútalo antes de continuar.
 3. Si **no está presente**, continúa al **Paso 1**.
@@ -82,10 +90,15 @@ Paso 1 ya lo encadena, así que normalmente esto solo confirma el estado):
 Advertencias a comunicar:
 
 - La selección completa requiere aproximadamente **5,9 GB** de descarga y puede tardar.
-- El acceso **gated** de HuggingFace puede afectar a **algunos** modelos, no a todos:
-  si `setup` reporta un problema de autorización, guía al usuario a aceptar las
-  condiciones del modelo afectado en su cuenta de HuggingFace (o definir `HF_TOKEN`)
-  y reintentar. No atribuyas todo fallo de descarga a HuggingFace gated.
+- La descarga es **anónima**: los modelos son repositorios públicos de Hugging
+  Face, no hace falta cuenta y `setup` ignora `HF_TOKEN` y el token de
+  `huggingface-cli login`. Respeta `HF_ENDPOINT`, `HF_HUB_CACHE` y `HF_HOME`.
+- Si `setup` falla, distingue la causa por el código o por el `reason` de
+  `ai-voice-interconnector setup --json`: `network_error` (exit `20`, red o
+  servidor) se resuelve reintentando `setup`; `model_unavailable` (exit `1`,
+  Hugging Face rechazó un modelo fijado) **no** se resuelve reintentando: hace
+  falta una versión del motor que vuelva a fijar el modelo (actualiza el motor
+  con el **Paso 1**).
 
 ## Paso 3 — Dejar el daemon en marcha
 
@@ -164,7 +177,9 @@ Interpreta el resultado:
 ## Paso 6 — Verificación de extremo a extremo
 
 1. Diagnóstico final: `ai-voice-interconnector doctor --json`. Confirma exit `0` con
-   `failed: []` (todos los entries de `checks` con `ok: true`).
+   `failed: []` (todos los entries de `checks` con `ok: true`). Si solo fallan
+   checks de instalación (`install_receipt`, `path_*`, `pending_artifacts`), la
+   narración funciona igual: aplica la distinción del **Paso 0**.
 2. Narración de prueba real (debe sonar audio):
 
    ```bash
@@ -177,11 +192,17 @@ Interpreta el resultado:
    reprodúcelo:
 
    ```bash
-   ai-voice-interconnector speech play --label <label-del-anuncio>
+   ai-voice-interconnector speech play --label <label-del-anuncio> --json
    ```
 
-   Debe sonar el anuncio con exit `0`. Un exit `3` significa que el anuncio no está
-   pre-sintetizado: repite el **Paso 4**.
+   Debe sonar el anuncio con exit `0`. Un exit `3` tiene cuatro causas, que el
+   campo `reason` del JSON distingue: `speech_not_found` (anuncio no
+   pre-sintetizado → repite el **Paso 4**); `voice_not_found` (voz de fábrica
+   ausente → **Paso 2** y luego **Paso 4**); `no_output_device` (el sistema no
+   tiene salida de audio predeterminada → configúrala;
+   `ai-voice-interconnector devices` la muestra); `audio_backend_unavailable`
+   (falta el backend de audio del sistema, en Linux ALSA/`libasound.so.2`). Un
+   exit `1` con `playback_failed` es un fallo de reproducción.
 
 4. Notificación de escritorio de prueba (verifica el canal visual nativo):
 
@@ -191,8 +212,9 @@ Interpreta el resultado:
 
    Pregunta al usuario si escuchó las locuciones y vio la notificación de escritorio. Si el audio no sonó:
    - Reconfirma que el daemon está `running` (Paso 3).
-   - Revisa `worker.log` en el state dir (`narrate-ctl.js status` da la ruta) por
-     errores de dispositivo de audio o CLI.
+   - Revisa `worker.log` en el state dir (`narrate-ctl.js status` da la ruta):
+     cada fallo de `speech play` o `speech say` queda registrado con su código y,
+     si el motor informó un `reason` conocido, con su causa y su remedio.
 
 ## Cierre
 
