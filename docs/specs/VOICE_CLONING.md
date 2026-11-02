@@ -4,9 +4,9 @@
 > **Contrato del motor verificado**: v0.41.4 · **Fecha**: 2026-11-02
 
 La funcionalidad propuesta requiere como mínimo el motor v0.41.4, el único
-corte contra el que el plugin se verifica; desde v0.39.0 los fallos de
-micrófono y de audio salen con exit 3 y `reason` propio (`no_input_device`,
-`no_output_device`, `audio_backend_unavailable`) en lugar de exit 10.
+corte contra el que el plugin se verifica; los fallos de micrófono y de audio
+salen con exit 3 y `reason` propio (`no_input_device`, `no_output_device`,
+`audio_backend_unavailable`).
 
 Este documento analiza el requerimiento de exponer el clonado de voz del motor
 AI Voice-InterConnector a través del plugin, fija el diseño y define los
