@@ -28,7 +28,7 @@ function makeFakeCli(
   statusJson: string,
   exitCode = 0,
 ): { cliPath: string; cleanup: () => void } {
-  const dir = makeTempDir("narrator-daemon-cli-");
+  const dir = makeTempDir("avi-plugin-daemon-cli-");
   writeFileSync(join(dir, "status.json"), statusJson);
   writeFileSync(join(dir, "status.exit"), String(exitCode));
   writeFileSync(
@@ -198,7 +198,7 @@ test("stopped + degraded orphan_resident ⇒ degraded conserva el código", () =
 });
 
 test("binario inexistente ⇒ uncertain, sin exit que conservar", () => {
-  const dir = makeTempDir("narrator-daemon-none-");
+  const dir = makeTempDir("avi-plugin-daemon-none-");
   try {
     const result = daemon.getDaemonStatus(join(dir, "no-existe"));
     assert.equal(result.kind, "uncertain");

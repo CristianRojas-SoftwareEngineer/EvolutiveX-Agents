@@ -19,7 +19,7 @@ import {
 import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
 
 function makeBinDir(...fileNames: string[]): string {
-  const dir = makeTempDir("narrator-bin-");
+  const dir = makeTempDir("avi-plugin-bin-");
   for (const name of fileNames) {
     writeFileSync(join(dir, name), "#!/bin/sh\n");
   }
@@ -125,7 +125,7 @@ test("Windows: usa las extensiones por defecto si PATHEXT falta", () => {
 });
 
 test("Windows: ignora entradas que son directorios, no archivos", () => {
-  const bin = makeTempDir("narrator-bin-");
+  const bin = makeTempDir("avi-plugin-bin-");
   mkdirSync(join(bin, "ai-voice-interconnector.exe"));
   const restoreP = fakePlatform("win32");
   const restoreE = withEnv({ PATH: bin, PATHEXT: ".EXE" });

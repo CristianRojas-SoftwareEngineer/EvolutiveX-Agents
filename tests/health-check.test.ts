@@ -25,7 +25,7 @@ const HEALTH = join(process.cwd(), "dist", "health-check.js");
 let stateBase: string;
 
 beforeEach(() => {
-  stateBase = makeTempDir("narrator-health-");
+  stateBase = makeTempDir("avi-plugin-health-");
 });
 
 afterEach(() => {
@@ -210,7 +210,7 @@ function systemMessageOf(stdout: string): string {
 }
 
 test("sano + daemon running: no avisa, consulta el estado y no arranca", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -232,7 +232,7 @@ test("sano + daemon running: no avisa, consulta el estado y no arranca", () => {
 });
 
 test("sano + daemon stopped limpio: arranca el daemon exactamente una vez", async () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -251,7 +251,7 @@ test("sano + daemon stopped limpio: arranca el daemon exactamente una vez", asyn
 });
 
 test("sano + daemon stopped degraded: avisa remitiendo a daemon status y no arranca", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -272,7 +272,7 @@ test("sano + daemon stopped degraded: avisa remitiendo a daemon status y no arra
 });
 
 test("sano + daemon running warm_failed: avisa del fallo de calentamiento y no arranca", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -292,7 +292,7 @@ test("sano + daemon running warm_failed: avisa del fallo de calentamiento y no a
 });
 
 test("sano + daemon running warming: no avisa ni bloquea ni arranca", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -312,7 +312,7 @@ test("sano + daemon running warming: no avisa ni bloquea ni arranca", () => {
 });
 
 test("sano + daemon status ilegible: avisa remitiendo a daemon status y no arranca", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
@@ -329,7 +329,7 @@ test("sano + daemon status ilegible: avisa remitiendo a daemon status y no arran
 });
 
 test("doctor exit 1 + failed no vacío: avisa nombrando todos los checks, sin consultar el daemon", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
@@ -366,7 +366,7 @@ test("doctor exit 1 + failed no vacío: avisa nombrando todos los checks, sin co
 });
 
 test("doctor exit 1 + solo checks informativos + daemon stopped: avisa y arranca el daemon una vez", async () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: informativeDoctorJson(),
@@ -388,7 +388,7 @@ test("doctor exit 1 + solo checks informativos + daemon stopped: avisa y arranca
 });
 
 test("doctor exit 1 + solo checks informativos + daemon running warm: avisa sin arrancar", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: informativeDoctorJson(),
@@ -409,7 +409,7 @@ test("doctor exit 1 + solo checks informativos + daemon running warm: avisa sin 
 });
 
 test("doctor exit 1 + solo checks informativos + daemon degraded: un solo systemMessage con ambos avisos, sin arrancar", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: informativeDoctorJson(),
@@ -432,7 +432,7 @@ test("doctor exit 1 + solo checks informativos + daemon degraded: un solo system
 });
 
 test("doctor exit 1 + solo checks informativos + daemon warm_failed: un solo systemMessage con ambos avisos", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: informativeDoctorJson(),
@@ -455,7 +455,7 @@ test("doctor exit 1 + solo checks informativos + daemon warm_failed: un solo sys
 });
 
 test("doctor exit 1 + onnx_runtime fallido: avisa sin consultar el daemon", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
@@ -479,7 +479,7 @@ test("doctor exit 1 + onnx_runtime fallido: avisa sin consultar el daemon", () =
 });
 
 test("doctor exit 1 + objeto de error doctor_failed: aviso de fallo del diagnóstico, sin consultar el daemon", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
@@ -502,7 +502,7 @@ test("doctor exit 1 + objeto de error doctor_failed: aviso de fallo del diagnós
 });
 
 test("doctor exit 0 + JSON ilegible: sin aviso ni daemon (estado incierto)", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, { doctorJson: "esto no es json" });
     const res = runHealth(dir);
@@ -516,7 +516,7 @@ test("doctor exit 0 + JSON ilegible: sin aviso ni daemon (estado incierto)", () 
 });
 
 test("doctor exit 0 con failed no vacío (incoherente): sin daemon ni arranque", () => {
-  const dir = makeTempDir("narrator-health-cli-");
+  const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
@@ -552,7 +552,7 @@ test(
   "presupuesto: un doctor que supera su timeout no compromete el hook (<30 s)",
   { timeout: 60000 },
   () => {
-    const dir = makeTempDir("narrator-health-cli-");
+    const dir = makeTempDir("avi-plugin-health-cli-");
     try {
       // Demora por encima del timeout de doctor (20 s): el hook debe matarlo y
       // terminar bien dentro del timeout de 30 s de SessionStart.

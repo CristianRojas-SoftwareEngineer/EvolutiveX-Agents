@@ -5,7 +5,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Las preferencias viven en config.json y el secreto solo en el entorno:
-// defaults, lectura de archivo sin claves, tolerancia a archivo
+// defaults, invariante de seguridad (la clave nunca se lee ni se escribe en el
+// archivo), tolerancia a archivo
 // ausente/corrupto y merge parcial de updateConfig.
 // El state dir se aísla en un temporal (ver helpers) para no tocar el real.
 import { test, beforeEach, afterEach } from "node:test";
@@ -51,7 +52,7 @@ test("loadConfig ignora las claves presentes en el archivo", () => {
     JSON.stringify({
       voiceEnabled: false,
       messageMode: "llm",
-      geminiApiKey: "clave-archivo",
+      geminiApiKey: "clave-en-archivo",
     }),
   );
   const cfg = loadConfig();
@@ -73,7 +74,7 @@ test("loadConfig normaliza un messageMode desconocido a local", () => {
 });
 
 test("loadConfig lee la API key solo del entorno", () => {
-  writeConfigFile(JSON.stringify({ geminiApiKey: "del-archivo" }));
+  writeConfigFile(JSON.stringify({ geminiApiKey: "clave-en-archivo" }));
   process.env.GEMINI_API_KEY = "del-entorno";
   assert.equal(loadConfig().geminiApiKey, "del-entorno");
 });
@@ -83,8 +84,8 @@ test("una env var vacía o de solo espacios no configura la clave", () => {
   assert.equal(loadConfig().geminiApiKey, undefined);
 });
 
-test("updateConfig escribe solo preferencias y descarta claves del archivo", () => {
-  writeConfigFile(JSON.stringify({ geminiApiKey: "clave-vieja" }));
+test("updateConfig escribe solo preferencias y nunca persiste una clave presente en el archivo", () => {
+  writeConfigFile(JSON.stringify({ geminiApiKey: "clave-en-archivo" }));
   updateConfig({ messageMode: "llm" });
   const raw = JSON.parse(readFileSync(configPath(), "utf8")) as Record<
     string,

@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 function makeSleepingCli(ms: number): string {
-  const dir = makeTempDir("narrator-sleep-cli-");
+  const dir = makeTempDir("avi-plugin-sleep-cli-");
   restoreDirs.push(dir);
   writeFileSync(
     join(dir, "impl.cjs"),
@@ -49,7 +49,7 @@ function makeSleepingCli(ms: number): string {
 
 /** CLI falso que imprime `output` por stdout y sale con `exitCode`. */
 function makeEchoCli(output: string, exitCode: number): string {
-  const dir = makeTempDir("narrator-echo-cli-");
+  const dir = makeTempDir("avi-plugin-echo-cli-");
   restoreDirs.push(dir);
   writeFileSync(join(dir, "out.txt"), output);
   writeFileSync(

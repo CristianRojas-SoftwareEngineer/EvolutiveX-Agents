@@ -37,8 +37,8 @@ function readFileConfig(): FileConfig {
     const raw = readFileSync(configPath(), "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (parsed && typeof parsed === "object") {
-      // Solo se conservan preferencias no secretas; cualquier campo de clave
-      // presente en un archivo se ignora.
+      // Lista blanca de preferencias: una clave escrita a mano en el archivo se
+      // ignora (la API key solo se lee del entorno; ver SECURITY.md).
       const { voiceEnabled, notificationsEnabled, messageMode } =
         parsed as FileConfig;
       return { voiceEnabled, notificationsEnabled, messageMode };

@@ -23,7 +23,7 @@ const CTL = join(process.cwd(), "dist", "narrate-ctl.js");
 let stateBase: string;
 
 beforeEach(() => {
-  stateBase = makeTempDir("narrator-ctl-");
+  stateBase = makeTempDir("avi-plugin-ctl-");
 });
 
 afterEach(() => {
@@ -150,7 +150,7 @@ test("say sin texto devuelve 2 con uso", () => {
 });
 
 test("say sin ai-voice-interconnector en el PATH devuelve 1 con aviso", () => {
-  const emptyPath = makeTempDir("narrator-empty-");
+  const emptyPath = makeTempDir("avi-plugin-empty-");
   try {
     const res = runCtl(["say", "hola"], { PATH: emptyPath, Path: emptyPath });
     assert.equal(res.status, 1);
@@ -214,7 +214,7 @@ function loggedArgvs(argvLog: string): string[][] {
 }
 
 test("say invoca speech say --text --daemon (contrato §12)", () => {
-  const dir = makeTempDir("narrator-fakecli-");
+  const dir = makeTempDir("avi-plugin-fakecli-");
   try {
     const { argvLog } = makeFakeCli(dir, [0]);
     const res = runCtl(["say", "hola"], fakeCliEnv(dir));
@@ -228,7 +228,7 @@ test("say invoca speech say --text --daemon (contrato §12)", () => {
 });
 
 test("presynth pre-sintetiza los seis anuncios con speech synthesize --label --daemon", () => {
-  const dir = makeTempDir("narrator-fakecli-");
+  const dir = makeTempDir("avi-plugin-fakecli-");
   try {
     const { argvLog } = makeFakeCli(dir, [0, 0, 0, 0, 0, 0]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
@@ -255,7 +255,7 @@ test("presynth pre-sintetiza los seis anuncios con speech synthesize --label --d
 });
 
 test("presynth --force pasa --force al motor y reporta re-sintetizado", () => {
-  const dir = makeTempDir("narrator-fakecli-");
+  const dir = makeTempDir("avi-plugin-fakecli-");
   try {
     const { argvLog } = makeFakeCli(dir, [0, 0, 0, 0, 0, 0]);
     const res = runCtl(["presynth", "--force"], fakeCliEnv(dir));
@@ -281,7 +281,7 @@ test("presynth con un argumento inválido devuelve 2 con uso", () => {
 });
 
 test("presynth es idempotente: exit 6 (label ya existe) cuenta como éxito", () => {
-  const dir = makeTempDir("narrator-fakecli-");
+  const dir = makeTempDir("avi-plugin-fakecli-");
   try {
     makeFakeCli(dir, [0, 6, 6, 0, 6, 6]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
@@ -294,7 +294,7 @@ test("presynth es idempotente: exit 6 (label ya existe) cuenta como éxito", () 
 });
 
 test("presynth propaga el fallo (exit 5, daemon caído) con código ≠ 0", () => {
-  const dir = makeTempDir("narrator-fakecli-");
+  const dir = makeTempDir("avi-plugin-fakecli-");
   try {
     makeFakeCli(dir, [5, 0, 0, 0, 0, 0]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
@@ -307,7 +307,7 @@ test("presynth propaga el fallo (exit 5, daemon caído) con código ≠ 0", () =
 });
 
 test("presynth sin ai-voice-interconnector en el PATH devuelve 1 con aviso", () => {
-  const emptyPath = makeTempDir("narrator-empty-");
+  const emptyPath = makeTempDir("avi-plugin-empty-");
   try {
     const res = runCtl(["presynth"], { PATH: emptyPath, Path: emptyPath });
     assert.equal(res.status, 1);

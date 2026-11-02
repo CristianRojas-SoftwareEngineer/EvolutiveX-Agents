@@ -240,7 +240,7 @@ test("Stop (llm) ignora el transcript aunque transcript_path exista: solo va las
   try {
     const transcriptPath = join(
       tmpdir(),
-      `narrator-ignored-${Date.now()}.jsonl`,
+      `avi-plugin-ignored-${Date.now()}.jsonl`,
     );
     writeFileSync(
       transcriptPath,

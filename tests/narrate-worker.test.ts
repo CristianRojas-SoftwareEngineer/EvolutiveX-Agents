@@ -92,9 +92,9 @@ function runWorker(env: NodeJS.ProcessEnv): { status: number | null } {
 }
 
 test("worker narra dos payloads encolados en orden y sin duplicados", () => {
-  const dir = makeTempDir("narrator-worker-");
+  const dir = makeTempDir("avi-plugin-worker-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-");
+  const cliDir = makeTempDir("avi-plugin-cli-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
@@ -145,9 +145,9 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
 });
 
 test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
-  const dir = makeTempDir("narrator-worker-empty-");
+  const dir = makeTempDir("avi-plugin-worker-empty-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-empty-");
+  const cliDir = makeTempDir("avi-plugin-cli-empty-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
@@ -168,9 +168,9 @@ test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
 });
 
 test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola", () => {
-  const dir = makeTempDir("narrator-worker-stale-");
+  const dir = makeTempDir("avi-plugin-worker-stale-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-stale-");
+  const cliDir = makeTempDir("avi-plugin-cli-stale-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
@@ -215,9 +215,9 @@ test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola"
 });
 
 test("worker respeta lock activo (PID vivo en worker.pid) y sale sin drenar", () => {
-  const dir = makeTempDir("narrator-worker-live-");
+  const dir = makeTempDir("avi-plugin-worker-live-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-live-");
+  const cliDir = makeTempDir("avi-plugin-cli-live-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir);
 
@@ -260,9 +260,9 @@ function logLines(marker: string): string[] {
 }
 
 test("worker registra la pista de cada reason de speech play y degrada el desconocido al código", () => {
-  const dir = makeTempDir("narrator-worker-play-reason-");
+  const dir = makeTempDir("avi-plugin-worker-play-reason-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-play-reason-");
+  const cliDir = makeTempDir("avi-plugin-cli-play-reason-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir, [
     { stdout: '{"error":"e","reason":"speech_not_found"}', exit: 3 },
@@ -312,9 +312,9 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
 });
 
 test("worker registra la pista de cada reason de speech say", () => {
-  const dir = makeTempDir("narrator-worker-say-reason-");
+  const dir = makeTempDir("avi-plugin-worker-say-reason-");
   restoreDirs.push(dir);
-  const cliDir = makeTempDir("narrator-cli-say-reason-");
+  const cliDir = makeTempDir("avi-plugin-cli-say-reason-");
   restoreDirs.push(cliDir);
   makeFakeCli(cliDir, [
     { stdout: '{"error":"e","reason":"daemon_unreachable"}', exit: 5 },

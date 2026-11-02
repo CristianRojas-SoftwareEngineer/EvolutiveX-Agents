@@ -46,7 +46,7 @@ export function withEnv(vars: Record<string, string | undefined>): () => void {
   };
 }
 
-export function makeTempDir(prefix = "narrator-test-"): string {
+export function makeTempDir(prefix = "avi-plugin-test-"): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
