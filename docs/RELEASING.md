@@ -89,7 +89,11 @@ En orden; cada paso asume el anterior.
      `notifications-off` y registro idempotente del AUMID en Windows
      (`dist/notification-register.js --install` y `--status`);
    - `narrate-ctl status` reporta el estado (`voice` y `notifications`) sin exponer claves;
-   - el aviso de `SessionStart` cuando el motor no está en el `PATH`.
+   - el aviso de `SessionStart` cuando el motor no está en el `PATH`;
+   - el aviso no bloqueante de `SessionStart` con un check de instalación
+     fallido, con el daemon arrancado igual (Fase 2, ítem E);
+   - la causa por `reason` en `worker.log` ante un `speech play` fallido
+     (Fase 2, ítem F).
 7. **Commit, tag y push**:
    ```bash
    git commit -m "release: vX.Y.Z"
@@ -214,7 +218,9 @@ irm "https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/r
 # 1b. Comprobación: el CLI reporta la versión correcta.
 ai-voice-interconnector version
 
-# 1c. Aprovisionar el modelo (idempotente; el instalador ya lo encadena).
+# 1c. Aprovisionar los modelos (idempotente; el instalador ya lo encadena).
+#     La descarga es anónima: ignora HF_TOKEN. Un model_unavailable (exit 1)
+#     no se resuelve reintentando; un network_error (exit 20) sí.
 ai-voice-interconnector setup
 
 # 1d. Comprobación: doctor sano = exit 0 con failed vacío. El reporte es un
@@ -353,6 +359,43 @@ claude --plugin-dir $PLUGIN_E2E
      $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") +
                  ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
      ```
+
+- **(E) Aviso no bloqueante de `SessionStart` con un check de instalación
+  fallido:** una copia no registrada de la instalación (canal `unmanaged`)
+  antepuesta en el `PATH` hace fallar `install_receipt` y/o `path_*` sin tocar
+  los recursos. Se usan solo comandos oficiales del motor; no se tocan pidfiles
+  ni datos.
+
+  ```powershell
+  ai-voice-interconnector daemon stop
+  $installDir = (ai-voice-interconnector doctor --json | ConvertFrom-Json).install.dir
+  $copy = Join-Path $env:TEMP "avi-unmanaged"
+  Copy-Item -Recurse -Force $installDir $copy   # directorio completo: incluye la librería ONNX Runtime
+  $env:PATH = "$copy;$env:PATH"
+  ai-voice-interconnector doctor --json | ConvertFrom-Json | Select-Object -ExpandProperty failed
+  # Debe listar solo install_receipt y/o path_* (nunca models_provisioned ni onnx_runtime).
+  claude --plugin-dir $PLUGIN_E2E
+  # Comprobación: aparece el aviso de chequeos de instalación SIN bloquear la sesión y,
+  # tras unos segundos, `ai-voice-interconnector daemon status --json` informa "running".
+  ai-voice-interconnector daemon stop
+  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" +
+              [System.Environment]::GetEnvironmentVariable("PATH","User")
+  Remove-Item -Recurse -Force $copy
+  ai-voice-interconnector daemon start
+  ```
+
+- **(F) Pista por `reason` en `worker.log`:** el label exacto del acuse se toma
+  de la salida de `presynth` del runbook (forma `voice-user-prompt-submit`).
+
+  ```powershell
+  ai-voice-interconnector speech play --label etiqueta-inexistente --json
+  # Exit 3 y {"error": ..., "reason": "speech_not_found"} en stdout.
+  ai-voice-interconnector speech remove --label voice-user-prompt-submit
+  # En una sesión de Claude, envía un prompt (UserPromptSubmit no suena).
+  Get-Content "$STATE_DIR\worker.log" -Tail 5
+  # Debe contener: speech play salió con código 3 (speech_not_found: ... narrate-ctl presynth)
+  narrate-ctl presynth   # restaura el anuncio
+  ```
 
 Esta fase requiere verificación humana (audible) y no se automatiza por completo.
 

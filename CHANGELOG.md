@@ -63,6 +63,14 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Cambiado
 
+- **Sincronización con AI Voice-InterConnector v0.41.1**: código, tests y
+  documentación contrastados con el tag `v0.41.1` del motor (envelope
+  `schema_version: "6"`, seis modelos, descarga anónima de `setup`).
+- **`speech play` y `speech say` con `--json`**: el worker lee el `reason` del
+  payload de error y registra en `worker.log` la causa y el remedio
+  (`speech_not_found`, `voice_not_found`, `no_output_device`,
+  `audio_backend_unavailable`, `playback_failed`, `daemon_unreachable`,
+  `model_missing`); un `reason` desconocido se registra solo con el código.
 - **La API key de Gemini vive solo en el entorno** (`GEMINI_API_KEY`).
   `config.json` deja de almacenar claves y solo persiste preferencias no
   secretas (`voiceEnabled`, `notificationsEnabled` y `messageMode`); `loadConfig` ya no lee
@@ -111,6 +119,17 @@ play`) en vez de re-sintetizarse en cada aparición: el catálogo único de
   anuncios vive en `src/message/static-announcements.ts`, con un label semántico
   fijo por anuncio (p. ej. `voice-stop`) asignado explícitamente, no derivado
   del texto.
+
+### Corregido
+
+- **`SessionStart` calienta el daemon en instalaciones sin recibo**: el hook
+  aplica un gate de recursos (`models_provisioned`, `onnx_runtime`); los checks
+  de instalación (`install_receipt`, `path_*`, `pending_artifacts`) se avisan
+  sin impedir el arranque.
+- **Instalación guiada sin consejos obsoletos de Hugging Face**: se retira la
+  indicación de aceptar licencias «gated» y definir `HF_TOKEN`; se distingue
+  `network_error` de `model_unavailable` y se enumeran las causas del exit 3 de
+  `speech play`.
 
 ### Eliminado
 
