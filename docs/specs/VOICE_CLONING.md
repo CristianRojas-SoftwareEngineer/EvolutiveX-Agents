@@ -1,9 +1,12 @@
 # Especificación de diseño: clonado de voz y voz activa
 
 > **Estado**: propuesta, no implementada · **Versión base del plugin**: 0.1.0 ·
-> **Contrato del motor verificado**: v0.37.4 · **Fecha**: 2026-10-31
+> **Contrato del motor verificado**: v0.41.1 · **Fecha**: 2026-11-02
 
-La funcionalidad propuesta requiere como mínimo el motor v0.37.3. En v0.37.3,
+La funcionalidad propuesta requiere como mínimo el motor v0.41.1, el único
+corte contra el que el plugin se verifica; desde v0.39.0 los fallos de
+micrófono y de audio salen con exit 3 y `reason` propio (`no_input_device`,
+`no_output_device`, `audio_backend_unavailable`) en lugar de exit 10. En v0.37.3,
 para usar push-to-talk sin duración hay que configurar
 `AVI_PUSH_TO_TALK_MAX_SECS` con un valor no superior a 30; desde v0.37.4 el
 motor usa 30 s cuando la variable está ausente.
@@ -78,8 +81,8 @@ Hoy el plugin **no selecciona voz**. Las tres rutas omiten `--voice`:
 | Ruta            | Invocación actual                               |
 | --------------- | ----------------------------------------------- |
 | Pre-síntesis    | `speech synthesize --text … --label … --daemon` |
-| Reproducción    | `speech play --label …`                         |
-| `Stop` dinámico | `speech say --text … --daemon`                  |
+| Reproducción    | `speech play --label … --json`                  |
+| `Stop` dinámico | `speech say --text … --daemon --json`           |
 
 El motor resuelve la voz de fábrica `default` cuando `--voice` falta. `default`
 es una voz clonada de fábrica con una huella `reference.qvoice` embebida; no es
@@ -97,21 +100,21 @@ Consecuencias del diseño actual:
 
 ## 4. Glosario
 
-| Término              | Definición                                                                                                                                                                              |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Voz**              | Entrada del registro `VoiceStore` del motor. Puede ser de fábrica (`default`, `ryan`, `vivian`) o clonada por el usuario.                                                               |
-| **Voz clonada**      | Voz creada por `voice clone` a partir de una referencia de audio. El almacén de voces conserva la huella `reference.qvoice`, no el WAV; pueden existir temporales de trabajo.           |
-| **Voz activa**       | Nombre de la voz que el plugin persiste en `config.json` y usa en todas las rutas de narración.                                                                                         |
-| **Referencia**       | Muestra de audio que el usuario entrega a `voice clone` (archivo WAV o captura de micrófono). Se recomiendan ~10 s; el motor rechaza más de 30 s.                                       |
-| **Huella de timbre** | Archivo `reference.qvoice` que produce el clonado. No contiene transcripción ni idioma.                                                                                                 |
-| **Etiqueta**         | Identificador fijo de una locución pre-sintetizada (`voice-user-prompt-submit`, `voice-stop`, etc.).                                                                                    |
-| **Locución**         | WAV pre-sintetizado y persistido por el motor bajo `(voz, etiqueta)`.                                                                                                                   |
-| **Pre-síntesis**     | Ejecución única de `speech synthesize` para cada etiqueta del catálogo, con el fin de que `speech play` sea instantáneo.                                                                |
-| **Cache miss**       | `speech play` no encuentra la locución para la voz y etiqueta solicitadas. El motor sale con exit `3`.                                                                                  |
-| **Denoise**          | Limpieza opcional con DPDFNet antes de extraer la huella; requiere `native-denoise` y `dpdfnet8`. Su preservación de identidad vocal no se ha evaluado en una prueba humana controlada. |
-| **`reason`**         | Identificador de error en el JSON; el exit code solo identifica la clase y puede compartirse entre causas distintas.                                                                    |
-| **`precomputed`**    | En ruta daemon indica que se inició el calentamiento, no que haya terminado.                                                                                                            |
-| **`schema_version`** | Versión del envelope CLI, independiente de la versión del protocolo del daemon.                                                                                                         |
+| Término              | Definición                                                                                                                                                                                                                                                   |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Voz**              | Entrada del registro `VoiceStore` del motor. Puede ser de fábrica (`default`, `ryan`, `vivian`) o clonada por el usuario.                                                                                                                                    |
+| **Voz clonada**      | Voz creada por `voice clone` a partir de una referencia de audio. El almacén de voces conserva la huella `reference.qvoice`, no el WAV; pueden existir temporales de trabajo.                                                                                |
+| **Voz activa**       | Nombre de la voz que el plugin persiste en `config.json` y usa en todas las rutas de narración.                                                                                                                                                              |
+| **Referencia**       | Muestra de audio que el usuario entrega a `voice clone` (archivo WAV o captura de micrófono). Se recomiendan ~10 s; el motor rechaza más de 30 s.                                                                                                            |
+| **Huella de timbre** | Archivo `reference.qvoice` que produce el clonado. No contiene transcripción ni idioma.                                                                                                                                                                      |
+| **Etiqueta**         | Identificador fijo de una locución pre-sintetizada (`voice-user-prompt-submit`, `voice-stop`, etc.).                                                                                                                                                         |
+| **Locución**         | WAV pre-sintetizado y persistido por el motor bajo `(voz, etiqueta)`.                                                                                                                                                                                        |
+| **Pre-síntesis**     | Ejecución única de `speech synthesize` para cada etiqueta del catálogo, con el fin de que `speech play` sea instantáneo.                                                                                                                                     |
+| **Cache miss**       | `speech play` no encuentra la locución (`speech_not_found`) o la voz (`voice_not_found`) solicitadas; el motor sale con exit `3`. El mismo exit con `no_output_device` o `audio_backend_unavailable` no es cache miss, sino un problema del entorno de audio |
+| **Denoise**          | Limpieza opcional con DPDFNet antes de extraer la huella; requiere `native-denoise` y `dpdfnet8`. Su preservación de identidad vocal no se ha evaluado en una prueba humana controlada.                                                                      |
+| **`reason`**         | Identificador de error en el JSON; el exit code solo identifica la clase y puede compartirse entre causas distintas.                                                                                                                                         |
+| **`precomputed`**    | En ruta daemon indica que se inició el calentamiento, no que haya terminado.                                                                                                                                                                                 |
+| **`schema_version`** | Versión del envelope CLI, independiente de la versión del protocolo del daemon.                                                                                                                                                                              |
 
 ## 5. Requisitos
 
@@ -215,7 +218,7 @@ termina el residente anterior y arranca uno nuevo. Por eso:
 | **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                              |
 | **D-13** | Las operaciones manuales de clonado, activación, borrado, pre-síntesis y escritura de preferencias se coordinan entre procesos del plugin.                               |
 | **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                                   |
-| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.37.3 o posterior.                                                            |
+| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.41.1 o posterior.                                                            |
 
 ## 7. Diseño
 
@@ -464,22 +467,22 @@ Además, se añaden flags a superficies existentes:
 El contrato debe documentar los campos y códigos de salida que el plugin
 consume:
 
-| Operación           | Salida relevante                              | Códigos                                                                                                                                                                     |
-| ------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `voice clone`       | `{name, speech, precomputed, schema_version}` | `0`; `1` clone/io/denoise; `2` nombre/audio/duración/no-tty; `3` audio no encontrado; `4` modelo; `5` daemon; `6` `voice_exists` o `denoise_busy`; `10` mic; `17` lifecycle |
-| `voice list`        | `{voices: string[]}`                          | `0`; `1` listado                                                                                                                                                            |
-| `voice remove`      | `{status, voice, removed_speech}`             | `0`; `1` io; `2` fábrica/nombre; `3` voz no encontrada                                                                                                                      |
-| `speech synthesize` | `{status, audio_path, voice}`                 | `0`; `6` label existente; `4`/`5`/`3` precondiciones                                                                                                                        |
-| `speech say`        | `{status, voice}`                             | `0`; `3` voz; `4`/`5` precondiciones                                                                                                                                        |
-| `speech play`       | `{status, label, voice}`                      | `0`; `3` label o voz; `2` identificador                                                                                                                                     |
+| Operación           | Salida relevante                              | Códigos                                                                                                                                                                                                                                                                                                                                |
+| ------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `voice clone`       | `{name, speech, precomputed, schema_version}` | `0`; `1` `voice_clone_failed`/`io_error`/`denoise_unsupported`/`denoise_failed`; `2` nombre/audio/duración/no-tty/`empty_audio`; `3` `audio_not_found`/`no_input_device`/`audio_backend_unavailable`; `4` modelo; `5` daemon; `6` `voice_exists` o `denoise_busy`; `10` `transcription_failed` (otro fallo de captura); `17` lifecycle |
+| `voice list`        | `{voices: string[]}`                          | `0`; `1` listado                                                                                                                                                                                                                                                                                                                       |
+| `voice remove`      | `{status, voice, removed_speech}`             | `0`; `1` io; `2` fábrica/nombre; `3` voz no encontrada                                                                                                                                                                                                                                                                                 |
+| `speech synthesize` | `{status, audio_path, voice}`                 | `0`; `6` label existente; `4`/`5`/`3` precondiciones                                                                                                                                                                                                                                                                                   |
+| `speech say`        | `{status, voice}`                             | `0`; `1` `playback_failed`/`synthesis_failed`; `3` voz o `no_output_device`/`audio_backend_unavailable`; `4`/`5` precondiciones                                                                                                                                                                                                        |
+| `speech play`       | `{status, label, voice}`                      | `0`; `1` `playback_failed`; `2` identificador; `3` `speech_not_found`/`voice_not_found`/`no_output_device`/`audio_backend_unavailable`                                                                                                                                                                                                 |
 
-La feature requiere motor v0.37.3 o posterior. Antes de habilitar la gestión de
+La feature requiere motor v0.41.1 o posterior. Antes de habilitar la gestión de
 voces, el plugin consulta `version --json` y compara la versión; ante una
 versión inferior o ilegible informa que la feature no está disponible y conserva
 las rutas de narración existentes con `default`. La consulta no se añade al
 launcher. En v0.37.3 el push-to-talk sin duración exige configurar el techo
 explícito; desde v0.37.4 el valor ausente usa 30 s.
-Los envelopes CLI incluyen `schema_version: "5"`; claves adicionales se toleran.
+Los envelopes CLI incluyen `schema_version: "6"`; claves adicionales se toleran.
 `voice list`, `voice remove` y `speech play` son locales y no aceptan `--daemon`.
 `speech say` y `speech synthesize` admiten hasta 500 caracteres Unicode.
 
@@ -556,37 +559,41 @@ y ejecuta `voice use`. Si no acepta, `default` queda lista para la narración.
 
 ## 9. Errores y mensajes
 
-| Condición                                  | Origen                                     | Acción del plugin                       | Mensaje orientativo                                                          |
-| ------------------------------------------ | ------------------------------------------ | --------------------------------------- | ---------------------------------------------------------------------------- |
-| CLI no encontrado                          | `resolveCli()`                             | No invoca nada; exit 1                  | «AI Voice-InterConnector no está en el PATH.»                                |
-| Daemon caído en clone/use/presynth/say     | Motor exit `5`                             | No reintenta en local; exit 5           | «Levanta el daemon con `ai-voice-interconnector daemon start`.»              |
-| Modelo Base ausente                        | Motor exit `4`                             | Exit 4                                  | «Ejecuta `ai-voice-interconnector setup`.»                                   |
-| WAV no encontrado                          | Plugin                                     | Exit 3; no invoca al motor              | «La ruta de referencia no existe.»                                           |
-| WAV inválido o >30 s                       | Motor exit `2`                             | Exit 2                                  | «Usa un audio de hasta 30 s; se recomiendan ~10 s.»                          |
-| `--mic` sin `--duration` en entorno no-TTY | Motor exit `2`                             | Exit 2                                  | «`--mic` requiere `--duration <segs>` en entornos desatendidos.»             |
-| Fallo de hardware de micrófono             | Motor exit `10`                            | Exit 10                                 | «No se pudo acceder al micrófono: verifica permisos y conexión.»             |
-| Nombre inválido                            | Plugin/Motor exit `2`                      | Exit 2                                  | «Usa minúsculas, números, punto, guion o guion bajo.»                        |
-| Voz ya existe sin `--force`                | Motor exit `6`                             | Exit 6                                  | «Elige otro nombre o usa `--force` para reemplazarla.»                       |
-| Voz de fábrica                             | Plugin                                     | Exit 2; no invoca                       | «`default`, `ryan` y `vivian` son voces de fábrica.»                         |
-| Voz inexistente en `use`                   | Motor exit `3`                             | Exit 3                                  | «Consulta `voice list` y elige una voz existente.»                           |
-| Label existente sin `--force`              | Motor exit `6`, `label_exists`             | Éxito idempotente                       | «Ya pre-sintetizado.»                                                        |
-| Label o voz ausente en `play`              | Motor exit `3`                             | Log en `worker.log`; sin audio          | «Ejecuta `presynth` o revisa la voz activa.»                                 |
-| Voz activa eliminada externamente          | `SessionStart`                             | `systemMessage`; no arranca daemon      | «La voz activa no existe; activa otra con `voice use` o vuelve a `default`.» |
-| Borrar voz activa                          | Plugin                                     | Exit 2; no invoca                       | «Activa otra voz antes de borrar esta.»                                      |
-| JSON inválido del motor                    | Plugin                                     | Exit 1; log                             | «El motor devolvió una respuesta inesperada.»                                |
-| Captura vacía                              | `2 empty_audio`                            | Exit 2                                  | «No se capturó audio.»                                                       |
-| Duración o techo excesivo                  | `2 audio_too_long`                         | Exit 2                                  | «El máximo de clonado es 30 s.»                                              |
-| WAV truncado o inválido                    | `2 invalid_audio`                          | Exit 2                                  | «Usa un WAV válido.»                                                         |
-| Ciclo de vida ocupado                      | `17 lifecycle_locked`                      | Exit 17; no se ejecuta                  | «Espera a que termine la instalación o limpieza.»                            |
-| Limpieza ocupada                           | `6 denoise_busy`                           | Exit 6; no confundir con `voice_exists` | «Reintenta al terminar la limpieza en curso.»                                |
-| Limpieza no disponible o fallida           | `1 denoise_unsupported` / `denoise_failed` | Exit 1; sin fallback                    | «Comprueba la instalación y el modelo de limpieza.»                          |
-| Modelo de limpieza ausente                 | `4 model_missing`                          | Exit 4                                  | «Ejecuta setup.»                                                             |
-| Proceso no iniciado, señal o timeout       | Plugin                                     | Fallo, nunca éxito por status nulo      | «No se pudo completar la operación.»                                         |
+| Condición                                  | Origen                                                        | Acción del plugin                              | Mensaje orientativo                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| CLI no encontrado                          | `resolveCli()`                                                | No invoca nada; exit 1                         | «AI Voice-InterConnector no está en el PATH.»                                                            |
+| Daemon caído en clone/use/presynth/say     | Motor exit `5`                                                | No reintenta en local; exit 5                  | «Levanta el daemon con `ai-voice-interconnector daemon start`.»                                          |
+| Modelo Base ausente                        | Motor exit `4`                                                | Exit 4                                         | «Ejecuta `ai-voice-interconnector setup`.»                                                               |
+| WAV no encontrado                          | Plugin                                                        | Exit 3; no invoca al motor                     | «La ruta de referencia no existe.»                                                                       |
+| WAV inválido o >30 s                       | Motor exit `2`                                                | Exit 2                                         | «Usa un audio de hasta 30 s; se recomiendan ~10 s.»                                                      |
+| `--mic` sin `--duration` en entorno no-TTY | Motor exit `2`                                                | Exit 2                                         | «`--mic` requiere `--duration <segs>` en entornos desatendidos.»                                         |
+| Fallo de hardware de micrófono             | Motor exit `3` `no_input_device`/`audio_backend_unavailable`  | Exit 3                                         | «No hay micrófono predeterminado o falta el backend de audio: revisa `ai-voice-interconnector devices`.» |
+| Otro fallo de captura                      | Motor exit `10` `transcription_failed`                        | Exit 10                                        | «No se pudo capturar audio del micrófono: verifica permisos y conexión.»                                 |
+| Nombre inválido                            | Plugin/Motor exit `2`                                         | Exit 2                                         | «Usa minúsculas, números, punto, guion o guion bajo.»                                                    |
+| Voz ya existe sin `--force`                | Motor exit `6`                                                | Exit 6                                         | «Elige otro nombre o usa `--force` para reemplazarla.»                                                   |
+| Voz de fábrica                             | Plugin                                                        | Exit 2; no invoca                              | «`default`, `ryan` y `vivian` son voces de fábrica.»                                                     |
+| Voz inexistente en `use`                   | Motor exit `3`                                                | Exit 3                                         | «Consulta `voice list` y elige una voz existente.»                                                       |
+| Label existente sin `--force`              | Motor exit `6`, `label_exists`                                | Éxito idempotente                              | «Ya pre-sintetizado.»                                                                                    |
+| Label o voz ausente en `play`              | Motor exit `3` `speech_not_found`/`voice_not_found`           | Log en `worker.log`; sin audio                 | «Ejecuta `presynth` o revisa la voz activa.»                                                             |
+| Sin salida de audio en `play`/`say`        | Motor exit `3` `no_output_device`/`audio_backend_unavailable` | Log en `worker.log` con el `reason`; sin audio | «Configura una salida de audio predeterminada.»                                                          |
+| Voz activa eliminada externamente          | `SessionStart`                                                | `systemMessage`; no arranca daemon             | «La voz activa no existe; activa otra con `voice use` o vuelve a `default`.»                             |
+| Borrar voz activa                          | Plugin                                                        | Exit 2; no invoca                              | «Activa otra voz antes de borrar esta.»                                                                  |
+| JSON inválido del motor                    | Plugin                                                        | Exit 1; log                                    | «El motor devolvió una respuesta inesperada.»                                                            |
+| Captura vacía                              | `2 empty_audio`                                               | Exit 2                                         | «No se capturó audio.»                                                                                   |
+| Duración o techo excesivo                  | `2 audio_too_long`                                            | Exit 2                                         | «El máximo de clonado es 30 s.»                                                                          |
+| WAV truncado o inválido                    | `2 invalid_audio`                                             | Exit 2                                         | «Usa un WAV válido.»                                                                                     |
+| Ciclo de vida ocupado                      | `17 lifecycle_locked`                                         | Exit 17; no se ejecuta                         | «Espera a que termine la instalación o limpieza.»                                                        |
+| Limpieza ocupada                           | `6 denoise_busy`                                              | Exit 6; no confundir con `voice_exists`        | «Reintenta al terminar la limpieza en curso.»                                                            |
+| Limpieza no disponible o fallida           | `1 denoise_unsupported` / `denoise_failed`                    | Exit 1; sin fallback                           | «Comprueba la instalación y el modelo de limpieza.»                                                      |
+| Modelo de limpieza ausente                 | `4 model_missing`                                             | Exit 4                                         | «Ejecuta setup.»                                                                                         |
+| Proceso no iniciado, señal o timeout       | Plugin                                                        | Fallo, nunca éxito por status nulo             | «No se pudo completar la operación.»                                                                     |
 
 Los errores JSON incluyen `reason` y mensaje; se interpreta el código junto con
 la operación y el `reason`. Una razón desconocida conserva el código y recibe
-un mensaje genérico. En `speech play`, exit 3 distingue `voice_not_found` y
-`speech_not_found` si se solicita JSON. `doctor` con veredicto negativo devuelve
+un mensaje genérico. En `speech play` y `speech say`, el exit 3 distingue con
+`--json` `speech_not_found` (solo `play`), `voice_not_found`,
+`no_output_device` y `audio_backend_unavailable`; el worker del plugin ya
+registra ese `reason` en `worker.log`. `doctor` con veredicto negativo devuelve
 su informe y exit 1, no necesariamente un objeto de error.
 
 ## 10. Estrategia de pruebas
@@ -651,7 +658,7 @@ Casos:
 16. `voice remove --json` reporta `removed_speech`; `voice use` de voz activa con fallo deja estado parcial informado.
 17. operaciones manuales simultáneas, recuperación simultánea de dueño terminado, PID reutilizado, dueño no verificable y liberación sin propiedad; verificar que nunca haya dos dueños.
 18. voz ausente con daemon activo, `degraded`, `warm_failed` y veredicto integral de `doctor`.
-19. versión inferior a v0.37.3 o ilegible no habilita la feature y mantiene narración existente.
+19. versión inferior a v0.41.1 o ilegible no habilita la feature y mantiene narración existente.
 20. `presynth` concurrente con `voice use` y `on/off/mode` concurrente con `voice use`: sin WAV ni preferencias perdidas por carreras del plugin; sin bloqueo reentrante en pre-síntesis interna.
 
 ### 10.3 E2E opcional
@@ -709,7 +716,7 @@ que exista un micrófono de entrada.
 | **AC-24** | Windows, Linux y macOS                                                                                            | Se ejecutan los tests                              | Pasan los mismos casos, incluidas rutas con espacios y shims `.cmd` en Windows.                                                                            |
 | **AC-25** | La implementación termina                                                                                         | Se ejecutan los gates                              | `lint`, `format:check`, `typecheck`, `test` y `check-dist` pasan; `claude plugin validate --strict .` pasa; CI verde.                                      |
 | **AC-26** | La implementación termina                                                                                         | Se revisa la documentación                         | `docs/INTEGRATION.md`, `README.md`, `SECURITY.md`, `CHANGELOG.md` y este documento reflejan la feature y las nuevas superficies.                           |
-| **AC-27** | Un motor anterior a v0.37.3 o versión ilegible                                                                    | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                      |
+| **AC-27** | Un motor anterior a v0.41.1 o versión ilegible                                                                    | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                      |
 | **AC-28** | Una fuente WAV o micrófono                                                                                        | Se clona con `--denoise`                           | Se transmite el flag; ausencia de modelo, saturación o fallo se informan sin clonar audio sin limpiar.                                                     |
 | **AC-29** | Motor corregido, TTY y variable PTT ausente                                                                       | Se clona con `--mic` sin duración                  | El límite es 30 s; la captura real solo se verifica con dispositivo disponible.                                                                            |
 | **AC-30** | Una operación manual tiene el bloqueo                                                                             | Otra intenta clonar, activar o borrar              | No muta y comunica el conflicto; un dueño no verificable no se elimina automáticamente.                                                                    |
@@ -756,7 +763,7 @@ que exista un micrófono de entrada.
   contrato estable del plugin; hay que documentarlas y verificarlas.
 - **Modelo Base**: el clonado y las voces clonadas requieren
   `qwen3-tts-0.6b-base`; sin él, el motor sale con exit 4.
-- **Permisos de micrófono**: al clonar con `--mic`, si el sistema operativo no concede permisos al proceso del motor, sale con exit 10. La UX debe informar con claridad cómo conceder permisos o usar un archivo WAV alternativo.
+- **Permisos de micrófono**: al clonar con `--mic`, si el sistema operativo no concede permisos al proceso del motor, sale con exit 3 (`no_input_device` o `audio_backend_unavailable`) cuando falta el dispositivo o el backend, o con exit 10 (`transcription_failed`) ante otro fallo de captura. La UX debe informar con claridad cómo conceder permisos o usar un archivo WAV alternativo.
 - **PTT en v0.37.3**: sin duración y con variable ausente, esa versión rechaza su default general; la corrección está publicada en v0.37.4.
 - **Concurrencia externa y recuperación**: el bloqueo del plugin no controla invocaciones externas; una interrupción puede dejar locuciones parciales o temporales para barrido.
 - **Denoise**: `denoise_busy` comparte exit 6 con otros conflictos; no se ha validado en evaluación humana controlada la preservación de identidad.
