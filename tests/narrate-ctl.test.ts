@@ -56,7 +56,7 @@ function runCtl(
 function readConfigFile(): Record<string, unknown> {
   const sub =
     process.platform === "darwin" ? join("Library", "Application Support") : "";
-  const path = join(stateBase, sub, "evolutivex-agent", "config.json");
+  const path = join(stateBase, sub, "evolutivex-agents", "config.json");
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 }
 

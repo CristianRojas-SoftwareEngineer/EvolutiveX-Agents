@@ -30,7 +30,7 @@ const APP_ID_FLAG = "app-id";
 const ICON_FLAG = "icon";
 
 // Default de branding: AUMID Windows (Company.App, sin espacios, ≤ 129 chars).
-export const DEFAULT_APP_ID = "EvolutiveX.Agent";
+export const DEFAULT_APP_ID = "EvolutiveX.Agents";
 
 export const globalFallbackIconProvider = {
   get(): string {

@@ -12,7 +12,7 @@ import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
 
-const APP_DIR = "evolutivex-agent";
+const APP_DIR = "evolutivex-agents";
 
 /** Directorio de estado del plugin, según el SO. No garantiza que exista. */
 export function stateDir(): string {

@@ -1,11 +1,11 @@
 ---
 name: narrate
-description: Controla la narración por voz y las notificaciones de escritorio de EvolutiveX Agent (activar/desactivar canales, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración del plugin.
+description: Controla la narración por voz y las notificaciones de escritorio de EvolutiveX Agents (activar/desactivar canales, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración del plugin.
 ---
 
-# Narración por voz y notificaciones con EvolutiveX Agent
+# Narración por voz y notificaciones con EvolutiveX Agents
 
-Esta skill opera el plugin **EvolutiveX Agent** (`evolutivex-agent`), que narra por voz la actividad de la sesión mediante AI Voice-InterConnector y emite notificaciones de escritorio nativas. La **automatización por turno** la manejan los hooks (no esta skill); aquí se cubre el **uso consciente**: toggles de ambos canales, modo, estado y narración a demanda. Todas las operaciones pasan por un único script de control:
+Esta skill opera el plugin **EvolutiveX Agents** (`evolutivex-agents`), que narra por voz la actividad de la sesión mediante AI Voice-InterConnector y emite notificaciones de escritorio nativas. La **automatización por turno** la manejan los hooks (no esta skill); aquí se cubre el **uso consciente**: toggles de ambos canales, modo, estado y narración a demanda. Todas las operaciones pasan por un único script de control:
 
 ```
 node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" <comando> [args]

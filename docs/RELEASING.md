@@ -1,6 +1,6 @@
 # Proceso de release
 
-Cómo se corta y publica una versión de **EvolutiveX Agent**. El proceso es deliberadamente más simple que el del motor ([AI-Voice-InterConnector/docs/RELEASING.md](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/main/docs/RELEASING.md)): aquí no hay CI de publicación ni artefactos binarios por plataforma — el plugin se distribuye clonando el repo con `dist/` y `vendor/` commiteados, y **el release es un tag de git precedido por este checklist**. El CI de CircleCI corre en cada push como verificación continua (no participa del corte); el marketplace de plugins de Claude Code resuelve las versiones desde los tags del repo.
+Cómo se corta y publica una versión de **EvolutiveX Agents**. El proceso es deliberadamente más simple que el del motor ([AI-Voice-InterConnector/docs/RELEASING.md](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/main/docs/RELEASING.md)): aquí no hay CI de publicación ni artefactos binarios por plataforma — el plugin se distribuye clonando el repo con `dist/` y `vendor/` commiteados, y **el release es un tag de git precedido por este checklist**. El CI de CircleCI corre en cada push como verificación continua (no participa del corte); el marketplace de plugins de Claude Code resuelve las versiones desde los tags del repo.
 
 ## Tabla de contenidos
 
@@ -154,10 +154,10 @@ Estas variables se reutilizan en varias fases; defínelas al inicio de la sesió
 $PLUGIN_DEV = (Get-Item .).FullName
 
 # Directorio temporal para el clon limpio del E2E.
-$PLUGIN_E2E = "$env:TEMP\evolutivex-agent-e2e"
+$PLUGIN_E2E = "$env:TEMP\evolutivex-agents-e2e"
 
-# State dir del plugin (Windows): %LOCALAPPDATA%\evolutivex-agent.
-$STATE_DIR = "$env:LOCALAPPDATA\evolutivex-agent"
+# State dir del plugin (Windows): %LOCALAPPDATA%\evolutivex-agents.
+$STATE_DIR = "$env:LOCALAPPDATA\evolutivex-agents"
 
 # Versión del motor verificada (fuente única: package.json).
 $MOTOR_VERSION = "v" + (Get-Content "$PLUGIN_DEV\package.json" | ConvertFrom-Json).engine.aiVoiceInterConnector
@@ -260,14 +260,14 @@ se ejecuta **antes de publicar** el release del plugin, así que el clon sale de
 la **ruta local** del repositorio de desarrollo (`$PLUGIN_DEV`): en ese momento
 los cambios **aún no están en GitHub** y un clon remoto no los contendría. El
 clon desde GitHub
-(`git clone https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent`)
+(`git clone https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents`)
 corresponde al smoke de una **release ya publicada**, no a éste.
 
 ```powershell
 if (-not (Test-Path $PLUGIN_E2E)) {
   # Smoke previo a publicar: clon local, porque los cambios aún no están en GitHub.
   # Para el smoke de una release ya publicada, clona en su lugar desde GitHub:
-  #   git clone https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent $PLUGIN_E2E
+  #   git clone https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents $PLUGIN_E2E
   git clone "$PLUGIN_DEV" $PLUGIN_E2E
 }
 # Comprobación: el dist/ compilado existe (es lo que ejecutan los hooks).
@@ -290,7 +290,7 @@ node "$PLUGIN_E2E\dist\notification-cli.js" --event-type SessionStart --message 
 # La clave es la cadena "daemon"; "stopped" con exit 0 no es error; un exit 1/5 sí lo es: el sondeo falló (ver paso 2).
 ai-voice-interconnector daemon status --json | ConvertFrom-Json | ForEach-Object { $_.daemon -eq "running" }
 narrate-ctl say "Prueba de audio local"
-# Comprobación AUDIBLE y VISUAL: se escucha la frase en español y aparece el toast con branding EvolutiveX Agent.
+# Comprobación AUDIBLE y VISUAL: se escucha la frase en español y aparece el toast con branding EvolutiveX Agents.
 ```
 
 #### Paso 5 — Verificación completa por superficie del contrato (audible y visual)
@@ -462,11 +462,11 @@ git ls-remote --tags origin "v$V"
 ```powershell
 # 1. Resolución desde una máquina limpia.
 #    Comandos dentro de Claude Code:
-#      /plugin marketplace add CristianRojas-SoftwareEngineer/EvolutiveX-Agent
-#      /plugin install evolutivex-agent@EvolutiveX-Agent
+#      /plugin marketplace add CristianRojas-SoftwareEngineer/EvolutiveX-Agents
+#      /plugin install evolutivex-agents@EvolutiveX-Agents
 
 # Comprobación: el tag está publicado.
-git ls-remote --tags https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent "v$V"
+git ls-remote --tags https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents "v$V"
 
 # 2. Si el changelog del motor menciona el plugin, confirmar que el enlace
 #    apunta al tag correcto.

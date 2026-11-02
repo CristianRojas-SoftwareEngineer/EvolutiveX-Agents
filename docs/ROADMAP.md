@@ -1,4 +1,4 @@
-# Roadmap — EvolutiveX Agent
+# Roadmap — EvolutiveX Agents
 
 Este es el roadmap vivo del plugin y mira hacia adelante: reúne las direcciones
 que todavía no están implementadas. Lo ya construido y lo descartado no se

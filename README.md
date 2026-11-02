@@ -1,4 +1,4 @@
-# EvolutiveX Agent
+# EvolutiveX Agents
 
 Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) y emite **notificaciones de escritorio nativas** (toasts silenciosos con icono por evento). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto y recibes un aviso visual independiente del motor de voz.
 
@@ -18,11 +18,11 @@ Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la activi
 
 ```bash
 # 1. Instalar el plugin (persiste entre sesiones)
-/plugin marketplace add CristianRojas-SoftwareEngineer/EvolutiveX-Agent
-/plugin install evolutivex-agent@EvolutiveX-Agent
+/plugin marketplace add CristianRojas-SoftwareEngineer/EvolutiveX-Agents
+/plugin install evolutivex-agents@EvolutiveX-Agents
 
 # 2. Instalar y configurar el motor (guiado, detecta SO, descarga modelo, pre-sintetiza)
-/evolutivex-agent:install
+/evolutivex-agents:install
 ```
 
 El comando de instalación guía todo el proceso: detecta tu SO, instala el binario nativo, descarga los 6 modelos, levanta el daemon, pre-sintetiza los 6 anuncios estáticos y activa la narración.
@@ -52,11 +52,11 @@ El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (op
 
 Ubicación por SO:
 
-| SO      | Ruta                                                             |
-| ------- | ---------------------------------------------------------------- |
-| Windows | `%LOCALAPPDATA%\evolutivex-agent\config.json`                    |
-| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agent/config.json` |
-| macOS   | `~/Library/Application Support/evolutivex-agent/config.json`     |
+| SO      | Ruta                                                              |
+| ------- | ----------------------------------------------------------------- |
+| Windows | `%LOCALAPPDATA%\evolutivex-agents\config.json`                    |
+| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/config.json` |
+| macOS   | `~/Library/Application Support/evolutivex-agents/config.json`     |
 
 Ejemplo:
 
@@ -74,14 +74,14 @@ Ejemplo:
 
 ### Notificaciones de escritorio (CLI y branding Windows)
 
-El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `EvolutiveX.Agent`.
+El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `EvolutiveX.Agents`.
 
 - **Control del canal:** `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" notifications-on` / `notifications-off`.
 - **CLI manual (`dist/notification-cli.js`):** conserva todas las opciones (`--event-type`, `--message`, `--title`, `--sound`, `--silent`, `--stdin-json`, `--app-id`, `--icon`):
   ```bash
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-cli.js" --event-type Stop --message "Listo"
   ```
-- **Branding en Windows (`dist/notification-register.js`):** registra el AUMID `EvolutiveX.Agent` y el acceso directo `EvolutiveX-Agent.lnk` en el Menú Inicio:
+- **Branding en Windows (`dist/notification-register.js`):** registra el AUMID `EvolutiveX.Agents` y el acceso directo `EvolutiveX-Agents.lnk` en el Menú Inicio:
   ```bash
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
@@ -120,7 +120,7 @@ Notas:
 - No uses `.env`: el plugin no lo lee.
 - Para activar el parafraseo: define `GEMINI_API_KEY` y ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode llm`. `status` confirma `gemini key: configurada` sin mostrar el valor.
 
-Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolutivex-agent:narrate` expone toggles interactivos.
+Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolutivex-agents:narrate` expone toggles interactivos.
 
 ---
 
@@ -144,8 +144,8 @@ npm test           # suite (node --test, sin framework externo)
 
 ### Reglas del nombre del plugin
 
-- Identidad pública: `evolutivex-agent@EvolutiveX-Agent`
-- Namespace: `/evolutivex-agent:*`
+- Identidad pública: `evolutivex-agents@EvolutiveX-Agents`
+- Namespace: `/evolutivex-agents:*`
 - No puede empezar por `claude-` (reservado por Anthropic)
 - Debe ser kebab-case (requisito marketplace Claude.ai)
 

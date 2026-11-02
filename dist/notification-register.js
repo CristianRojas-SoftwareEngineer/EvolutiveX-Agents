@@ -3726,9 +3726,9 @@ async function installSnoreToastShortcut(lnkFileName, targetExe, aumid, lnkAbsol
 }
 
 // src/notifications/register.ts
-var AUMID = "EvolutiveX.Agent";
-var DISPLAY_NAME = "EvolutiveX Agent";
-var LNK_FILENAME = "EvolutiveX-Agent.lnk";
+var AUMID = "EvolutiveX.Agents";
+var DISPLAY_NAME = "EvolutiveX Agents";
+var LNK_FILENAME = "EvolutiveX-Agents.lnk";
 var registryProvider = {
   readRegistry,
   writeRegistry,
@@ -3911,7 +3911,7 @@ async function statusAction() {
 async function main() {
   const program2 = new Command();
   program2.name("notification-register").description(
-    "Registra, desregistra o consulta el AUMID de EvolutiveX Agent en Windows (idempotente, opt-in)."
+    "Registra, desregistra o consulta el AUMID de EvolutiveX Agents en Windows (idempotente, opt-in)."
   ).allowExcessArguments(false).option(
     "--install",
     "Crea o actualiza el .lnk en el Men\xFA Inicio y la clave de registro del AUMID"

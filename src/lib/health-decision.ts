@@ -39,12 +39,12 @@ export type HealthDecision =
 
 /** Aviso base por entorno de voz no provisionado. Fuente única. */
 export const NOT_PROVISIONED_MESSAGE =
-  "EvolutiveX Agent: el entorno de voz no está provisionado. Ejecuta " +
+  "EvolutiveX Agents: el entorno de voz no está provisionado. Ejecuta " +
   "ai-voice-interconnector setup para habilitar la narración por voz.";
 
 /** Aviso cuando `doctor` falla como comando (reason doctor_failed). */
 const DOCTOR_FAILED_MESSAGE =
-  "EvolutiveX Agent: el diagnóstico del motor (doctor) falló y no produjo " +
+  "EvolutiveX Agents: el diagnóstico del motor (doctor) falló y no produjo " +
   "un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
 
 const DOCTOR_JSON_HINT =
@@ -150,7 +150,7 @@ function isValidReport(value: unknown): value is DoctorReport {
 function buildFailedMessage(report: DoctorReport): string {
   const parts = report.failed.map((name) => describeCheck(report, name));
   return (
-    "EvolutiveX Agent: el diagnóstico del motor reporta chequeos " +
+    "EvolutiveX Agents: el diagnóstico del motor reporta chequeos " +
     `fallidos. ${parts.join(" ")} ${DOCTOR_JSON_HINT}`
   );
 }
@@ -179,7 +179,7 @@ function describeCheck(report: DoctorReport, name: string): string {
 function buildAdvisoryMessage(report: DoctorReport): string {
   const parts = report.failed.map((name) => describeCheck(report, name));
   return (
-    "EvolutiveX Agent: el diagnóstico del motor reporta chequeos " +
+    "EvolutiveX Agents: el diagnóstico del motor reporta chequeos " +
     `de instalación fallidos que no impiden la narración. ${parts.join(" ")} ` +
     DOCTOR_JSON_HINT
   );

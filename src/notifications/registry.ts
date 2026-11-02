@@ -7,8 +7,8 @@
 // Wrapper sobre `reg.exe` (built-in en Windows) para escribir, leer y
 // borrar la clave de registro que registra el AUMID del plugin:
 //
-//   HKCU\Software\Classes\AppUserModelId\EvolutiveX.Agent
-//     DisplayName (REG_SZ)         = "EvolutiveX Agent"
+//   HKCU\Software\Classes\AppUserModelId\EvolutiveX.Agents
+//     DisplayName (REG_SZ)         = "EvolutiveX Agents"
 //     Icon        (REG_EXPAND_SZ)  = ruta al .ico (shell / acceso directo)
 //     IconUri     (REG_SZ)         = ruta al .png estable (header WinRT)
 //     IconBackgroundColor (REG_SZ) = "0" (sin tinte de acento extra)

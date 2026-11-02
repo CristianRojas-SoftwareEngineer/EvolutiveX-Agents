@@ -1,14 +1,14 @@
 {
-  "name": "EvolutiveX-Agent",
+  "name": "EvolutiveX-Agents",
   "owner": {
     "name": "Cristián Rojas Arredondo"
   },
   "metadata": {
-    "description": "Marketplace del plugin EvolutiveX Agent: narración por voz y notificaciones de escritorio de la sesión de Claude Code mediante AI Voice-InterConnector."
+    "description": "Marketplace del plugin EvolutiveX Agents: narración por voz y notificaciones de escritorio de la sesión de Claude Code mediante AI Voice-InterConnector."
   },
   "plugins": [
     {
-      "name": "evolutivex-agent",
+      "name": "evolutivex-agents",
       "source": "./",
       "description": "Narra por voz la actividad de la sesión de Claude Code usando AI Voice-InterConnector y emite notificaciones de escritorio nativas. Genera un mensaje conversacional corto por turno (Gemini free tier con degradación local) y lo sintetiza vía el CLI ai-voice-interconnector. Multiplataforma, no intrusivo, costo cero."
     }

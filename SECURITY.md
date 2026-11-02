@@ -2,7 +2,7 @@
 
 ## Versiones soportadas
 
-EvolutiveX Agent está en desarrollo activo pre-1.0. Solo la última versión publicada recibe correcciones de seguridad.
+EvolutiveX Agents está en desarrollo activo pre-1.0. Solo la última versión publicada recibe correcciones de seguridad.
 
 | Versión | Soportada |
 | ------- | --------- |
@@ -13,7 +13,7 @@ EvolutiveX Agent está en desarrollo activo pre-1.0. Solo la última versión pu
 
 **No** reportes vulnerabilidades de seguridad en Issues públicos.
 
-Usa el canal privado de [**GitHub Security Advisories**](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent/security/advisories/new) para reportarlas de forma confidencial. Incluye:
+Usa el canal privado de [**GitHub Security Advisories**](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/security/advisories/new) para reportarlas de forma confidencial. Incluye:
 
 - Una descripción de la vulnerabilidad y su impacto.
 - Pasos para reproducirla (versión del plugin, versión del motor, SO, evento
@@ -30,7 +30,7 @@ El plugin es un cliente delgado que corre dentro de la sesión de Claude Code de
 
 ### Qué se persiste, dónde y con qué permisos
 
-- El _state dir_ por SO (`%LOCALAPPDATA%\evolutivex-agent` en Windows, `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agent` en Linux, `~/Library/Application Support/evolutivex-agent` en macOS) contiene `config.json` —solo `voiceEnabled`, `notificationsEnabled` y `messageMode`—, `worker.pid`, `queue/` (archivos `.json` transitorios de la cola FIFO) y `worker.log`. **Ninguno contiene la API key**: el plugin no persiste secretos en disco.
+- El _state dir_ por SO (`%LOCALAPPDATA%\evolutivex-agents` en Windows, `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents` en Linux, `~/Library/Application Support/evolutivex-agents` en macOS) contiene `config.json` —solo `voiceEnabled`, `notificationsEnabled` y `messageMode`—, `worker.pid`, `queue/` (archivos `.json` transitorios de la cola FIFO) y `worker.log`. **Ninguno contiene la API key**: el plugin no persiste secretos en disco.
 - El canal de notificaciones de escritorio muestra extractos locales del evento (preview del prompt, herramienta/pregunta o último mensaje del asistente, truncados) en el centro de notificaciones del sistema operativo local. **Nunca envía datos por red**.
 - La API key se lee únicamente de la variable de entorno `GEMINI_API_KEY` y vive en memoria durante la generación.
 - La variable de entorno puede heredarse en procesos hijos y, si el usuario la define de forma persistente, queda en su perfil fuera del control del plugin. Esa decisión y su protección son responsabilidad del usuario.

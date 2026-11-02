@@ -62,7 +62,7 @@ function execSnoreToast(args: string[]): Promise<void> {
 
 /**
  * Crea el .lnk en el Menú Inicio con el flujo oficial de SnoreToast.
- * `lnkFileName` es solo el nombre (p. ej. `EvolutiveX-Agent.lnk`), no ruta absoluta.
+ * `lnkFileName` es solo el nombre (p. ej. `EvolutiveX-Agents.lnk`), no ruta absoluta.
  * `targetExe` suele ser la propia ruta de SnoreToast.
  */
 export async function installSnoreToastShortcut(

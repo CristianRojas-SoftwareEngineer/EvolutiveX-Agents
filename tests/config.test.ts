@@ -28,7 +28,7 @@ afterEach(() => {
 });
 
 function writeConfigFile(contents: string): void {
-  mkdirSync(join(state.dir, "evolutivex-agent"), { recursive: true });
+  mkdirSync(join(state.dir, "evolutivex-agents"), { recursive: true });
   writeFileSync(configPath(), contents);
 }
 
