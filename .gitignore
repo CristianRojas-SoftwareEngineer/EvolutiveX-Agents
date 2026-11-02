@@ -2,5 +2,9 @@ node_modules/
 *.log
 .DS_Store
 tests/.build/
-.claude/
+# Herramientas locales de Claude Code: solo se versiona la skill de sincronización con el motor.
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/sync-with-engine/
 .engram/
