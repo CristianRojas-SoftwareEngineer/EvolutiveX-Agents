@@ -124,6 +124,7 @@ function buildShellCommand(cli, args) {
 function runCli(cli, args, opts) {
   return needsShell(cli) ? spawnSync(buildShellCommand(cli, args), { ...opts, shell: true }) : spawnSync(cli, args, { ...opts, shell: false });
 }
+var MAX_STDOUT_BYTES = 64 * 1024;
 
 // src/message/static-announcements.ts
 function announcement(text, label) {

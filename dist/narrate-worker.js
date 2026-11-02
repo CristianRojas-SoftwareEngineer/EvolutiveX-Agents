@@ -242,13 +242,22 @@ function buildShellCommand(cli, args) {
 function spawnCli(cli, args, opts) {
   return needsShell(cli) ? spawn2(buildShellCommand(cli, args), { ...opts, shell: true }) : spawn2(cli, args, { ...opts, shell: false });
 }
+var MAX_STDOUT_BYTES = 64 * 1024;
 function runCliWithTimeout(cli, args, opts) {
   const { timeoutMs, killGraceMs = 2e3, ...spawnOpts } = opts;
   const child = spawnCli(cli, args, {
     ...spawnOpts,
     detached: process.platform !== "win32",
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "ignore"],
     windowsHide: true
+  });
+  const chunks = [];
+  let captured = 0;
+  child.stdout?.on("data", (chunk) => {
+    if (captured >= MAX_STDOUT_BYTES) return;
+    const slice = chunk.subarray(0, MAX_STDOUT_BYTES - captured);
+    chunks.push(slice);
+    captured += slice.length;
   });
   let resolved = false;
   let timer;
@@ -257,7 +266,13 @@ function runCliWithTimeout(cli, args, opts) {
       if (resolved) return;
       resolved = true;
       if (timer) clearTimeout(timer);
-      resolve({ code, signal, timedOut, error });
+      resolve({
+        code,
+        signal,
+        timedOut,
+        stdout: Buffer.concat(chunks).toString("utf8"),
+        error
+      });
     };
     timer = setTimeout(() => {
       killProcessTree(child.pid ?? 0, { killGraceMs });
@@ -266,7 +281,7 @@ function runCliWithTimeout(cli, args, opts) {
     child.on("error", (err) => {
       finish(null, null, false, err);
     });
-    child.on("exit", (code, signal) => {
+    child.on("close", (code, signal) => {
       finish(code, signal, false);
     });
   });

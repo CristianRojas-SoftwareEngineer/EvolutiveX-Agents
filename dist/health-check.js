@@ -108,6 +108,7 @@ function runCli(cli, args, opts) {
 function spawnCli(cli, args, opts) {
   return needsShell(cli) ? spawn(buildShellCommand(cli, args), { ...opts, shell: true }) : spawn(cli, args, { ...opts, shell: false });
 }
+var MAX_STDOUT_BYTES = 64 * 1024;
 
 // src/lib/hook-payload.ts
 function readStdin() {

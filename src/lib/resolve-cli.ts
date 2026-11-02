@@ -108,6 +108,9 @@ export function spawnCli(
     : spawn(cli, args, { ...opts, shell: false });
 }
 
+/** Tope de bytes de stdout que se conservan; el exceso se drena y se descarta. */
+const MAX_STDOUT_BYTES = 64 * 1024;
+
 /**
  * Resultado de una invocación con timeout.
  */
@@ -115,26 +118,43 @@ export interface CliRunWithTimeoutResult {
   code: number | null;
   signal: NodeJS.Signals | null;
   timedOut: boolean;
+  /** Stdout capturado (UTF-8, acotado a MAX_STDOUT_BYTES). */
+  stdout: string;
   error?: Error;
 }
 
 /**
  * Invoca el CLI resuelto con un tiempo de espera y mata su árbol de procesos
  * si se excede. En POSIX spawnea con `detached: true` para poder matar el
- * grupo de procesos; en Windows usa taskkill /T /F. Devuelve una promesa que
- * nunca rechaza.
+ * grupo de procesos; en Windows usa taskkill /T /F. Captura stdout acotado a
+ * MAX_STDOUT_BYTES (stdin y stderr se ignoran) y resuelve en `close`, para no
+ * perder la salida aún sin drenar cuando el proceso termina. Devuelve una
+ * promesa que nunca rechaza.
  */
 export function runCliWithTimeout(
   cli: string,
   args: string[],
-  opts: SpawnOptions & { timeoutMs: number; killGraceMs?: number },
+  opts: Omit<SpawnOptions, "stdio"> & {
+    timeoutMs: number;
+    killGraceMs?: number;
+  },
 ): Promise<CliRunWithTimeoutResult> {
   const { timeoutMs, killGraceMs = 2000, ...spawnOpts } = opts;
   const child = spawnCli(cli, args, {
     ...spawnOpts,
     detached: process.platform !== "win32",
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "ignore"],
     windowsHide: true,
+  });
+  const chunks: Buffer[] = [];
+  let captured = 0;
+  // Lectura continua: el exceso sobre el tope se descarta, pero el stream se
+  // sigue drenando para que el hijo no se bloquee por backpressure.
+  child.stdout?.on("data", (chunk: Buffer) => {
+    if (captured >= MAX_STDOUT_BYTES) return;
+    const slice = chunk.subarray(0, MAX_STDOUT_BYTES - captured);
+    chunks.push(slice);
+    captured += slice.length;
   });
   let resolved = false;
   let timer: NodeJS.Timeout | undefined;
@@ -148,7 +168,13 @@ export function runCliWithTimeout(
       if (resolved) return;
       resolved = true;
       if (timer) clearTimeout(timer);
-      resolve({ code, signal, timedOut, error });
+      resolve({
+        code,
+        signal,
+        timedOut,
+        stdout: Buffer.concat(chunks).toString("utf8"),
+        error,
+      });
     };
     timer = setTimeout(() => {
       killProcessTree(child.pid ?? 0, { killGraceMs });
@@ -157,7 +183,7 @@ export function runCliWithTimeout(
     child.on("error", (err) => {
       finish(null, null, false, err);
     });
-    child.on("exit", (code, signal) => {
+    child.on("close", (code, signal) => {
       finish(code, signal, false);
     });
   });
