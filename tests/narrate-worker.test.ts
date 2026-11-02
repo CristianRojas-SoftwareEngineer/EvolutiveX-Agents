@@ -13,7 +13,11 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
 import { enqueuePayload, listPending } from "../src/lib/queue.js";
-import { ensureStateDir, workerPidPath } from "../src/lib/state-dir.js";
+import {
+  ensureStateDir,
+  workerLogPath,
+  workerPidPath,
+} from "../src/lib/state-dir.js";
 import { withEnv, makeTempDir, removeDir } from "./helpers.js";
 
 const WORKER = join(process.cwd(), "dist", "narrate-worker.js");
@@ -27,15 +31,40 @@ afterEach(() => {
   if (restoreEnv) restoreEnv();
 });
 
-function makeFakeCli(dir: string): string {
+/**
+ * CLI falso que anota su argv en `argv.log`. Con `responses`, la invocación
+ * i-ésima (contador en disco) imprime `stdout` y sale con `exit`; sin respuesta
+ * para ese índice, sale con 0.
+ */
+function makeFakeCli(
+  dir: string,
+  responses: Array<{ stdout: string; exit: number }> = [],
+): string {
+  if (responses.length > 0) {
+    writeFileSync(join(dir, "responses.json"), JSON.stringify(responses));
+  }
   writeFileSync(
     join(dir, "impl.cjs"),
     [
       'const fs = require("node:fs");',
       'const path = require("node:path");',
-      "const argv = process.argv.slice(2);",
-      'fs.appendFileSync(path.join(__dirname, "argv.log"), JSON.stringify(argv) + "\\n");',
-      "process.exit(0);",
+      "(function () {",
+      "  const argv = process.argv.slice(2);",
+      '  fs.appendFileSync(path.join(__dirname, "argv.log"), JSON.stringify(argv) + "\\n");',
+      '  const responsesPath = path.join(__dirname, "responses.json");',
+      "  if (fs.existsSync(responsesPath)) {",
+      '    const counterPath = path.join(__dirname, "counter");',
+      '    const i = fs.existsSync(counterPath) ? Number(fs.readFileSync(counterPath, "utf8")) : 0;',
+      "    fs.writeFileSync(counterPath, String(i + 1));",
+      '    const r = JSON.parse(fs.readFileSync(responsesPath, "utf8"))[i];',
+      "    if (r) {",
+      "      process.stdout.write(r.stdout);",
+      "      process.exitCode = r.exit;",
+      "      return;",
+      "    }",
+      "  }",
+      "  process.exitCode = 0;",
+      "})();",
     ].join("\n"),
   );
   let cliPath: string;
@@ -104,12 +133,14 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
     .map((line) => JSON.parse(line) as string[]);
   assert.equal(calls.length, 2, "debe invocar el CLI exactamente dos veces");
   assert.deepEqual(calls[0]!.slice(0, 3), ["speech", "play", "--label"]);
+  assert.equal(calls[0]![4], "--json");
   assert.deepEqual(calls[1], [
     "speech",
     "say",
     "--text",
     "segundo",
     "--daemon",
+    "--json",
   ]);
 });
 
@@ -179,6 +210,7 @@ test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola"
     "--text",
     "recuperado tras caída",
     "--daemon",
+    "--json",
   ]);
 });
 
@@ -218,4 +250,104 @@ test("worker respeta lock activo (PID vivo en worker.pid) y sale sin drenar", ()
   );
   assert.equal(listPending().length, 1);
   assert.equal(existsSync(join(cliDir, "argv.log")), false);
+});
+
+/** Líneas de worker.log que contienen `marker`, en orden. */
+function logLines(marker: string): string[] {
+  return readFileSync(workerLogPath(), "utf8")
+    .split("\n")
+    .filter((line) => line.includes(marker));
+}
+
+test("worker registra la pista de cada reason de speech play y degrada el desconocido al código", () => {
+  const dir = makeTempDir("narrator-worker-play-reason-");
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir("narrator-cli-play-reason-");
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir, [
+    { stdout: '{"error":"e","reason":"speech_not_found"}', exit: 3 },
+    { stdout: '{"error":"e","reason":"voice_not_found"}', exit: 3 },
+    { stdout: '{"error":"e","reason":"no_output_device"}', exit: 3 },
+    { stdout: '{"error":"e","reason":"audio_backend_unavailable"}', exit: 3 },
+    { stdout: '{"error":"e","reason":"playback_failed"}', exit: 1 },
+    { stdout: '{"error":"e","reason":"reason_del_futuro"}', exit: 3 },
+    { stdout: "no es json", exit: 3 },
+  ]);
+
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+
+  for (let i = 1; i <= 7; i++) {
+    enqueuePayload({
+      session_id: `p${i}`,
+      hook_event_name: "UserPromptSubmit",
+      prompt: "x",
+    });
+  }
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
+
+  const res = runWorker(env);
+  assert.equal(res.status, 0);
+
+  const lines = logLines("speech play salió con código");
+  assert.equal(lines.length, 7);
+  assert.match(
+    lines[0]!,
+    /código 3 \(speech_not_found: .*narrate-ctl presynth\)$/,
+  );
+  assert.match(lines[1]!, /código 3 \(voice_not_found: .*setup.*presynth\)$/);
+  assert.match(lines[2]!, /código 3 \(no_output_device: .*devices\)$/);
+  assert.match(lines[3]!, /código 3 \(audio_backend_unavailable: .*\)$/);
+  assert.match(lines[4]!, /código 1 \(playback_failed: .*\)$/);
+  assert.match(lines[5]!, /speech play salió con código 3$/);
+  assert.match(lines[6]!, /speech play salió con código 3$/);
+});
+
+test("worker registra la pista de cada reason de speech say", () => {
+  const dir = makeTempDir("narrator-worker-say-reason-");
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir("narrator-cli-say-reason-");
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir, [
+    { stdout: '{"error":"e","reason":"daemon_unreachable"}', exit: 5 },
+    { stdout: '{"error":"e","reason":"no_output_device"}', exit: 3 },
+    { stdout: '{"error":"e","reason":"model_missing"}', exit: 4 },
+  ]);
+
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+
+  for (const [i, text] of ["uno", "dos", "tres"].entries()) {
+    enqueuePayload({
+      session_id: `s${i + 1}`,
+      hook_event_name: "Stop",
+      last_assistant_message: text,
+    });
+  }
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
+
+  const res = runWorker(env);
+  assert.equal(res.status, 0);
+
+  const lines = logLines("speech say salió con código");
+  assert.equal(lines.length, 3);
+  assert.match(lines[0]!, /código 5 \(daemon_unreachable: .*daemon start\)$/);
+  assert.match(lines[1]!, /código 3 \(no_output_device: .*\)$/);
+  assert.match(lines[2]!, /código 4 \(model_missing: .*setup\)$/);
 });

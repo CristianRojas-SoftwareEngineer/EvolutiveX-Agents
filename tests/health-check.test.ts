@@ -6,12 +6,13 @@
 
 // Hook de SessionStart (dist/health-check.js) como subproceso real, con un CLI
 // `ai-voice-interconnector` falso en el PATH parametrizado por caso: `doctor
-// --json` con su exit y payload (contrato v0.36.2: reporte con failed/checks o
+// --json` con su exit y payload (contrato v0.41.1: reporte con failed/checks o
 // objeto de error), y `daemon status --json` con su exit y payload (running/
 // stopped/degraded o basura). Fija por contrato el flujo nuevo: consultar el
-// daemon solo tras diagnóstico sano, arrancarlo a lo sumo una vez y solo con
+// daemon solo tras recursos sanos, arrancarlo a lo sumo una vez y solo con
 // stopped limpio, aviso por systemMessage ante negativo/degraded/incierto, y
-// exit 0 en todos los caminos.
+// exit 0 en todos los caminos. Los checks informativos fallidos (instalación o
+// ciclo de vida) avisan sin impedir la consulta ni el arranque del daemon.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -73,7 +74,7 @@ function makeFakeCli(dir: string, opts: ShimOptions): { argvLog: string } {
   writeFileSync(join(dir, "doctor.delay"), String(doctorDelayMs));
   writeFileSync(
     join(dir, "daemon.json"),
-    daemonJson ?? JSON.stringify({ schema_version: "5", daemon: "running" }),
+    daemonJson ?? JSON.stringify({ schema_version: "6", daemon: "running" }),
   );
   writeFileSync(join(dir, "daemon.exit"), String(daemonExit));
   writeFileSync(
@@ -163,15 +164,49 @@ function startCount(argvLog: string): number {
   ).length;
 }
 
-/** Reporte sano del contrato v0.36.2: failed vacío y checks correctos. */
+/** Reporte sano del contrato v0.41.1: failed vacío y checks correctos. */
 function healthyDoctorJson(): string {
   return JSON.stringify({
-    schema_version: "5",
-    version: "0.36.2",
+    schema_version: "6",
+    version: "0.41.1",
     failed: [],
     checks: [{ name: "install_receipt", ok: true, detail: "recibo válido" }],
     models: { missing: [] },
   });
+}
+
+/**
+ * Reporte de una instalación `unmanaged` funcional: solo fallan checks
+ * informativos (recibo y PATH); los recursos están provisionados.
+ */
+function informativeDoctorJson(): string {
+  return JSON.stringify({
+    schema_version: "6",
+    version: "0.41.1",
+    channel: "unmanaged",
+    failed: ["install_receipt", "path_resolves"],
+    checks: [
+      {
+        name: "install_receipt",
+        ok: false,
+        detail: "no hay recibo en el directorio de programa",
+      },
+      {
+        name: "path_resolves",
+        ok: false,
+        detail: "la primera entrada del PATH no es la instalación registrada",
+      },
+      { name: "models_provisioned", ok: true, detail: "seis modelos" },
+    ],
+    models: { missing: [] },
+  });
+}
+
+/** Parsea el stdout del hook como un único objeto con `systemMessage`. */
+function systemMessageOf(stdout: string): string {
+  const payload = JSON.parse(stdout) as { systemMessage?: unknown };
+  assert.equal(typeof payload.systemMessage, "string");
+  return payload.systemMessage as string;
 }
 
 test("sano + daemon running: no avisa, consulta el estado y no arranca", () => {
@@ -180,7 +215,7 @@ test("sano + daemon running: no avisa, consulta el estado y no arranca", () => {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         daemon: "running",
         warm: "warm",
       }),
@@ -201,7 +236,7 @@ test("sano + daemon stopped limpio: arranca el daemon exactamente una vez", asyn
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
-      daemonJson: JSON.stringify({ schema_version: "5", daemon: "stopped" }),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
     });
     const res = runHealth(dir);
     assert.equal(res.status, 0);
@@ -221,7 +256,7 @@ test("sano + daemon stopped degraded: avisa remitiendo a daemon status y no arra
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         daemon: "stopped",
         degraded: "unresponsive",
       }),
@@ -242,7 +277,7 @@ test("sano + daemon running warm_failed: avisa del fallo de calentamiento y no a
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         daemon: "running",
         warm: "warm_failed",
       }),
@@ -262,7 +297,7 @@ test("sano + daemon running warming: no avisa ni bloquea ni arranca", () => {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         daemon: "running",
         warm: "warming",
       }),
@@ -298,7 +333,7 @@ test("doctor exit 1 + failed no vacío: avisa nombrando todos los checks, sin co
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         failed: ["models_provisioned", "install_receipt"],
         checks: [
           {
@@ -330,12 +365,125 @@ test("doctor exit 1 + failed no vacío: avisa nombrando todos los checks, sin co
   }
 });
 
+test("doctor exit 1 + solo checks informativos + daemon stopped: avisa y arranca el daemon una vez", async () => {
+  const dir = makeTempDir("narrator-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: informativeDoctorJson(),
+      doctorExit: 1,
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
+    });
+    const res = runHealth(dir);
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("install_receipt"));
+    assert.ok(message.includes("path_resolves"));
+    assert.ok(message.includes("doctor --json"));
+    assert.ok(invoked(argvLog, ["daemon", "status", "--json"]));
+    assert.ok(await waitFor(() => startCount(argvLog) === 1));
+    assert.equal(startCount(argvLog), 1);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("doctor exit 1 + solo checks informativos + daemon running warm: avisa sin arrancar", () => {
+  const dir = makeTempDir("narrator-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: informativeDoctorJson(),
+      doctorExit: 1,
+      daemonJson: JSON.stringify({
+        schema_version: "6",
+        daemon: "running",
+        warm: "warm",
+      }),
+    });
+    const res = runHealth(dir);
+    assert.equal(res.status, 0);
+    assert.ok(systemMessageOf(res.stdout).includes("install_receipt"));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("doctor exit 1 + solo checks informativos + daemon degraded: un solo systemMessage con ambos avisos, sin arrancar", () => {
+  const dir = makeTempDir("narrator-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: informativeDoctorJson(),
+      doctorExit: 1,
+      daemonJson: JSON.stringify({
+        schema_version: "6",
+        daemon: "stopped",
+        degraded: "unresponsive",
+      }),
+    });
+    const res = runHealth(dir);
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("install_receipt"));
+    assert.ok(message.includes("daemon status --json"));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("doctor exit 1 + solo checks informativos + daemon warm_failed: un solo systemMessage con ambos avisos", () => {
+  const dir = makeTempDir("narrator-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: informativeDoctorJson(),
+      doctorExit: 1,
+      daemonJson: JSON.stringify({
+        schema_version: "6",
+        daemon: "running",
+        warm: "warm_failed",
+      }),
+    });
+    const res = runHealth(dir);
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("install_receipt"));
+    assert.ok(message.includes("warm_failed"));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("doctor exit 1 + onnx_runtime fallido: avisa sin consultar el daemon", () => {
+  const dir = makeTempDir("narrator-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: JSON.stringify({
+        schema_version: "6",
+        failed: ["onnx_runtime"],
+        checks: [
+          { name: "onnx_runtime", ok: false, detail: "no carga la librería" },
+        ],
+        models: { missing: [] },
+      }),
+      doctorExit: 1,
+    });
+    const res = runHealth(dir);
+    assert.equal(res.status, 0);
+    assert.ok(systemMessageOf(res.stdout).includes("onnx_runtime"));
+    assert.ok(!invoked(argvLog, ["daemon", "status", "--json"]));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test("doctor exit 1 + objeto de error doctor_failed: aviso de fallo del diagnóstico, sin consultar el daemon", () => {
   const dir = makeTempDir("narrator-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         error: "no se pudo resolver el ejecutable en ejecución",
         reason: "doctor_failed",
         message: "doctor falló",
@@ -372,7 +520,7 @@ test("doctor exit 0 con failed no vacío (incoherente): sin daemon ni arranque",
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: JSON.stringify({
-        schema_version: "5",
+        schema_version: "6",
         failed: ["models_provisioned"],
         checks: [
           {

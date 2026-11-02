@@ -4,11 +4,13 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Decisión pura del health-check contra el contrato v0.36.2 de `doctor --json`
+// Decisión pura del health-check contra el contrato v0.41.1 de `doctor --json`
 // (DOCTOR.md del tag): emite exactamente un objeto con `failed: string[]` y
 // `checks: {name, ok, detail}[]`; el veredicto sale del exit más el reporte
 // válido, nunca de un campo `status` que el motor no emite. La entrada de la
-// decisión es {exitCode, report} y devuelve healthy | notify | uncertain.
+// decisión es {exitCode, report} y devuelve healthy | notify | uncertain. Como
+// `doctor` es integral, la decisión aplica un gate de recursos: solo
+// `models_provisioned` y `onnx_runtime` bloquean; el resto se avisa sin bloquear.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -17,11 +19,11 @@ import {
   NOT_PROVISIONED_MESSAGE,
 } from "../src/lib/health-decision.js";
 
-/** Reporte mínimo del contrato v0.36.2 (shape congelado desde DOCTOR.md). */
+/** Reporte mínimo del contrato v0.41.1 (shape congelado desde DOCTOR.md). */
 function healthyReport() {
   return {
-    schema_version: "5",
-    version: "0.36.2",
+    schema_version: "6",
+    version: "0.41.1",
     failed: [],
     checks: [
       { name: "install_receipt", ok: true, detail: "recibo válido" },
@@ -34,7 +36,7 @@ function healthyReport() {
 /** Reporte con los checks indicados fallando (exit 1 del motor). */
 function failingReport(failed: string[], missing: string[] = []) {
   return {
-    schema_version: "5",
+    schema_version: "6",
     failed,
     checks: failed.map((name) => ({
       name,
@@ -68,7 +70,35 @@ test("exit 1 + models_provisioned fallido ⇒ notify con setup y los modelos mis
   assert.match(message, /qwen3-tts-0\.6b/);
 });
 
-test("exit 1 + varios checks fallidos ⇒ un solo aviso que no oculta ninguno", () => {
+test("exit 1 + onnx_runtime fallido ⇒ notify que lo nombra, sin mensaje de setup", () => {
+  const decision = decideHealthAction({
+    exitCode: 1,
+    report: failingReport(["onnx_runtime"]),
+  });
+  assert.equal(decision.kind, "notify");
+  const message = decision.kind === "notify" ? decision.message : "";
+  assert.ok(message.includes("onnx_runtime"));
+  assert.match(message, /doctor --json/);
+  assert.ok(!message.includes(NOT_PROVISIONED_MESSAGE));
+});
+
+test("exit 1 + recurso e informativo mezclados ⇒ notify que nombra ambos", () => {
+  const decision = decideHealthAction({
+    exitCode: 1,
+    report: failingReport(
+      ["models_provisioned", "install_receipt"],
+      ["dpdfnet8"],
+    ),
+  });
+  assert.equal(decision.kind, "notify");
+  const message = decision.kind === "notify" ? decision.message : "";
+  assert.ok(message.includes("models_provisioned"));
+  assert.ok(message.includes("install_receipt"));
+  assert.ok(message.includes(NOT_PROVISIONED_MESSAGE));
+  assert.ok(message.includes("dpdfnet8"));
+});
+
+test("exit 1 + solo checks informativos ⇒ healthy con aviso que no oculta ninguno", () => {
   const decision = decideHealthAction({
     exitCode: 1,
     report: failingReport([
@@ -77,34 +107,35 @@ test("exit 1 + varios checks fallidos ⇒ un solo aviso que no oculta ninguno", 
       "path_resolves",
     ]),
   });
-  assert.equal(decision.kind, "notify");
-  const message = decision.kind === "notify" ? decision.message : "";
+  assert.equal(decision.kind, "healthy");
+  const advisory = decision.kind === "healthy" ? (decision.advisory ?? "") : "";
   for (const name of [
     "install_receipt",
     "pending_artifacts",
     "path_resolves",
   ]) {
-    assert.ok(message.includes(name), `el aviso debe nombrar ${name}`);
+    assert.ok(advisory.includes(name), `el aviso debe nombrar ${name}`);
   }
-  assert.match(message, /doctor --json/);
+  assert.match(advisory, /doctor --json/);
+  assert.ok(!advisory.includes(NOT_PROVISIONED_MESSAGE));
 });
 
-test("exit 1 + check desconocido ⇒ aviso que lo nombra, sin remedio inventado", () => {
+test("exit 1 + check desconocido ⇒ healthy con aviso que lo nombra, sin remedio inventado", () => {
   const decision = decideHealthAction({
     exitCode: 1,
     report: failingReport(["check_del_futuro"]),
   });
-  assert.equal(decision.kind, "notify");
-  const message = decision.kind === "notify" ? decision.message : "";
-  assert.ok(message.includes("check_del_futuro"));
-  assert.ok(!message.includes("cleanup"));
+  assert.equal(decision.kind, "healthy");
+  const advisory = decision.kind === "healthy" ? (decision.advisory ?? "") : "";
+  assert.ok(advisory.includes("check_del_futuro"));
+  assert.ok(!advisory.includes("cleanup"));
 });
 
 test("exit 1 + objeto de error doctor_failed ⇒ aviso de fallo del diagnóstico, distinto del veredicto negativo", () => {
   const decision = decideHealthAction({
     exitCode: 1,
     report: {
-      schema_version: "5",
+      schema_version: "6",
       error: "no se pudo resolver el ejecutable en ejecución",
       reason: "doctor_failed",
       message: "doctor falló",

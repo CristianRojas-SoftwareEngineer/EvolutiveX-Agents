@@ -4,7 +4,7 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// `daemon status --json` contra el contrato v0.36.2 (CONTRACT.md tabla por comando): clave
+// `daemon status --json` contra el contrato v0.41.1 (CONTRACT.md tabla por comando): clave
 // `daemon` como cadena ("running"|"stopped"), `degraded` opcional
 // (unresponsive|unregistered|orphan_resident) y `warm` opcional
 // (warming|warm|warm_failed); exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`). getDaemonStatus devuelve un
@@ -66,7 +66,7 @@ function makeFakeCli(
 test("running con warm warming ⇒ running, conserva warm, pid y exit 0", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({
-      schema_version: "5",
+      schema_version: "6",
       daemon: "running",
       pid: 1234,
       engine: "rust_native",
@@ -89,7 +89,7 @@ test("running con warm warming ⇒ running, conserva warm, pid y exit 0", () => 
 
 test("running con warm warm ⇒ running con warm preservado", () => {
   const { cliPath, cleanup } = makeFakeCli(
-    JSON.stringify({ schema_version: "5", daemon: "running", warm: "warm" }),
+    JSON.stringify({ schema_version: "6", daemon: "running", warm: "warm" }),
   );
   try {
     const result = daemon.getDaemonStatus(cliPath);
@@ -103,7 +103,7 @@ test("running con warm warm ⇒ running con warm preservado", () => {
 test("running con warm warm_failed ⇒ running con warm_failed preservado", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({
-      schema_version: "5",
+      schema_version: "6",
       daemon: "running",
       warm: "warm_failed",
     }),
@@ -119,7 +119,7 @@ test("running con warm warm_failed ⇒ running con warm_failed preservado", () =
 
 test("running sin warm ⇒ ausencia del campo no es fallo", () => {
   const { cliPath, cleanup } = makeFakeCli(
-    JSON.stringify({ schema_version: "5", daemon: "running", pid: 42 }),
+    JSON.stringify({ schema_version: "6", daemon: "running", pid: 42 }),
   );
   try {
     const result = daemon.getDaemonStatus(cliPath);
@@ -133,7 +133,7 @@ test("running sin warm ⇒ ausencia del campo no es fallo", () => {
 
 test('stopped limpio: {"daemon":"stopped"} ⇒ stopped sin degraded', () => {
   const { cliPath, cleanup } = makeFakeCli(
-    JSON.stringify({ schema_version: "5", daemon: "stopped" }),
+    JSON.stringify({ schema_version: "6", daemon: "stopped" }),
   );
   try {
     const result = daemon.getDaemonStatus(cliPath);
@@ -148,7 +148,7 @@ test('stopped limpio: {"daemon":"stopped"} ⇒ stopped sin degraded', () => {
 test("stopped + degraded unresponsive ⇒ degraded conserva el código", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({
-      schema_version: "5",
+      schema_version: "6",
       daemon: "stopped",
       degraded: "unresponsive",
     }),
@@ -166,7 +166,7 @@ test("stopped + degraded unresponsive ⇒ degraded conserva el código", () => {
 test("stopped + degraded unregistered ⇒ degraded conserva el código", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({
-      schema_version: "5",
+      schema_version: "6",
       daemon: "stopped",
       degraded: "unregistered",
     }),
@@ -183,7 +183,7 @@ test("stopped + degraded unregistered ⇒ degraded conserva el código", () => {
 test("stopped + degraded orphan_resident ⇒ degraded conserva el código", () => {
   const { cliPath, cleanup } = makeFakeCli(
     JSON.stringify({
-      schema_version: "5",
+      schema_version: "6",
       daemon: "stopped",
       degraded: "orphan_resident",
     }),
@@ -238,7 +238,7 @@ test('objeto sin campo daemon válido (p. ej. {"running":true}) ⇒ uncertain, n
 
 test('estado desconocido {"daemon":"banana"} ⇒ uncertain', () => {
   const { cliPath, cleanup } = makeFakeCli(
-    JSON.stringify({ schema_version: "5", daemon: "banana" }),
+    JSON.stringify({ schema_version: "6", daemon: "banana" }),
   );
   try {
     assert.equal(daemon.getDaemonStatus(cliPath).kind, "uncertain");
@@ -249,7 +249,7 @@ test('estado desconocido {"daemon":"banana"} ⇒ uncertain', () => {
 
 test("exit no cero con JSON running ⇒ uncertain (combinación incoherente), exit conservado", () => {
   const { cliPath, cleanup } = makeFakeCli(
-    JSON.stringify({ schema_version: "5", daemon: "running" }),
+    JSON.stringify({ schema_version: "6", daemon: "running" }),
     1,
   );
   try {
