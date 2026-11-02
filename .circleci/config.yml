@@ -135,6 +135,18 @@ jobs:
             npm run typecheck
             echo "[STEP] Typecheck (tsc --noEmit) - FIN"
       - run:
+          name: Lint (eslint)
+          command: |
+            echo "[STEP] Lint (eslint) - INICIO"
+            npm run lint
+            echo "[STEP] Lint (eslint) - FIN"
+      - run:
+          name: Format check (prettier --check)
+          command: |
+            echo "[STEP] Format check (prettier --check) - INICIO"
+            npm run format:check
+            echo "[STEP] Format check (prettier --check) - FIN"
+      - run:
           name: Check dist/ sincronizado con src/ (no escribe)
           command: |
             echo "[STEP] Check dist/ sincronizado con src/ (no escribe) - INICIO"
