@@ -7,7 +7,7 @@
   "author": "Cristián Rojas Arredondo",
   "license": "MPL-2.0",
   "engine": {
-    "aiVoiceInterConnector": "0.41.4"
+    "aiVoiceInterConnector": "0.42.0"
   },
   "scripts": {
     "build": "node build.mjs",

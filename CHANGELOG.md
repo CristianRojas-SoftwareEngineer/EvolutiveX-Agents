@@ -6,7 +6,7 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
-Verificado contra **AI Voice-InterConnector v0.41.4**.
+Verificado contra **AI Voice-InterConnector v0.42.0**.
 
 ### Añadido
 

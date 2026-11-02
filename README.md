@@ -173,7 +173,7 @@ CircleCI (`.circleci/config.yml`): `check-dist`, `lint`, `format:check`, `typech
 - [`CHANGELOG.md`](CHANGELOG.md) — cambios por versión.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — direcciones futuras del plugin.
 
-Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.41.4/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.41.4.
+Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.42.0/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.42.0.
 
 ---
 
