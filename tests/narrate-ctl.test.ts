@@ -59,7 +59,7 @@ function readConfigFile(): Record<string, unknown> {
   const path = join(
     stateBase,
     sub,
-    "agent-voice-interconnector",
+    "evolutivex-agent",
     "config.json",
   );
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;

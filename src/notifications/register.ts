@@ -21,9 +21,9 @@ import {
 
 // Constantes del branding. `AUMID` sigue la convención Windows
 // `[Compañía].[App]`, sin espacios, ≤ 129 caracteres.
-export const AUMID = "Agent.VoiceInterConnector";
-export const DISPLAY_NAME = "Agent-VoiceInterConnector";
-const LNK_FILENAME = `${DISPLAY_NAME}.lnk`;
+export const AUMID = "EvolutiveX.Agent";
+export const DISPLAY_NAME = "EvolutiveX Agent";
+const LNK_FILENAME = "EvolutiveX-Agent.lnk";
 
 export const registryProvider = {
   readRegistry,
@@ -250,7 +250,7 @@ async function main(): Promise<number> {
   program
     .name("notification-register")
     .description(
-      "Registra, desregistra o consulta el AUMID de Agent-VoiceInterConnector en Windows (idempotente, opt-in).",
+      "Registra, desregistra o consulta el AUMID de EvolutiveX Agent en Windows (idempotente, opt-in).",
     )
     .allowExcessArguments(false)
     .option(

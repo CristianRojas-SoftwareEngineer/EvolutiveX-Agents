@@ -6,7 +6,7 @@
 
 // Catálogo de perfiles por evento: copy, imagen de cuerpo y sonido por plataforma.
 
-export const NOTIFICATION_BRAND_TITLE = "Agent-VoiceInterConnector";
+export const NOTIFICATION_BRAND_TITLE = "EvolutiveX Agent";
 
 export type SoundSemanticLevel =
   "neutral" | "message" | "activity" | "attention" | "alarm";

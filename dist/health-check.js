@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-var APP_DIR = "agent-voice-interconnector";
+var APP_DIR = "evolutivex-agent";
 function stateDir() {
   const home = homedir();
   switch (platform()) {
@@ -196,8 +196,8 @@ function startDaemonDetached(cliPath) {
 }
 
 // src/lib/health-decision.ts
-var NOT_PROVISIONED_MESSAGE = "Agent Voice-InterConnector: el entorno de voz no est\xE1 provisionado. Ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz.";
-var DOCTOR_FAILED_MESSAGE = "Agent Voice-InterConnector: el diagn\xF3stico del motor (doctor) fall\xF3 y no produjo un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
+var NOT_PROVISIONED_MESSAGE = "EvolutiveX Agent: el entorno de voz no est\xE1 provisionado. Ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz.";
+var DOCTOR_FAILED_MESSAGE = "EvolutiveX Agent: el diagn\xF3stico del motor (doctor) fall\xF3 y no produjo un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
 var DOCTOR_JSON_HINT = "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
 var RESOURCE_CHECKS = [
   "models_provisioned",
@@ -262,7 +262,7 @@ function isValidReport(value) {
 }
 function buildFailedMessage(report) {
   const parts = report.failed.map((name) => describeCheck(report, name));
-  return `Agent Voice-InterConnector: el diagn\xF3stico del motor reporta chequeos fallidos. ${parts.join(" ")} ${DOCTOR_JSON_HINT}`;
+  return `EvolutiveX Agent: el diagn\xF3stico del motor reporta chequeos fallidos. ${parts.join(" ")} ${DOCTOR_JSON_HINT}`;
 }
 function describeCheck(report, name) {
   const check = report.checks.find((c) => c.name === name);
@@ -276,7 +276,7 @@ function describeCheck(report, name) {
 }
 function buildAdvisoryMessage(report) {
   const parts = report.failed.map((name) => describeCheck(report, name));
-  return `Agent Voice-InterConnector: el diagn\xF3stico del motor reporta chequeos de instalaci\xF3n fallidos que no impiden la narraci\xF3n. ${parts.join(" ")} ` + DOCTOR_JSON_HINT;
+  return `EvolutiveX Agent: el diagn\xF3stico del motor reporta chequeos de instalaci\xF3n fallidos que no impiden la narraci\xF3n. ${parts.join(" ")} ` + DOCTOR_JSON_HINT;
 }
 function decideHealthAction(input) {
   const { exitCode, report } = input;
@@ -305,7 +305,7 @@ function exitSilently() {
 }
 function daemonStatusMessage(status) {
   const reason = status.kind === "degraded" ? `el daemon reporta degraded (${status.degraded})` : "el estado del daemon es incierto";
-  return `Agent Voice-InterConnector: ${reason}. Ejecuta ai-voice-interconnector daemon status --json para diagnosticarlo; el daemon no se arranc\xF3.`;
+  return `EvolutiveX Agent: ${reason}. Ejecuta ai-voice-interconnector daemon status --json para diagnosticarlo; el daemon no se arranc\xF3.`;
 }
 async function main() {
   await readStdin();
@@ -314,7 +314,7 @@ async function main() {
   const cli = resolveCli();
   if (!cli) {
     exitWithSystemMessage(
-      "Agent Voice-InterConnector: AI Voice-InterConnector no est\xE1 en el PATH. Inst\xE1lalo y ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz."
+      "EvolutiveX Agent: AI Voice-InterConnector no est\xE1 en el PATH. Inst\xE1lalo y ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz."
     );
   }
   const res = runCli(cli, ["doctor", "--json"], {
@@ -340,7 +340,7 @@ async function main() {
   if (status.kind === "running") {
     if (status.warm === "warm_failed") {
       finish(
-        "Agent Voice-InterConnector: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle."
+        "EvolutiveX Agent: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle."
       );
     }
     finish();

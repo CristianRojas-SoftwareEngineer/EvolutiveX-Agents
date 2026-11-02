@@ -202,7 +202,7 @@ termina el residente anterior y arranca uno nuevo. Por eso:
 | ID       | Decisión                                                                                                                                                                 |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **D-01** | Una sola voz activa global, persistida como `voice` en `config.json`.                                                                                                    |
-| **D-02** | `narrate-ctl` expone `voice list`, `voice clone`, `voice use` y `voice remove`; el comando `/agent-voice-interconnector:voice` es la capa de explicación y confirmación. |
+| **D-02** | `narrate-ctl` expone `voice list`, `voice clone`, `voice use` y `voice remove`; el comando `/evolutivex-agent:voice` es la capa de explicación y confirmación. |
 | **D-03** | `voice clone` usa siempre el daemon en el MVP.                                                                                                                           |
 | **D-04** | `voice use` valida la voz, pre-sintetiza con `--force` y solo entonces escribe la configuración.                                                                         |
 | **D-05** | La voz activa se pasa siempre de forma explícita (`--voice`), incluido `default`, para no depender del default implícito del motor.                                      |
@@ -314,7 +314,7 @@ terminado por señal o agotó su timeout, nunca interpretar `status: null` como 
 
 ```text
 Usuario
-  │  /agent-voice-interconnector:voice clone <nombre> [<ruta.wav> | --mic [--duration <seg>]]
+  │  /evolutivex-agent:voice clone <nombre> [<ruta.wav> | --mic [--duration <seg>]]
   ▼
 Comando Claude Code
   │  1. valida explicación y confirmación (o guía de grabación de micrófono)
@@ -487,10 +487,10 @@ Los envelopes CLI incluyen `schema_version: "6"`; claves adicionales se toleran.
 Se añade `commands/voice.md`:
 
 ```text
-/agent-voice-interconnector:voice clone <nombre> [<ruta.wav> | --mic [--duration <segs>]]
-/agent-voice-interconnector:voice list
-/agent-voice-interconnector:voice use <nombre>
-/agent-voice-interconnector:voice remove <nombre>
+/evolutivex-agent:voice clone <nombre> [<ruta.wav> | --mic [--duration <segs>]]
+/evolutivex-agent:voice list
+/evolutivex-agent:voice use <nombre>
+/evolutivex-agent:voice remove <nombre>
 ```
 
 El comando debe explicar en español:

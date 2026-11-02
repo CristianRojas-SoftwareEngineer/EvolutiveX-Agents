@@ -1,5 +1,5 @@
 {
-  "name": "agent-voice-interconnector",
+  "name": "evolutivex-agent",
   "description": "Narra por voz la actividad de la sesión de Claude Code usando AI Voice-InterConnector y emite notificaciones de escritorio nativas. Genera un mensaje conversacional corto por turno (Gemini free tier con degradación local) y lo sintetiza vía el CLI ai-voice-interconnector. Multiplataforma, no intrusivo, costo cero.",
   "version": "0.1.0",
   "author": {

@@ -1,4 +1,4 @@
-# Roadmap — Agent Voice-InterConnector
+# Roadmap — EvolutiveX Agent
 
 Este es el roadmap vivo del plugin y mira hacia adelante: reúne las direcciones
 que todavía no están implementadas. Lo ya construido y lo descartado no se

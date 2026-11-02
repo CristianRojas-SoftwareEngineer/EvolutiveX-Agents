@@ -1,12 +1,16 @@
 # Changelog
 
-Todos los cambios notables de **Agent Voice-InterConnector** se documentan en este archivo.
+Todos los cambios notables de **EvolutiveX Agent** se documentan en este archivo.
 
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto adhiere a [Versionado Semántico](https://semver.org/lang/es/).
 
 ## [No publicado]
 
 Verificado contra **AI Voice-InterConnector v0.42.0**.
+
+### Modificado
+
+- Renombrado canónico de **Agent Voice-InterConnector** a **EvolutiveX Agent** (`evolutivex-agent`).
 
 ### Añadido
 
@@ -19,7 +23,7 @@ Verificado contra **AI Voice-InterConnector v0.42.0**.
 - Saneamiento del texto para voz antes de narrar o de enviarlo a un proveedor externo.
 - Notificaciones de escritorio con icono por evento y registro del AUMID en Windows.
 - `narrate-ctl` con `voice-on`/`voice-off`, `notifications-on`/`notifications-off`, `mode`, `status`, `say` y `presynth [--force]`.
-- Instalación guiada `/agent-voice-interconnector:install` y skill `/agent-voice-interconnector:narrate`.
+- Instalación guiada `/evolutivex-agent:install` y skill `/evolutivex-agent:narrate`.
 - Licencia MPL-2.0.
 
-[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/Agent-Voice-InterConnector/commits/main
+[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent/commits/main

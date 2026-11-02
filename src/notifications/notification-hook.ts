@@ -6,7 +6,7 @@
 
 // Hook de notificaciones de escritorio del plugin. Independiente del canal de
 // narración por voz, del daemon y del gateway. Emite toasts silenciosos por
-// defecto usando el icono específico del evento y el AUMID Agent.VoiceInterConnector.
+// defecto usando el icono específico del evento y el AUMID EvolutiveX.Agent.
 import { loadConfig } from "../lib/config.js";
 import { readStdin } from "../lib/hook-payload.js";
 import { fileURLToPath } from "node:url";

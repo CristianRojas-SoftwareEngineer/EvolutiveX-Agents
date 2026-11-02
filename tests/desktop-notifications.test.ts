@@ -114,10 +114,10 @@ test("DesktopNotificationAdapter: traduce appId→appID, silent→sound:false y 
     title: "Hola",
     message: "Mundo",
     sound: "Notification.SMS",
-    appId: "Agent.VoiceInterConnector",
+    appId: "EvolutiveX.Agent",
     icon: "/ruta/icon.png",
   });
-  assert.equal(calls[1]!.appID, "Agent.VoiceInterConnector");
+  assert.equal(calls[1]!.appID, "EvolutiveX.Agent");
   assert.equal(calls[1]!.icon, "/ruta/icon.png");
   assert.equal(calls[1]!.sound, "Notification.SMS");
 
@@ -141,7 +141,7 @@ test("DesktopNotificationAdapter: traduce appId→appID, silent→sound:false y 
 // --- Catálogo de perfiles, sonidos e imágenes ---
 
 test("event-notification-profile y assets: 12 eventos con imágenes existentes en el plugin", () => {
-  assert.equal(NOTIFICATION_BRAND_TITLE, "Agent-VoiceInterConnector");
+  assert.equal(NOTIFICATION_BRAND_TITLE, "EvolutiveX Agent");
   assert.equal(NOTIFICATION_EVENT_KEYS.length, 12);
   for (const key of NOTIFICATION_EVENT_KEYS) {
     const profile = getProfileForEvent(key);
@@ -276,7 +276,7 @@ test("hook-payload-notification-message: formatea eventos, repara mojibake y tru
 
 // --- CLI de notificaciones ---
 
-test("CLI: branding Agent.VoiceInterConnector, precedencias, overrides y degradación de icono", () => {
+test("CLI: branding EvolutiveX.Agent, precedencias, overrides y degradación de icono", () => {
   assert.deepEqual(
     JSON.parse(normalizeStdinJsonText('\uFEFF{"hook_event_name":"Stop"}\n')),
     { hook_event_name: "Stop" },
@@ -355,7 +355,7 @@ test("CLI: branding Agent.VoiceInterConnector, precedencias, overrides y degrada
     globalFallbackIconProvider.get = () => "/no/existe/ai-assistant.png";
     const built = buildNotificationPayload(baseCliOptions, undefined, "win32");
     assert.ok(!("error" in built));
-    assert.equal(built.appId, "Agent.VoiceInterConnector");
+    assert.equal(built.appId, "EvolutiveX.Agent");
     assert.equal(built.icon, undefined);
   } finally {
     eventIconsDirProvider.get = prevEvents;

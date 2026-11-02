@@ -3,9 +3,9 @@ description: Instala y configura AI Voice-InterConnector (binario + modelos + da
 argument-hint: "(sin argumentos)"
 ---
 
-# Instalación guiada de Agent Voice-InterConnector (narración por voz y notificaciones de escritorio)
+# Instalación guiada de EvolutiveX Agent (narración por voz y notificaciones de escritorio)
 
-Eres el asistente que guía al usuario para dejar operativo el plugin **Agent Voice-InterConnector** (`agent-voice-interconnector`): instalar el motor **AI Voice-InterConnector**, descargar sus modelos, dejar el daemon listo y activar tanto la narración por voz como las notificaciones de escritorio (incluido el registro del AUMID en Windows). Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
+Eres el asistente que guía al usuario para dejar operativo el plugin **EvolutiveX Agent** (`evolutivex-agent`): instalar el motor **AI Voice-InterConnector**, descargar sus modelos, dejar el daemon listo y activar tanto la narración por voz como las notificaciones de escritorio (incluido el registro del AUMID en Windows). Ejecuta este procedimiento paso a paso con la herramienta de shell, **informando antes de cada acción** y pidiendo confirmación antes de descargar o instalar algo.
 
 ## Reglas de conducta (obligatorias)
 
@@ -146,7 +146,7 @@ Interpreta el resultado:
    node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" status
    ```
 
-2. **En Windows**, registra de forma idempotente el AUMID `Agent.VoiceInterConnector` y el acceso directo en el Menú Inicio para que los toasts muestren el nombre `Agent-VoiceInterConnector` y su icono en la cabecera (a nivel de usuario en `HKCU` y `%APPDATA%`, sin `sudo` ni privilegios de administrador):
+2. **En Windows**, registra de forma idempotente el AUMID `EvolutiveX.Agent` y el acceso directo en el Menú Inicio para que los toasts muestren el nombre `EvolutiveX Agent` y su icono en la cabecera (a nivel de usuario en `HKCU` y `%APPDATA%`, sin `sudo` ni privilegios de administrador):
 
    ```powershell
    node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
@@ -218,6 +218,6 @@ Interpreta el resultado:
 
 ## Cierre
 
-Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/agent-voice-interconnector:narrate` (`voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`/`status`/`say`/`presynth`).
+Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/evolutivex-agent:narrate` (`voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`/`status`/`say`/`presynth`).
 
 Menciona también el mantenimiento de los anuncios pre-sintetizados: si se borran las locuciones del almacén del motor (`<data_dir>/speech/<voz>/<etiqueta>.wav`), basta re-ejecutar `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth` con el daemon caliente (es idempotente; los anuncios vigentes no se re-sintetizan). Ten en cuenta que `--synthetic-speech` es una categoría de `cleanup`, no una carpeta. Como los labels son slugs fijos, si en una actualización del plugin **cambia la frase** de un anuncio, `presynth` a secas no lo detecta (el label no cambió): hay que forzar la sobreescritura con `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --force`.

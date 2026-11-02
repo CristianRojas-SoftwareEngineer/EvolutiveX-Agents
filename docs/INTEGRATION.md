@@ -1,6 +1,6 @@
 # Integración con AI Voice-InterConnector
 
-Este documento describe la integración de **Agent Voice-InterConnector** con el motor de síntesis **AI Voice-InterConnector**, desde la perspectiva del **plugin (el consumidor)**.
+Este documento describe la integración de **EvolutiveX Agent** con el motor de síntesis **AI Voice-InterConnector**, desde la perspectiva del **plugin (el consumidor)**.
 
 La contraparte, escrita desde la perspectiva del motor, está en su contrato público:
 [docs/CLI/CONTRACT.md §12 «Contratos externos»](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.42.0/docs/CLI/CONTRACT.md#12-contratos-externos)
@@ -23,7 +23,7 @@ El sistema de narración por voz tiene dos componentes con repositorios y ciclos
 
 | Componente                            | Repositorio                                                                                                  | Rol                                                                                                      |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **Agent Voice-InterConnector** (este) | [`Agent-Voice-InterConnector`](https://github.com/CristianRojas-SoftwareEngineer/Agent-Voice-InterConnector) | **Cliente**: detecta eventos de la sesión de Claude Code, construye un mensaje corto y pide su síntesis. |
+| **EvolutiveX Agent** (este)           | [`EvolutiveX-Agent`](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent)           | **Cliente**: detecta eventos de la sesión de Claude Code, construye un mensaje corto y pide su síntesis. |
 | **AI Voice-InterConnector**           | [`AI-Voice-InterConnector`](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector)       | **Motor**: sintetiza voz 100 % offline y expone una CLI pública.                                         |
 
 El plugin **depende** de AI Voice-InterConnector; AI Voice-InterConnector **no** conoce ni depende del plugin. La relación es unidireccional.
@@ -71,7 +71,7 @@ El único punto de acoplamiento es el ejecutable `ai-voice-interconnector` en el
   remitiendo a `daemon status --json`; `warm_failed` avisa sin reiniciar y
   `warming` no bloquea. El aviso de checks de instalación y el del daemon se
   combinan en un **único** `systemMessage`. Termina siempre con exit `0`.
-- **Instalación** (`/agent-voice-interconnector:install`) → `narrate-ctl presynth`
+- **Instalación** (`/evolutivex-agent:install`) → `narrate-ctl presynth`
   pre-sintetiza los anuncios del catálogo (`src/message/static-announcements.ts`) con
   `speech synthesize … --daemon`, una sola vez y de forma idempotente.
 
@@ -93,7 +93,7 @@ El plugin está verificado contra **AI Voice-InterConnector v0.42.0** (soporte e
    clonadas, incluida `default`. La narración usa la voz de fábrica `default` y no
    pasa `--voice`.
 
-El comando `/agent-voice-interconnector:install` del plugin guía ambos pasos.
+El comando `/evolutivex-agent:install` del plugin guía ambos pasos.
 
 ## Degradación y no intrusión
 

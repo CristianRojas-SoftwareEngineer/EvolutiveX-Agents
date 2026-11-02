@@ -7275,7 +7275,7 @@ var DesktopNotificationAdapter = class {
 };
 
 // src/notifications/event-notification-profile.ts
-var NOTIFICATION_BRAND_TITLE = "Agent-VoiceInterConnector";
+var NOTIFICATION_BRAND_TITLE = "EvolutiveX Agent";
 var EVENT_NOTIFICATION_PROFILES = {
   UserPromptSubmit: {
     message: "Procesando tu solicitud...",
@@ -7568,7 +7568,7 @@ var SILENT_FLAG = "silent";
 var STDIN_JSON_FLAG = "stdin-json";
 var APP_ID_FLAG = "app-id";
 var ICON_FLAG = "icon";
-var DEFAULT_APP_ID = "Agent.VoiceInterConnector";
+var DEFAULT_APP_ID = "EvolutiveX.Agent";
 var globalFallbackIconProvider = {
   get() {
     return join2(
