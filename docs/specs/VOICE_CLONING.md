@@ -199,23 +199,23 @@ termina el residente anterior y arranca uno nuevo. Por eso:
 
 ### 6.6 Decisiones cerradas
 
-| ID       | Decisión                                                                                                                                                                 |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **D-01** | Una sola voz activa global, persistida como `voice` en `config.json`.                                                                                                    |
+| ID       | Decisión                                                                                                                                                       |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D-01** | Una sola voz activa global, persistida como `voice` en `config.json`.                                                                                          |
 | **D-02** | `narrate-ctl` expone `voice list`, `voice clone`, `voice use` y `voice remove`; el comando `/evolutivex-agent:voice` es la capa de explicación y confirmación. |
-| **D-03** | `voice clone` usa siempre el daemon en el MVP.                                                                                                                           |
-| **D-04** | `voice use` valida la voz, pre-sintetiza con `--force` y solo entonces escribe la configuración.                                                                         |
-| **D-05** | La voz activa se pasa siempre de forma explícita (`--voice`), incluido `default`, para no depender del default implícito del motor.                                      |
-| **D-06** | Las voces de fábrica no se clonan encima ni se borran desde el plugin.                                                                                                   |
-| **D-07** | La voz activa no se puede borrar: primero hay que activar otra.                                                                                                          |
-| **D-08** | `voice remove` exige `--yes` en `narrate-ctl`; el comando de Claude Code pide la confirmación conversacional.                                                            |
-| **D-09** | No hay fallback automático a `default` en runtime. `SessionStart` avisa si la voz activa no existe.                                                                      |
-| **D-10** | El plugin no guarda audio, rutas de referencia ni secretos; solo el nombre de la voz.                                                                                    |
-| **D-11** | `sessionStart` arranca el daemon con `--warm-voice <activa>` solo cuando está parado y la voz existe.                                                                    |
-| **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                              |
-| **D-13** | Las operaciones manuales de clonado, activación, borrado, pre-síntesis y escritura de preferencias se coordinan entre procesos del plugin.                               |
-| **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                                   |
-| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.42.0 o posterior.                                                            |
+| **D-03** | `voice clone` usa siempre el daemon en el MVP.                                                                                                                 |
+| **D-04** | `voice use` valida la voz, pre-sintetiza con `--force` y solo entonces escribe la configuración.                                                               |
+| **D-05** | La voz activa se pasa siempre de forma explícita (`--voice`), incluido `default`, para no depender del default implícito del motor.                            |
+| **D-06** | Las voces de fábrica no se clonan encima ni se borran desde el plugin.                                                                                         |
+| **D-07** | La voz activa no se puede borrar: primero hay que activar otra.                                                                                                |
+| **D-08** | `voice remove` exige `--yes` en `narrate-ctl`; el comando de Claude Code pide la confirmación conversacional.                                                  |
+| **D-09** | No hay fallback automático a `default` en runtime. `SessionStart` avisa si la voz activa no existe.                                                            |
+| **D-10** | El plugin no guarda audio, rutas de referencia ni secretos; solo el nombre de la voz.                                                                          |
+| **D-11** | `sessionStart` arranca el daemon con `--warm-voice <activa>` solo cuando está parado y la voz existe.                                                          |
+| **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                    |
+| **D-13** | Las operaciones manuales de clonado, activación, borrado, pre-síntesis y escritura de preferencias se coordinan entre procesos del plugin.                     |
+| **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                         |
+| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.42.0 o posterior.                                                  |
 
 ## 7. Diseño
 

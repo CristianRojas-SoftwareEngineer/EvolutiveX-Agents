@@ -21,10 +21,10 @@ La contraparte, escrita desde la perspectiva del motor, está en su contrato pú
 
 El sistema de narración por voz tiene dos componentes con repositorios y ciclos de vida independientes:
 
-| Componente                            | Repositorio                                                                                                  | Rol                                                                                                      |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| **EvolutiveX Agent** (este)           | [`EvolutiveX-Agent`](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent)           | **Cliente**: detecta eventos de la sesión de Claude Code, construye un mensaje corto y pide su síntesis. |
-| **AI Voice-InterConnector**           | [`AI-Voice-InterConnector`](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector)       | **Motor**: sintetiza voz 100 % offline y expone una CLI pública.                                         |
+| Componente                  | Repositorio                                                                                            | Rol                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| **EvolutiveX Agent** (este) | [`EvolutiveX-Agent`](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agent)               | **Cliente**: detecta eventos de la sesión de Claude Code, construye un mensaje corto y pide su síntesis. |
+| **AI Voice-InterConnector** | [`AI-Voice-InterConnector`](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) | **Motor**: sintetiza voz 100 % offline y expone una CLI pública.                                         |
 
 El plugin **depende** de AI Voice-InterConnector; AI Voice-InterConnector **no** conoce ni depende del plugin. La relación es unidireccional.
 

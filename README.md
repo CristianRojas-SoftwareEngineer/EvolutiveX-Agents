@@ -52,8 +52,8 @@ El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (op
 
 Ubicación por SO:
 
-| SO      | Ruta                                                                       |
-| ------- | -------------------------------------------------------------------------- |
+| SO      | Ruta                                                             |
+| ------- | ---------------------------------------------------------------- |
 | Windows | `%LOCALAPPDATA%\evolutivex-agent\config.json`                    |
 | Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agent/config.json` |
 | macOS   | `~/Library/Application Support/evolutivex-agent/config.json`     |
