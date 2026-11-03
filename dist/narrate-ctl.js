@@ -12,12 +12,25 @@ import { parseArgs } from "node:util";
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
 var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var CUSTOM_VOICE = "custom";
+var SELECTABLE_VOICES = [
+  ...FACTORY_VOICES,
+  CUSTOM_VOICE
+];
 var MIN_ENGINE_VERSION = "0.42.0";
+var MAX_DISPLAY_NAME_LENGTH = 64;
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
 }
 function isFactoryVoice(name) {
   return FACTORY_VOICES.includes(name);
+}
+function normalizeDisplayName(raw) {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (name === "" || [...name].length > MAX_DISPLAY_NAME_LENGTH)
+    return void 0;
+  if (/[\u0000-\u001f\u007f]/.test(name)) return void 0;
+  return name;
 }
 function parseVoiceList(stdout) {
   let parsed;
@@ -108,6 +121,9 @@ function ensureStateDir() {
 }
 function activeVoicePath() {
   return join(stateDir(), "active-voice");
+}
+function customDisplayNamePath() {
+  return join(stateDir(), "custom-display-name");
 }
 function voiceOperationLockPath() {
   return join(stateDir(), "voice-operation.lock");
@@ -269,6 +285,27 @@ function readOwner() {
   }
 }
 
+// src/voice/custom-display-name.ts
+import { readFileSync as readFileSync3, renameSync as renameSync2, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "node:fs";
+function writeCustomDisplayName(name) {
+  ensureStateDir();
+  const path = customDisplayNamePath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
+  writeFileSync3(tmpPath, `${name}
+`, "utf8");
+  renameSync2(tmpPath, path);
+}
+function readCustomDisplayName() {
+  try {
+    return normalizeDisplayName(readFileSync3(customDisplayNamePath(), "utf8"));
+  } catch {
+    return void 0;
+  }
+}
+function removeCustomDisplayName() {
+  rmSync3(customDisplayNamePath(), { force: true });
+}
+
 // src/voice/health-decision.ts
 function parseSingleJsonObject(text) {
   const trimmed = text.trim();
@@ -318,7 +355,7 @@ var REASON_MESSAGES = {
   no_input_device: DEVICE_HINT,
   audio_backend_unavailable: DEVICE_HINT,
   transcription_failed: "No se pudo capturar audio: revisa los permisos del micr\xF3fono o usa un WAV.",
-  voice_exists: "Elige otro nombre o usa `--force` para reemplazarla.",
+  voice_exists: "Ya tienes una voz custom; usa `--force` para reemplazarla.",
   denoise_busy: "Reintenta al terminar la limpieza en curso.",
   denoise_unsupported: DENOISE_HINT,
   denoise_failed: DENOISE_HINT,
@@ -361,8 +398,12 @@ function resolveVoice(flag) {
     return { voice: normalizeVoiceName(flag), source: "flag" };
   return readActiveVoice();
 }
+function voiceDisplayName(voice) {
+  const shown = voice === CUSTOM_VOICE ? readCustomDisplayName() : void 0;
+  return shown ? `${voice} \xAB${shown}\xBB` : voice;
+}
 function describeVoice({ voice, source }) {
-  return `${voice} (${SOURCE_LABELS[source]})`;
+  return `${voiceDisplayName(voice)} (${SOURCE_LABELS[source]})`;
 }
 function printStatus() {
   const cfg = loadConfig();
@@ -393,7 +434,7 @@ function say(text, voice) {
   });
   return typeof res.status === "number" ? res.status : 1;
 }
-function presynth(voice, force) {
+function presynth(voice, force, resynth = force) {
   const cli = requireCli("pre-sintetizar");
   if (!cli) return 1;
   return withVoiceOperationLock(() => {
@@ -409,16 +450,16 @@ function presynth(voice, force) {
         stdio: ["ignore", "pipe", "inherit"],
         windowsHide: true
       });
-      if (!reportPresynth(eventKey, label, res, force)) failed = true;
+      if (!reportPresynth(eventKey, label, res, resynth)) failed = true;
     }
     return failed ? 1 : 0;
   });
 }
-function reportPresynth(eventKey, label, res, force) {
+function reportPresynth(eventKey, label, res, resynth) {
   const failure = engineFailure(res);
   if (!failure) {
     console.log(
-      `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`
+      `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`
     );
     return true;
   }
@@ -473,29 +514,42 @@ function voiceList() {
   for (const voice of voices) {
     const tags = [
       isFactoryVoice(voice) ? "f\xE1brica" : "",
+      voice === CUSTOM_VOICE ? "tu voz" : "",
       voice === active.voice ? "activa" : ""
     ].filter(Boolean);
-    console.log(`  ${voice}${tags.length ? ` (${tags.join(", ")})` : ""}`);
+    const name = voiceDisplayName(voice);
+    console.log(`  ${name}${tags.length ? ` (${tags.join(", ")})` : ""}`);
   }
+  if (!voices.includes(CUSTOM_VOICE))
+    console.log(
+      `  ${CUSTOM_VOICE} (sin clonar; cl\xF3nala con /evolutivex-agents:voice clone)`
+    );
+  if (!voices.includes(active.voice))
+    console.log(
+      `Aviso: la voz activa ${active.voice} no existe en el motor; la narraci\xF3n fallar\xE1 hasta clonarla o elegir otra en /config \u2192 evolutivex-agents.voice.`
+    );
   return 0;
 }
 function parseClone(rest) {
   const parsed = parseOptions(rest, {
+    "display-name": { type: "string" },
     mic: { type: "boolean" },
     duration: { type: "string" },
     force: { type: "boolean", short: "f" },
     denoise: { type: "boolean" }
   });
   if (!parsed) return void 0;
-  const [rawName, wav, ...extra] = parsed.positionals;
-  const name = normalizeVoiceName(rawName ?? "");
+  const [wav, ...extra] = parsed.positionals;
   const mic = parsed.values.mic === true;
   const duration = parsed.values.duration;
-  if (!name || extra.length > 0 || mic === (wav !== void 0))
-    return void 0;
+  const rawDisplayName = parsed.values["display-name"];
+  const displayName = rawDisplayName === void 0 ? void 0 : normalizeDisplayName(rawDisplayName);
+  if (extra.length > 0 || mic === (wav !== void 0)) return void 0;
   if (duration !== void 0 && !mic) return void 0;
+  if (rawDisplayName !== void 0 && displayName === void 0)
+    return void 0;
   return {
-    name,
+    displayName,
     wav,
     mic,
     duration,
@@ -504,7 +558,7 @@ function parseClone(rest) {
   };
 }
 function cloneArgs(req) {
-  const args = ["voice", "clone", "--name", req.name];
+  const args = ["voice", "clone", "--name", CUSTOM_VOICE];
   if (req.wav !== void 0) args.push("--speech-reference", req.wav);
   else args.push("--mic");
   if (req.duration !== void 0) args.push("--duration", req.duration);
@@ -517,13 +571,10 @@ function voiceClone(rest) {
   const req = parseClone(rest);
   if (!req) {
     console.error(
-      "Uso: voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise]"
+      'Uso: voice clone [--display-name "<nombre>"] (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise]'
     );
-    return 2;
-  }
-  if (isFactoryVoice(req.name)) {
     console.error(
-      "`default`, `ryan` y `vivian` son voces de f\xE1brica; elige otro nombre."
+      "El nombre de presentaci\xF3n tiene de 1 a 64 caracteres, sin saltos de l\xEDnea."
     );
     return 2;
   }
@@ -547,15 +598,18 @@ function runClone(cli, req) {
   if (failure) return reportFailure(failure);
   if (!engineJson(res.stdout))
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
-  console.log(`Voz ${req.name} clonada; pre-sintetizando sus anuncios\u2026`);
-  if (presynth({ voice: req.name, source: "flag" }, true) !== 0) {
+  if (req.displayName) writeCustomDisplayName(req.displayName);
+  else removeCustomDisplayName();
+  const name = voiceDisplayName(CUSTOM_VOICE);
+  console.log(`Voz ${name} clonada; pre-sintetizando sus anuncios\u2026`);
+  if (presynth({ voice: CUSTOM_VOICE, source: "flag" }, true, false) !== 0) {
     console.error(
-      `La huella de la voz ${req.name} ya cambi\xF3, pero la pre-s\xEDntesis fall\xF3; reintenta con: narrate-ctl presynth --voice ${req.name} --force`
+      `La huella de la voz ${name} ya cambi\xF3, pero la pre-s\xEDntesis fall\xF3; reintenta con: narrate-ctl presynth --voice ${CUSTOM_VOICE} --force`
     );
     return 1;
   }
   console.log(
-    `Voz ${req.name} lista. Para usarla, fija /config \u2192 evolutivex-agents.voice = ${req.name}`
+    `Voz ${name} lista. Para usarla, elige ${CUSTOM_VOICE} en /config \u2192 evolutivex-agents.voice`
   );
   return 0;
 }
@@ -589,8 +643,10 @@ function runRemove(cli, name) {
   const removed = engineJson(res.stdout)?.removed_speech;
   if (!Array.isArray(removed))
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
+  const shown = voiceDisplayName(name);
+  if (name === CUSTOM_VOICE) removeCustomDisplayName();
   console.log(
-    `Voz ${name} borrada; locuciones borradas: ${removed.length > 0 ? removed.join(", ") : "ninguna"}.`
+    `Voz ${shown} borrada; locuciones borradas: ${removed.length > 0 ? removed.join(", ") : "ninguna"}.`
   );
   const active = readActiveVoice();
   if (active.source === "cache" && active.voice === name)
@@ -610,7 +666,7 @@ function runVoice([sub, ...rest]) {
       return voiceRemove(rest);
   }
   console.error(
-    "Uso: voice list | voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise] | voice remove <nombre> --yes"
+    'Uso: voice list | voice clone [--display-name "<nombre>"] (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise] | voice remove <voz> --yes'
   );
   return 2;
 }

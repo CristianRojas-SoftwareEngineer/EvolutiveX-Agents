@@ -32,7 +32,7 @@ const REASON_MESSAGES: Record<string, string> = {
   audio_backend_unavailable: DEVICE_HINT,
   transcription_failed:
     "No se pudo capturar audio: revisa los permisos del micrófono o usa un WAV.",
-  voice_exists: "Elige otro nombre o usa `--force` para reemplazarla.",
+  voice_exists: "Ya tienes una voz custom; usa `--force` para reemplazarla.",
   denoise_busy: "Reintenta al terminar la limpieza en curso.",
   denoise_unsupported: DENOISE_HINT,
   denoise_failed: DENOISE_HINT,

@@ -21,6 +21,7 @@ import {
   rotatedWorkerLogPath,
   activeVoicePath,
   voiceOperationLockPath,
+  customDisplayNamePath,
 } from "../src/lib/state-dir.js";
 import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
 
@@ -88,6 +89,10 @@ test("las rutas derivadas cuelgan del state dir con sus nombres fijos", () => {
   assert.equal(workerLogPath(), join(stateDir(), "worker.log"));
   assert.equal(rotatedWorkerLogPath(), join(stateDir(), "worker.log.1"));
   assert.equal(activeVoicePath(), join(stateDir(), "active-voice"));
+  assert.equal(
+    customDisplayNamePath(),
+    join(stateDir(), "custom-display-name"),
+  );
   assert.equal(
     voiceOperationLockPath(),
     join(stateDir(), "voice-operation.lock"),

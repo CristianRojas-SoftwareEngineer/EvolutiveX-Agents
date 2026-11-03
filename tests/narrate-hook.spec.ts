@@ -83,7 +83,7 @@ test("encola el payload anotado con la voz de /config y escribe la caché", () =
   writeFileSync(join(pluginStateDir(), "worker.pid"), String(process.pid));
 
   const res = spawnSync(process.execPath, [HOOK], {
-    env: hookEnv({ CLAUDE_PLUGIN_OPTION_VOICE: " Mi_Voz " }),
+    env: hookEnv({ CLAUDE_PLUGIN_OPTION_VOICE: " Custom " }),
     input: JSON.stringify({ hook_event_name: "Stop", session_id: "s1" }),
     encoding: "utf8",
     windowsHide: true,
@@ -96,11 +96,11 @@ test("encola el payload anotado con la voz de /config y escribe la caché", () =
   const item = JSON.parse(readFileSync(join(queue, files[0]!), "utf8"));
   assert.deepEqual(item, {
     payload: { hook_event_name: "Stop", session_id: "s1" },
-    voice: "mi_voz",
+    voice: "custom",
   });
   assert.equal(
     readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
-    "mi_voz\n",
+    "custom\n",
   );
 });
 
@@ -108,7 +108,7 @@ test("con la voz apagada escribe igualmente la caché con la voz de /config", ()
   const res = spawnSync(process.execPath, [HOOK], {
     env: hookEnv({
       CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
-      CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz",
+      CLAUDE_PLUGIN_OPTION_VOICE: "custom",
     }),
     input: JSON.stringify({ hook_event_name: "Stop" }),
     encoding: "utf8",
@@ -117,6 +117,6 @@ test("con la voz apagada escribe igualmente la caché con la voz de /config", ()
   assert.equal(res.status, 0);
   assert.equal(
     readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
-    "mi_voz\n",
+    "custom\n",
   );
 });

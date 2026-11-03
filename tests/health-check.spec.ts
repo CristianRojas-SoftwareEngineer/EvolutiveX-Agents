@@ -14,9 +14,10 @@
 // exit 0 en todos los caminos. Los checks informativos fallidos (instalación o
 // ciclo de vida) avisan sin impedir la consulta ni el arranque del daemon.
 // Con la voz activa de /config: arranque con `--warm-voice`, validación con
-// `voice list --json` (voz ausente, nombre inválido o listado incierto avisan
-// sin arrancar), sin reinicio del daemon corriendo y caché `active-voice`
-// escrita también con la voz desactivada.
+// `voice list --json` (custom sin clonar, voz ausente, valor fuera de las
+// opciones de /config o listado incierto avisan sin arrancar), sin reinicio
+// del daemon corriendo y caché `active-voice` escrita también con la voz
+// desactivada.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -631,20 +632,20 @@ test(
 
 // --- Voz activa de /config ---
 
-const VOICES_WITH_MI_VOZ = JSON.stringify({
+const VOICES_WITH_CUSTOM = JSON.stringify({
   schema_version: "6",
-  voices: ["default", "ryan", "vivian", "mi_voz"],
+  voices: ["default", "ryan", "vivian", "custom"],
 });
 
-test("voz activa existente + daemon stopped: arranca con --warm-voice <voz>", async () => {
+test("voz custom clonada + daemon stopped: arranca con --warm-voice custom", async () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
-      voicesJson: VOICES_WITH_MI_VOZ,
+      voicesJson: VOICES_WITH_CUSTOM,
     });
-    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "Mi_Voz" });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "Custom" });
     assert.equal(res.status, 0);
     assert.ok(!res.stdout.includes("systemMessage"));
     assert.ok(invoked(argvLog, ["voice", "list", "--json"]));
@@ -653,24 +654,25 @@ test("voz activa existente + daemon stopped: arranca con --warm-voice <voz>", as
       "daemon",
       "start",
       "--warm-voice",
-      "mi_voz",
+      "custom",
     ]);
   } finally {
     removeDir(dir);
   }
 });
 
-test("voz activa inexistente + daemon stopped: avisa y no arranca", async () => {
+test("voz custom sin clonar + daemon stopped: avisa cómo clonarla y no arranca", async () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
     });
-    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "custom" });
     assert.equal(res.status, 0);
     const message = systemMessageOf(res.stdout);
-    assert.ok(message.includes("la voz mi_voz no existe"));
+    assert.ok(message.includes("custom, pero todavía no está clonada"));
+    assert.ok(message.includes("/evolutivex-agents:voice clone"));
     assert.ok(message.includes("evolutivex-agents.voice"));
     assert.ok(message.includes("no se arrancó"));
     // Margen para un arranque desanclado que no debe ocurrir.
@@ -681,18 +683,19 @@ test("voz activa inexistente + daemon stopped: avisa y no arranca", async () => 
   }
 });
 
-test("nombre de voz inválido en /config: avisa sin consultar el motor ni arrancar", () => {
+test("valor de voz fuera de las opciones de /config: avisa sin consultar el motor ni arrancar", () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
     });
-    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi voz/.." });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
     assert.equal(res.status, 0);
     const message = systemMessageOf(res.stdout);
-    assert.ok(message.includes("«mi voz/..»"));
-    assert.ok(message.includes("no es válido"));
+    assert.ok(message.includes("«mi_voz»"));
+    assert.ok(message.includes("no es una de las opciones"));
+    assert.ok(message.includes("default, ryan, vivian, custom"));
     assert.deepEqual(loggedArgvs(argvLog), []);
   } finally {
     removeDir(dir);
@@ -711,11 +714,11 @@ for (const [label, opts] of [
         daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
         ...opts,
       });
-      const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+      const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "custom" });
       assert.equal(res.status, 0);
       const message = systemMessageOf(res.stdout);
-      assert.ok(message.includes("no se pudo comprobar si la voz mi_voz"));
-      assert.ok(!message.includes("no existe"));
+      assert.ok(message.includes("no se pudo comprobar si la voz custom"));
+      assert.ok(!message.includes("todavía no está clonada"));
       await new Promise((resolve) => setTimeout(resolve, 300));
       assert.equal(startCount(argvLog), 0);
     } finally {
@@ -734,9 +737,9 @@ test("daemon corriendo con otra voz caliente: no se reinicia ni avisa", () => {
         daemon: "running",
         warm: "warm",
       }),
-      voicesJson: VOICES_WITH_MI_VOZ,
+      voicesJson: VOICES_WITH_CUSTOM,
     });
-    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "custom" });
     assert.equal(res.status, 0);
     assert.ok(!res.stdout.includes("systemMessage"));
     assert.ok(invoked(argvLog, ["voice", "list", "--json"]));
@@ -746,17 +749,18 @@ test("daemon corriendo con otra voz caliente: no se reinicia ni avisa", () => {
   }
 });
 
-test("daemon corriendo y voz inexistente: avisa sin decir que no se arrancó", () => {
+test("daemon corriendo y voz de fábrica ausente: avisa sin decir que no se arrancó", () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
       doctorJson: healthyDoctorJson(),
       daemonJson: JSON.stringify({ schema_version: "6", daemon: "running" }),
+      voicesJson: JSON.stringify({ voices: ["default", "vivian"] }),
     });
-    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "ryan" });
     assert.equal(res.status, 0);
     const message = systemMessageOf(res.stdout);
-    assert.ok(message.includes("la voz mi_voz no existe"));
+    assert.ok(message.includes("la voz ryan no existe"));
     assert.ok(!message.includes("no se arrancó"));
     assert.equal(startCount(argvLog), 0);
   } finally {
@@ -767,9 +771,9 @@ test("daemon corriendo y voz inexistente: avisa sin decir que no se arrancó", (
 test("escribe la caché de la voz activa, también con la voz desactivada", () => {
   const res = runHealth(null, {
     CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
-    CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz",
+    CLAUDE_PLUGIN_OPTION_VOICE: "custom",
   });
   assert.equal(res.status, 0);
   assert.equal(res.stdout, "");
-  assert.equal(readFileSync(activeVoiceCache(), "utf8").trim(), "mi_voz");
+  assert.equal(readFileSync(activeVoiceCache(), "utf8").trim(), "custom");
 });

@@ -124,7 +124,7 @@ test("worker narra dos payloads encolados en orden, sin duplicados y con la voz 
       hook_event_name: "UserPromptSubmit",
       prompt: "primero",
     },
-    "mi_voz",
+    "custom",
   );
   enqueuePayload(
     {
@@ -149,7 +149,7 @@ test("worker narra dos payloads encolados en orden, sin duplicados y con la voz 
     .map((line) => JSON.parse(line) as string[]);
   assert.equal(calls.length, 2, "debe invocar el CLI exactamente dos veces");
   assert.deepEqual(calls[0]!.slice(0, 3), ["speech", "play", "--label"]);
-  assert.deepEqual(calls[0]!.slice(4), ["--voice", "mi_voz", "--json"]);
+  assert.deepEqual(calls[0]!.slice(4), ["--voice", "custom", "--json"]);
   assert.deepEqual(calls[1], [
     "speech",
     "say",
@@ -299,6 +299,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
     { stdout: '{"error":"e","reason":"reason_del_futuro"}', exit: 3 },
     { stdout: "no es json", exit: 3 },
     { stdout: '{"error":"e","reason":"invalid_identifier"}', exit: 2 },
+    { stdout: '{"error":"e","reason":"voice_not_found"}', exit: 3 },
   ]);
 
   restoreEnv = withEnv({
@@ -308,14 +309,15 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
     GEMINI_API_KEY: undefined,
   });
 
-  for (let i = 1; i <= 8; i++) {
+  // El noveno ítem se narra con la voz custom, que aún no está clonada.
+  for (let i = 1; i <= 9; i++) {
     enqueuePayload(
       {
         session_id: `p${i}`,
         hook_event_name: "UserPromptSubmit",
         prompt: "x",
       },
-      "default",
+      i === 9 ? "custom" : "default",
     );
   }
 
@@ -328,7 +330,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.equal(res.status, 0);
 
   const lines = logLines("speech play salió con código");
-  assert.equal(lines.length, 8);
+  assert.equal(lines.length, 9);
   assert.match(
     lines[0]!,
     /código 3 \(speech_not_found: .*voz default; ejecuta narrate-ctl presynth --voice default\)$/,
@@ -346,6 +348,10 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.match(
     lines[7]!,
     /código 2 \(invalid_identifier: el nombre de voz «default» no es válido; .*\/config.*\)$/,
+  );
+  assert.match(
+    lines[8]!,
+    /código 3 \(voice_not_found: la voz custom todavía no está clonada; clónala con \/evolutivex-agents:voice clone .*\)$/,
   );
 });
 

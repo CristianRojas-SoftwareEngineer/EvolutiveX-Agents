@@ -8,12 +8,17 @@ const __dirname = __pathDirname(__filename);
 
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
-var MAX_VOICE_NAME_LENGTH = 64;
+var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var CUSTOM_VOICE = "custom";
+var SELECTABLE_VOICES = [
+  ...FACTORY_VOICES,
+  CUSTOM_VOICE
+];
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
 }
-function isPlausibleVoiceName(name) {
-  return name.length > 0 && name.length <= MAX_VOICE_NAME_LENGTH && /^[A-Za-z0-9._-]+$/.test(name) && !name.includes("..");
+function isSelectableVoice(name) {
+  return SELECTABLE_VOICES.includes(name);
 }
 function parseVoiceList(stdout) {
   let parsed;
@@ -385,7 +390,7 @@ function checkVoice(cli, voice) {
   return voices.includes(voice) ? "present" : "absent";
 }
 function voiceCheckMessage(voice, check, daemonStopped) {
-  const base = check === "absent" ? `EvolutiveX Agents: la voz ${voice} no existe; elige otra en /config \u2192 evolutivex-agents.voice.` : `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.`;
+  const base = check === "uncertain" ? `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.` : voice === CUSTOM_VOICE ? "EvolutiveX Agents: elegiste la voz custom, pero todav\xEDa no est\xE1 clonada; cl\xF3nala con /evolutivex-agents:voice clone o elige otra en /config \u2192 evolutivex-agents.voice." : `EvolutiveX Agents: la voz ${voice} no existe; elige otra en /config \u2192 evolutivex-agents.voice.`;
   return daemonStopped ? `${base} El daemon no se arranc\xF3.` : base;
 }
 function handleDaemon(cli, voice, status) {
@@ -413,9 +418,9 @@ async function main() {
   const cfg = loadConfig();
   writeActiveVoice(cfg.voice);
   if (!cfg.voiceEnabled) exitSilently();
-  if (!isPlausibleVoiceName(cfg.voice)) {
+  if (!isSelectableVoice(cfg.voice)) {
     exitWithSystemMessage(
-      `EvolutiveX Agents: el nombre de voz \xAB${cfg.voice}\xBB de /config no es v\xE1lido. Usa letras, n\xFAmeros, punto, guion o guion bajo en /config \u2192 evolutivex-agents.voice; la narraci\xF3n fallar\xE1 hasta corregirlo y el daemon no se arranc\xF3.`
+      `EvolutiveX Agents: la voz \xAB${cfg.voice}\xBB de /config no es una de las opciones (${SELECTABLE_VOICES.join(", ")}). Elige una en /config \u2192 evolutivex-agents.voice; la narraci\xF3n fallar\xE1 hasta corregirlo y el daemon no se arranc\xF3.`
     );
   }
   const cli = resolveCli();

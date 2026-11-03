@@ -1,6 +1,6 @@
 ---
 name: narrate
-description: Muestra el estado de la narración por voz de EvolutiveX Agents, narra texto a demanda, pre-sintetiza los anuncios y gestiona las voces (clonar, listar, borrar y activar); explica que las preferencias (narración, voz activa, notificaciones de escritorio, modo de generación y transcript enriquecido) se cambian en /config. Úsala cuando el usuario pida "léeme esto en voz alta", "narra ...", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "clona mi voz", "qué voces tengo", "usa mi voz", "vuelve a la voz predeterminada", "borra la voz X", o pregunte por el estado o la configuración del plugin.
+description: Muestra el estado de la narración por voz de EvolutiveX Agents, narra texto a demanda, pre-sintetiza los anuncios y gestiona las voces (clonar, listar, borrar y activar); explica que las preferencias (narración, voz activa, notificaciones de escritorio, modo de generación y transcript enriquecido) se cambian en /config. Úsala cuando el usuario pida "léeme esto en voz alta", "narra ...", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "clona mi voz", "qué voces tengo", "usa mi voz", "vuelve a la voz predeterminada", "borra mi voz", o pregunte por el estado o la configuración del plugin.
 ---
 
 # Narración por voz y notificaciones con EvolutiveX Agents
@@ -15,32 +15,32 @@ Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya est
 
 ## Comandos
 
-| Intención del usuario       | Comando                                                                   |
-| --------------------------- | ------------------------------------------------------------------------- |
-| Ver el estado               | `narrate-ctl.js status`                                                   |
-| Narrar un texto ahora       | `narrate-ctl.js say [--voice <nombre>] "texto a narrar"`                  |
-| Pre-sintetizar los anuncios | `narrate-ctl.js presynth [--voice <nombre>]` (`--force` para re-sync)     |
-| Ver las voces               | `narrate-ctl.js voice list`                                               |
-| Clonar una voz              | `narrate-ctl.js voice clone <nombre> (<ruta.wav> \| --mic --duration 10)` |
-| Borrar una voz clonada      | `narrate-ctl.js voice remove <nombre> --yes`                              |
+| Intención del usuario       | Comando                                                                                      |
+| --------------------------- | -------------------------------------------------------------------------------------------- |
+| Ver el estado               | `narrate-ctl.js status`                                                                      |
+| Narrar un texto ahora       | `narrate-ctl.js say [--voice <nombre>] "texto a narrar"`                                     |
+| Pre-sintetizar los anuncios | `narrate-ctl.js presynth [--voice <nombre>]` (`--force` para re-sync)                        |
+| Ver las voces               | `narrate-ctl.js voice list`                                                                  |
+| Clonar tu voz (`custom`)    | `narrate-ctl.js voice clone [--display-name "<nombre>"] (<ruta.wav> \| --mic --duration 10)` |
+| Borrar una voz clonada      | `narrate-ctl.js voice remove <voz> --yes`                                                    |
 
 Tras `status`, resume la salida sin volcar rutas si el usuario no las pidió. `status` no muestra las preferencias, porque la herramienta de shell no recibe los valores de `/config`, pero sí la **voz activa** según el último evento narrado. `say` y `presynth` usan esa misma voz si no reciben `--voice`, e informan de dónde salió.
 
 ## Voces
 
-Para **clonar, listar o borrar** voces sigue el flujo del comando `/evolutivex-agents:voice`: explica la referencia (~10 s, máximo 30 s, WAV o micrófono) y la privacidad (el clonado es local y nada sale de la máquina), pide confirmación antes de clonar y de borrar, y ejecuta `voice clone` y `presynth` con el timeout de la herramienta de shell en 600000 ms. Para «usa mi voz» o «vuelve a la voz predeterminada», indica la opción `/config` → `evolutivex-agents.voice` (`default` para la predeterminada) y, si la voz no tiene sus anuncios, ejecuta antes `presynth --voice <nombre>`.
+Para **clonar, listar o borrar** voces sigue el flujo del comando `/evolutivex-agents:voice`: explica la referencia (~10 s, máximo 30 s, WAV o micrófono) y la privacidad (el clonado es local y nada sale de la máquina), pide confirmación antes de clonar y de borrar, y ejecuta `voice clone` y `presynth` con el timeout de la herramienta de shell en 600000 ms. La voz propia del usuario es siempre `custom` (hay una sola; clonar de nuevo la reemplaza con `--force`) y puede llevar un nombre de presentación (`--display-name`) que solo se muestra. Para «usa mi voz», indica elegir `custom` en el selector de `/config` → `evolutivex-agents.voice`; para «vuelve a la voz predeterminada», `default`. Si la voz no tiene sus anuncios (por ejemplo, `ryan` o `vivian`), ejecuta antes `presynth --voice <voz>`.
 
 ## Preferencias (en `/config`, no aquí)
 
 Si el usuario pide activar o desactivar la voz o las notificaciones de escritorio, o cambiar la voz o el modo de generación, indícale la opción de `/config` que corresponde; el cambio se aplica desde el evento siguiente, sin reiniciar:
 
-| Intención del usuario                   | Opción en `/config`                               |
-| --------------------------------------- | ------------------------------------------------- |
-| Activar/desactivar la narración por voz | `evolutivex-agents.voiceEnabled`                  |
-| Cambiar la voz de la narración          | `evolutivex-agents.voice`                         |
-| Activar/desactivar las notificaciones   | `evolutivex-agents.notificationsEnabled`          |
-| Cambiar el modo de generación           | `evolutivex-agents.messageMode` (`local` o `llm`) |
-| Activar/desactivar el transcript        | `evolutivex-agents.enhancedTranscript`            |
+| Intención del usuario                   | Opción en `/config`                                                |
+| --------------------------------------- | ------------------------------------------------------------------ |
+| Activar/desactivar la narración por voz | `evolutivex-agents.voiceEnabled`                                   |
+| Cambiar la voz de la narración          | `evolutivex-agents.voice` (`default`, `ryan`, `vivian` o `custom`) |
+| Activar/desactivar las notificaciones   | `evolutivex-agents.notificationsEnabled`                           |
+| Cambiar el modo de generación           | `evolutivex-agents.messageMode` (`local` o `llm`)                  |
+| Activar/desactivar el transcript        | `evolutivex-agents.enhancedTranscript`                             |
 
 `presynth` pre-sintetiza de una vez los anuncios estáticos del plugin (acuse de `UserPromptSubmit` y fallbacks por evento) con `speech synthesize`, para que luego se reproduzcan al instante con `speech play`. Cada voz tiene sus propios anuncios: `presynth` usa la voz de `--voice` o, sin ella, la voz activa. Es **idempotente** (un anuncio ya pre-sintetizado no se re-sintetiza) y **requiere el daemon caliente**; normalmente lo ejecutan la instalación guiada y `voice clone`, y solo hay que re-ejecutarlo tras borrar la caché del motor o al activar una voz sin anuncios. Como los labels son slugs fijos, un **cambio de frase** de un anuncio no cambia su label, así que `presynth` a secas no lo detecta: para forzar la re-síntesis usa `presynth --force`, que pasa `--force` al motor y sobrescribe el WAV existente.
 

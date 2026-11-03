@@ -143,11 +143,11 @@ Con `default` ya pre-sintetizada, pregunta al usuario si quiere que la narració
 Si acepta, sigue el flujo `clone` del comando `/evolutivex-agents:voice` (explicación de la referencia y de la privacidad, confirmación, timeout de la herramienta de shell en 600000 ms y `--duration 10` para el micrófono):
 
 ```bash
-node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone <nombre> <ruta.wav>
-node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone <nombre> --mic --duration 10
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone --display-name "<nombre>" "<ruta.wav>"
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone --display-name "<nombre>" --mic --duration 10
 ```
 
-Con exit `0`, la voz queda clonada y con sus anuncios pre-sintetizados: indica al usuario que fije `/config` → `evolutivex-agents.voice` = `<nombre>`. Desde el siguiente evento, la narración usa esa voz.
+La voz se guarda como `custom`, la única voz propia; `--display-name` (opcional) le da un nombre de presentación, por ejemplo el del usuario. Con exit `0`, la voz queda clonada y con sus anuncios pre-sintetizados: indica al usuario que elija `custom` en el selector de `/config` → `evolutivex-agents.voice`. Desde el siguiente evento, la narración usa esa voz.
 
 ## Paso 5 — Activar la narración, las notificaciones de escritorio y, opcionalmente, el modo LLM
 

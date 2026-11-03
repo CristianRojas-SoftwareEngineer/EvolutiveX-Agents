@@ -8,7 +8,8 @@
 // de AI Voice-InterConnector, sin depender de él. Contiene worker.pid (el lock
 // del worker), queue/ (cola de payloads de narración), worker.log y su
 // rotación worker.log.1, active-voice (caché de la voz activa que escriben los
-// hooks para narrate-ctl) y voice-operation.lock (exclusión entre operaciones
+// hooks para narrate-ctl), custom-display-name (nombre de presentación de la
+// voz personalizada) y voice-operation.lock (exclusión entre operaciones
 // manuales de voz). Las preferencias viven en el userConfig del plugin y la
 // API key en el entorno: ninguna se guarda aquí.
 import { homedir, platform } from "node:os";
@@ -61,6 +62,11 @@ export function rotatedWorkerLogPath(): string {
 /** Caché de la voz activa: derivada de /config, no es una preferencia. */
 export function activeVoicePath(): string {
   return join(stateDir(), "active-voice");
+}
+
+/** Etiqueta de presentación de la voz `custom`, escrita por `voice clone`. */
+export function customDisplayNamePath(): string {
+  return join(stateDir(), "custom-display-name");
 }
 
 /** Directorio de exclusión entre operaciones manuales de voz. */

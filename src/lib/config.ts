@@ -10,8 +10,9 @@
 // mayúsculas, booleanos como "true"/"false"), pero solo las que el usuario
 // fijó; los valores por defecto se aplican aquí. La API key se lee únicamente
 // de la variable de entorno GEMINI_API_KEY y nunca se persiste en disco. La
-// voz activa se normaliza pero no se valida: un nombre implausible se conserva
-// para que SessionStart lo avise, en lugar de narrar con otra voz en silencio.
+// voz activa se normaliza pero no se valida: un valor fuera de las opciones de
+// /config (p. ej. uno antiguo que quedó en settings.json) se conserva para que
+// SessionStart lo avise, en lugar de narrar con otra voz en silencio.
 import { DEFAULT_VOICE, normalizeVoiceName } from "../voice/voice.js";
 
 export type MessageMode = "llm" | "local";

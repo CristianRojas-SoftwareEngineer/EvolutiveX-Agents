@@ -8,9 +8,9 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Añadido
 
-- Clonado de voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`), que pre-sintetiza los anuncios con la voz nueva; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.42.0 o posterior.
-- Voz activa en `/config` → `evolutivex-agents.voice` (`default` por defecto): toda la narración la usa de forma explícita, y un cambio se oye desde el siguiente evento.
-- `SessionStart` arranca el daemon precalentando la voz activa y avisa si la voz no existe o su nombre no es válido, sin caer a `default`.
+- Clonado de tu voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`): se guarda como la voz `custom`, con un nombre de presentación opcional (`--display-name`), y pre-sintetiza sus anuncios; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.42.0 o posterior.
+- Selector de la voz activa en `/config` → `evolutivex-agents.voice` (`default`, `ryan`, `vivian` o `custom`; `default` por defecto): toda la narración la usa de forma explícita, y un cambio se oye desde el siguiente evento.
+- `SessionStart` arranca el daemon precalentando la voz activa y avisa si la voz no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, sin caer a `default`.
 - `narrate-ctl` con `voice list|clone|remove`, `--voice` en `say` y `presynth`, y la voz activa en `status`; las operaciones manuales de voz se excluyen entre sí.
 
 ### Corregido

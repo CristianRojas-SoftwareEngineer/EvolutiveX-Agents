@@ -4,26 +4,45 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Reglas puras de voces: normalización, plausibilidad del nombre, voces de
-// fábrica, parseo de `voice list --json` y comparación con la versión mínima
-// del motor. Sin motor ni disco.
+// Reglas puras de voces: normalización, voces de fábrica, voz personalizada y
+// voces seleccionables en /config (que deben coincidir con `options` del
+// manifiesto), nombre de presentación, parseo de `voice list --json` y
+// comparación con la versión mínima del motor. Sin motor ni disco.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import manifest from "../.claude-plugin/plugin.json" with { type: "json" };
 import {
+  CUSTOM_VOICE,
   DEFAULT_VOICE,
   FACTORY_VOICES,
   MIN_ENGINE_VERSION,
+  SELECTABLE_VOICES,
   isFactoryVoice,
-  isPlausibleVoiceName,
+  isSelectableVoice,
   meetsMinVersion,
+  normalizeDisplayName,
   normalizeVoiceName,
   parseVoiceList,
 } from "../src/voice/voice.js";
 
-test("las constantes fijan la voz por defecto, las de fábrica y la versión mínima", () => {
+test("las constantes fijan la voz por defecto, las de fábrica, custom y la versión mínima", () => {
   assert.equal(DEFAULT_VOICE, "default");
   assert.deepEqual([...FACTORY_VOICES], ["default", "ryan", "vivian"]);
+  assert.equal(CUSTOM_VOICE, "custom");
   assert.equal(MIN_ENGINE_VERSION, "0.42.0");
+});
+
+test("las voces seleccionables coinciden con options y default de userConfig.voice", () => {
+  const field = manifest.userConfig.voice;
+  assert.deepEqual([...SELECTABLE_VOICES], field.options);
+  assert.equal(field.default, DEFAULT_VOICE);
+});
+
+test("isSelectableVoice acepta solo las opciones de /config", () => {
+  for (const name of ["default", "ryan", "vivian", "custom"])
+    assert.equal(isSelectableVoice(name), true, name);
+  for (const name of ["mi_voz", "Custom", "", "voz_inexistente"])
+    assert.equal(isSelectableVoice(name), false, name);
 });
 
 test("normalizeVoiceName recorta y pasa a minúsculas", () => {
@@ -32,24 +51,14 @@ test("normalizeVoiceName recorta y pasa a minúsculas", () => {
   assert.equal(normalizeVoiceName("   "), "");
 });
 
-test("isPlausibleVoiceName acepta letras y números ASCII, punto, guion y guion bajo", () => {
-  for (const name of ["default", "mi_voz", "voz-2", "v.1", "A", "x".repeat(64)])
-    assert.equal(isPlausibleVoiceName(name), true, name);
+test("normalizeDisplayName recorta, colapsa espacios y admite acentos y espacios", () => {
+  assert.equal(normalizeDisplayName("  Cristián   Rojas "), "Cristián Rojas");
+  assert.equal(normalizeDisplayName("ñ".repeat(64)), "ñ".repeat(64));
 });
 
-test("isPlausibleVoiceName rechaza vacío, largo, `..`, separadores y no ASCII", () => {
-  for (const name of [
-    "",
-    "x".repeat(65),
-    "..",
-    "a..b",
-    "a/b",
-    "a\\b",
-    "mi voz",
-    "voz-ñ",
-    "café",
-  ])
-    assert.equal(isPlausibleVoiceName(name), false, name);
+test("normalizeDisplayName rechaza vacío, más de 64 caracteres y caracteres de control", () => {
+  for (const raw of ["", "   ", "x".repeat(65), "a\u0007b", "a\u007fb"])
+    assert.equal(normalizeDisplayName(raw), undefined, JSON.stringify(raw));
 });
 
 test("isFactoryVoice reconoce solo las voces de fábrica", () => {

@@ -57,13 +57,13 @@ El **transcript enriquecido** es la tercera funcionalidad y no usa el motor de v
 
 Todas las preferencias se configuran en `/config` → `evolutivex-agents.*`. El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar.
 
-| Clave                  | Tipo    | Valor por defecto | Efecto                                                                                                                                                       |
-| ---------------------- | ------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `voiceEnabled`         | boolean | `true`            | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar.                                                                   |
-| `notificationsEnabled` | boolean | `true`            | Activa/desactiva las notificaciones de escritorio nativas.                                                                                                   |
-| `messageMode`          | string  | `local`           | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`). |
-| `voice`                | string  | `default`         | Voz del motor con la que se narra: `default`, `ryan`, `vivian` o una voz clonada. Antes de activarla, la voz necesita sus anuncios pre-sintetizados.         |
-| `enhancedTranscript`   | boolean | `false`           | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in.                                                                           |
+| Clave                  | Tipo    | Valor por defecto | Efecto                                                                                                                                                                          |
+| ---------------------- | ------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `voiceEnabled`         | boolean | `true`            | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar.                                                                                      |
+| `notificationsEnabled` | boolean | `true`            | Activa/desactiva las notificaciones de escritorio nativas.                                                                                                                      |
+| `messageMode`          | string  | `local`           | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`).                    |
+| `voice`                | string  | `default`         | Selector de la voz con la que se narra: `default`, `ryan` o `vivian` (de fábrica) o `custom` (tu voz clonada). `ryan` y `vivian` necesitan antes sus anuncios pre-sintetizados. |
+| `enhancedTranscript`   | boolean | `false`           | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in.                                                                                              |
 
 La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en disco.
 
@@ -72,16 +72,18 @@ La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en
 El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI Voice-InterConnector 0.42.0 o posterior). El comando `/evolutivex-agents:voice` guía el proceso, y la instalación guiada lo ofrece de forma opcional:
 
 ```text
-/evolutivex-agents:voice clone <nombre> [<ruta.wav> | --mic [--duration <segs>]]
+/evolutivex-agents:voice clone [<nombre de presentación>] [<ruta.wav> | --mic [--duration <segs>]]
 /evolutivex-agents:voice list
-/evolutivex-agents:voice remove <nombre>
+/evolutivex-agents:voice remove <voz>
 ```
 
+- **Una sola voz propia, `custom`:** `/config` solo ofrece un selector con opciones fijas, así que tu voz se guarda siempre como `custom`. Clonar de nuevo la reemplaza (con `--force`). Puedes darle un **nombre de presentación** (por ejemplo, el tuyo), que se muestra en `status` y `voice list` como `custom «Cristián»`.
+
 - **Referencia:** unos 10 s de habla clara (máximo 30 s), desde un archivo WAV o el micrófono. `--denoise` limpia el ruido de fondo de forma opcional.
-- **Activación:** el clonado pre-sintetiza los seis anuncios con la voz nueva y luego indica el valor de `/config` → `evolutivex-agents.voice`. El plugin nunca activa una voz por su cuenta; el cambio se oye desde el siguiente evento.
+- **Activación:** el clonado pre-sintetiza los seis anuncios con la voz nueva y luego indica elegir `custom` en `/config` → `evolutivex-agents.voice`. El plugin nunca activa una voz por su cuenta; el cambio se oye desde el siguiente evento.
 - **Costo de cambiar de voz:** cada voz tiene sus propios anuncios (seis síntesis, una sola vez) y la primera síntesis con otra voz tarda algo más mientras el daemon la carga.
-- **Sin fallback:** si la voz activa no existe o su nombre no es válido, `SessionStart` lo avisa y la narración falla con el remedio en `worker.log`, en lugar de sonar otra voz.
-- **A demanda:** `narrate-ctl say` y `presynth` aceptan `--voice <nombre>`; sin él usan la voz activa del último evento narrado, que `status` muestra.
+- **Sin fallback:** si la voz activa no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, `SessionStart` lo avisa y la narración falla con el remedio en `worker.log`, en lugar de sonar otra voz.
+- **A demanda:** `narrate-ctl say` y `presynth` aceptan `--voice <voz>`; sin él usan la voz activa del último evento narrado, que `status` muestra.
 
 ### Transcript enriquecido (`/config`)
 
@@ -175,10 +177,10 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 
   Al superar 512 KiB se renombra a `worker.log.1` (que reemplaza al anterior), y `worker.log.1` se borra tras 14 días sin cambios: como máximo, 2 archivos y 1 MiB.
 
-  El mismo directorio guarda `active-voice` (la voz activa del último evento, que leen `say` y `presynth`) y, mientras dura una operación manual de voz, el bloqueo `voice-operation.lock`.
+  El mismo directorio guarda `active-voice` (la voz activa del último evento, que leen `say` y `presynth`), `custom-display-name` (el nombre de presentación de tu voz `custom`) y, mientras dura una operación manual de voz, el bloqueo `voice-operation.lock`.
 
 - **`speech_not_found` en `worker.log`:** la voz activa no tiene sus anuncios pre-sintetizados. Ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice <voz>` con el daemon caliente.
-- **`voice_not_found` o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor. Consulta `/evolutivex-agents:voice list` y elige otra (o `default`).
+- **`voice_not_found` o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor; con `custom`, todavía no clonaste tu voz. Clónala con `/evolutivex-agents:voice clone` o elige otra (por ejemplo, `default`).
 - **«Hay otra operación de voz en curso»:** otra operación de `clone`, `remove` o `presynth` tiene el bloqueo. Si no hay ninguna en marcha, borra `voice-operation.lock` del _state dir_.
 
 - **El transcript enriquecido desapareció a mitad de sesión:** se apagó por fallos repetidos (ver la protección en [Transcript enriquecido](#transcript-enriquecido-config)); el toast indica la causa. Vuelve al reiniciar Claude Code o con `/reload-plugins`.

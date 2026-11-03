@@ -31,6 +31,7 @@ import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
 import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
 import { sayTimeoutMs } from "./say-timeout.js";
+import { CUSTOM_VOICE } from "./voice.js";
 
 // Cota de worker.log: al superar WORKER_LOG_MAX_BYTES se renombra a
 // worker.log.1 (que reemplaza al anterior), y worker.log.1 se borra tras
@@ -87,11 +88,13 @@ const REASON_HINTS: Record<string, string | ((voice: string) => string)> = {
   speech_not_found: (voice) =>
     `locución no pre-sintetizada para la voz ${voice}; ejecuta narrate-ctl presynth --voice ${voice}`,
   voice_not_found: (voice) =>
-    `la voz ${voice} no existe en el motor; elige otra en /config → evolutivex-agents.voice`,
+    voice === CUSTOM_VOICE
+      ? "la voz custom todavía no está clonada; clónala con /evolutivex-agents:voice clone o elige otra en /config → evolutivex-agents.voice"
+      : `la voz ${voice} no existe en el motor; elige otra en /config → evolutivex-agents.voice`,
   // `speech play` responde así a un nombre de voz ilegal (las etiquetas del
-  // catálogo son fijas y válidas).
+  // catálogo son fijas y válidas), p. ej. un valor antiguo en settings.json.
   invalid_identifier: (voice) =>
-    `el nombre de voz «${voice}» no es válido; corrígelo en /config → evolutivex-agents.voice`,
+    `el nombre de voz «${voice}» no es válido; elige una voz en /config → evolutivex-agents.voice`,
   no_output_device:
     "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
   audio_backend_unavailable:

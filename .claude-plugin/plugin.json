@@ -29,7 +29,8 @@
     "voice": {
       "type": "string",
       "title": "Voz de la narración",
-      "description": "Nombre de la voz del motor con la que se narra (default, ryan, vivian o una voz clonada). Antes de activar una voz, pre-sintetiza sus anuncios.",
+      "description": "Voz con la que se narra: default, ryan o vivian (de fábrica), o custom, tu propia voz clonada con /evolutivex-agents:voice clone. Antes de activar ryan o vivian, pre-sintetiza sus anuncios.",
+      "options": ["default", "ryan", "vivian", "custom"],
       "default": "default"
     },
     "enhancedTranscript": {

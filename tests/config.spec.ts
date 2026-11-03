@@ -50,15 +50,15 @@ test("loadConfig trata la voz vacía o de solo espacios como default", () => {
 });
 
 test("loadConfig normaliza la voz fijada (recorte y minúsculas)", () => {
-  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "  Mi_Voz " });
+  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "  Custom " });
   try {
-    assert.equal(loadConfig().voice, "mi_voz");
+    assert.equal(loadConfig().voice, "custom");
   } finally {
     undo();
   }
 });
 
-test("loadConfig conserva un nombre de voz implausible sin sustituirlo por default", () => {
+test("loadConfig conserva un valor de voz fuera de las opciones sin sustituirlo por default", () => {
   const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "mi voz/../x" });
   try {
     assert.equal(loadConfig().voice, "mi voz/../x");

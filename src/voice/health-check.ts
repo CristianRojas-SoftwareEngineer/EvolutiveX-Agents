@@ -12,7 +12,8 @@
 // caché de la voz activa para narrate-ctl. El veredicto sale del exit de
 // `doctor --json` más su reporte (failed/checks del contrato vigente); ante un
 // check de recursos fallido, un estado degradado/incierto del daemon, una voz
-// activa con nombre inválido o inexistente o un `voice list` incierto avisa al
+// activa fuera de las opciones de /config o inexistente en el motor, o un
+// `voice list` incierto avisa al
 // usuario con el campo systemMessage del JSON de salida (único mecanismo de
 // aviso portable) y no arranca el daemon. Los checks de instalación fallidos
 // (`install_receipt`, `path_*`, `pending_artifacts`) se avisan sin impedir el
@@ -32,8 +33,10 @@ import {
 } from "./health-decision.js";
 import { writeActiveVoice } from "./active-voice.js";
 import {
+  CUSTOM_VOICE,
   DEFAULT_VOICE,
-  isPlausibleVoiceName,
+  SELECTABLE_VOICES,
+  isSelectableVoice,
   parseVoiceList,
 } from "./voice.js";
 
@@ -106,11 +109,15 @@ function voiceCheckMessage(
   daemonStopped: boolean,
 ): string {
   const base =
-    check === "absent"
-      ? `EvolutiveX Agents: la voz ${voice} no existe; elige otra en ` +
-        "/config → evolutivex-agents.voice."
-      : `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. ` +
-        "Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.";
+    check === "uncertain"
+      ? `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. ` +
+        "Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo."
+      : voice === CUSTOM_VOICE
+        ? "EvolutiveX Agents: elegiste la voz custom, pero todavía no está " +
+          "clonada; clónala con /evolutivex-agents:voice clone o elige otra " +
+          "en /config → evolutivex-agents.voice."
+        : `EvolutiveX Agents: la voz ${voice} no existe; elige otra en ` +
+          "/config → evolutivex-agents.voice.";
   return daemonStopped ? `${base} El daemon no se arrancó.` : base;
 }
 
@@ -169,10 +176,12 @@ async function main(): Promise<void> {
   writeActiveVoice(cfg.voice);
   if (!cfg.voiceEnabled) exitSilently();
 
-  if (!isPlausibleVoiceName(cfg.voice)) {
+  // /config solo ofrece las opciones del manifiesto, pero settings.json puede
+  // conservar un valor antiguo o editado a mano.
+  if (!isSelectableVoice(cfg.voice)) {
     exitWithSystemMessage(
-      `EvolutiveX Agents: el nombre de voz «${cfg.voice}» de /config no es ` +
-        "válido. Usa letras, números, punto, guion o guion bajo en " +
+      `EvolutiveX Agents: la voz «${cfg.voice}» de /config no es una de las ` +
+        `opciones (${SELECTABLE_VOICES.join(", ")}). Elige una en ` +
         "/config → evolutivex-agents.voice; la narración fallará hasta " +
         "corregirlo y el daemon no se arrancó.",
     );

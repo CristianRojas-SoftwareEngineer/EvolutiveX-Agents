@@ -7202,6 +7202,12 @@ var require_commander = __commonJS({
 
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
+var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var CUSTOM_VOICE = "custom";
+var SELECTABLE_VOICES = [
+  ...FACTORY_VOICES,
+  CUSTOM_VOICE
+];
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
 }

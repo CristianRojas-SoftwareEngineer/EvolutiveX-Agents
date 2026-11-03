@@ -8,8 +8,10 @@
 // preferencias se configuran en /config → evolutivex-agents.* y no se leen
 // aquí: la herramienta Bash no recibe las variables de userConfig. La voz
 // activa sale de `--voice` o, si no se indica, de la caché `active-voice` que
-// escriben los hooks (o `default` sin caché). La API key se lee del entorno.
-// No participa en el flujo de hooks.
+// escriben los hooks (o `default` sin caché). La voz propia del usuario vive
+// siempre en el motor como `custom`, la opción de /config que la activa; su
+// nombre propio es un nombre de presentación (`--display-name`). La API key se lee
+// del entorno. No participa en el flujo de hooks.
 //
 // Uso: node dist/narrate-ctl.js <comando> [args]
 //   status                                  muestra el estado y la voz activa (sin revelar las claves)
@@ -17,10 +19,11 @@
 //                                           (el texto puede empezar por guion; tras `--`, todo es texto)
 //   presynth [--voice <nombre>] [--force]   pre-sintetiza los anuncios estáticos con la voz
 //                                           (idempotente; --force reescribe)
-//   voice list                              lista las voces y marca las de fábrica y la activa
-//   voice clone <nombre> <ruta.wav> [--force] [--denoise]
-//   voice clone <nombre> --mic [--duration <segs>] [--force] [--denoise]
-//                                           clona una voz y pre-sintetiza sus anuncios
+//   voice list                              lista las voces y marca las de fábrica, custom y la activa
+//   voice clone [--display-name "<nombre>"] <ruta.wav> [--force] [--denoise]
+//   voice clone [--display-name "<nombre>"] --mic [--duration <segs>] [--force] [--denoise]
+//                                           clona tu voz en `custom` y pre-sintetiza sus anuncios
+//                                           (--force reemplaza la voz custom existente)
 //   voice remove <nombre> --yes             borra una voz de usuario y sus locuciones
 //
 // Las operaciones `voice *` exigen la versión mínima del motor; `voice clone`,
@@ -33,9 +36,16 @@ import { ANNOUNCEMENTS } from "./voice/message/static-announcements.js";
 import { readActiveVoice } from "./voice/active-voice.js";
 import { withVoiceOperationLock } from "./voice/operation-lock.js";
 import {
+  readCustomDisplayName,
+  removeCustomDisplayName,
+  writeCustomDisplayName,
+} from "./voice/custom-display-name.js";
+import {
+  CUSTOM_VOICE,
   MIN_ENGINE_VERSION,
   isFactoryVoice,
   meetsMinVersion,
+  normalizeDisplayName,
   normalizeVoiceName,
   parseVoiceList,
 } from "./voice/voice.js";
@@ -66,8 +76,14 @@ function resolveVoice(flag: string | undefined): ResolvedVoice {
   return readActiveVoice();
 }
 
+/** Voz con el nombre de presentación de `custom`, si lo hay: `custom «Cristián»`. */
+function voiceDisplayName(voice: string): string {
+  const shown = voice === CUSTOM_VOICE ? readCustomDisplayName() : undefined;
+  return shown ? `${voice} «${shown}»` : voice;
+}
+
 function describeVoice({ voice, source }: ResolvedVoice): string {
-  return `${voice} (${SOURCE_LABELS[source]})`;
+  return `${voiceDisplayName(voice)} (${SOURCE_LABELS[source]})`;
 }
 
 function printStatus(): void {
@@ -112,9 +128,15 @@ function say(text: string, voice: ResolvedVoice): number {
  * `force`, pasa `--force` al motor para sobrescribir el WAV del label
  * existente: el re-sync manual tras un cambio de frase o un re-clonado.
  * Requiere el daemon caliente (exit `5` si está caído) y el modelo
- * provisionado (exit `4`). Devuelve 1 si algún anuncio falla.
+ * provisionado (exit `4`). `resynth` decide si un éxito se informa como
+ * «re-sintetizado» (por defecto, con `force`); tras clonar una voz nueva es
+ * «pre-sintetizado». Devuelve 1 si algún anuncio falla.
  */
-function presynth(voice: ResolvedVoice, force: boolean): number {
+function presynth(
+  voice: ResolvedVoice,
+  force: boolean,
+  resynth = force,
+): number {
   const cli = requireCli("pre-sintetizar");
   if (!cli) return 1;
   return withVoiceOperationLock(() => {
@@ -130,7 +152,7 @@ function presynth(voice: ResolvedVoice, force: boolean): number {
         stdio: ["ignore", "pipe", "inherit"],
         windowsHide: true,
       });
-      if (!reportPresynth(eventKey, label, res, force)) failed = true;
+      if (!reportPresynth(eventKey, label, res, resynth)) failed = true;
     }
     return failed ? 1 : 0;
   });
@@ -144,12 +166,12 @@ function reportPresynth(
   eventKey: string,
   label: string,
   res: EngineRun,
-  force: boolean,
+  resynth: boolean,
 ): boolean {
   const failure = engineFailure(res);
   if (!failure) {
     console.log(
-      `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
+      `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
     );
     return true;
   }
@@ -220,16 +242,28 @@ function voiceList(): number {
   for (const voice of voices) {
     const tags = [
       isFactoryVoice(voice) ? "fábrica" : "",
+      voice === CUSTOM_VOICE ? "tu voz" : "",
       voice === active.voice ? "activa" : "",
     ].filter(Boolean);
-    console.log(`  ${voice}${tags.length ? ` (${tags.join(", ")})` : ""}`);
+    const name = voiceDisplayName(voice);
+    console.log(`  ${name}${tags.length ? ` (${tags.join(", ")})` : ""}`);
   }
+  if (!voices.includes(CUSTOM_VOICE))
+    console.log(
+      `  ${CUSTOM_VOICE} (sin clonar; clónala con /evolutivex-agents:voice clone)`,
+    );
+  if (!voices.includes(active.voice))
+    console.log(
+      `Aviso: la voz activa ${active.voice} no existe en el motor; la ` +
+        "narración fallará hasta clonarla o elegir otra en /config → " +
+        "evolutivex-agents.voice.",
+    );
   return 0;
 }
 
-/** Petición de clonado ya parseada. */
+/** Petición de clonado ya parseada; la voz es siempre `custom`. */
 interface CloneRequest {
-  name: string;
+  displayName?: string;
   wav?: string;
   mic: boolean;
   duration?: string;
@@ -238,26 +272,32 @@ interface CloneRequest {
 }
 
 /**
- * Parsea `voice clone`; exige el nombre y exactamente una fuente, y
- * `--duration` solo con `--mic`.
+ * Parsea `voice clone`; exige exactamente una fuente, `--duration` solo con
+ * `--mic` y, si se indica, un nombre de presentación válido.
  */
 function parseClone(rest: string[]): CloneRequest | undefined {
   const parsed = parseOptions(rest, {
+    "display-name": { type: "string" },
     mic: { type: "boolean" },
     duration: { type: "string" },
     force: { type: "boolean", short: "f" },
     denoise: { type: "boolean" },
   });
   if (!parsed) return undefined;
-  const [rawName, wav, ...extra] = parsed.positionals;
-  const name = normalizeVoiceName(rawName ?? "");
+  const [wav, ...extra] = parsed.positionals;
   const mic = parsed.values.mic === true;
   const duration = parsed.values.duration as string | undefined;
-  if (!name || extra.length > 0 || mic === (wav !== undefined))
-    return undefined;
+  const rawDisplayName = parsed.values["display-name"] as string | undefined;
+  const displayName =
+    rawDisplayName === undefined
+      ? undefined
+      : normalizeDisplayName(rawDisplayName);
+  if (extra.length > 0 || mic === (wav !== undefined)) return undefined;
   if (duration !== undefined && !mic) return undefined;
+  if (rawDisplayName !== undefined && displayName === undefined)
+    return undefined;
   return {
-    name,
+    displayName,
     wav,
     mic,
     duration,
@@ -268,7 +308,7 @@ function parseClone(rest: string[]): CloneRequest | undefined {
 
 /** Argumentos de `voice clone` del motor, siempre con `--daemon --json`. */
 function cloneArgs(req: CloneRequest): string[] {
-  const args = ["voice", "clone", "--name", req.name];
+  const args = ["voice", "clone", "--name", CUSTOM_VOICE];
   if (req.wav !== undefined) args.push("--speech-reference", req.wav);
   else args.push("--mic");
   if (req.duration !== undefined) args.push("--duration", req.duration);
@@ -279,21 +319,18 @@ function cloneArgs(req: CloneRequest): string[] {
 }
 
 /**
- * `voice clone`: rechaza las voces de fábrica y el push-to-talk sin terminal
- * antes de invocar al motor; luego, con la versión mínima y el bloqueo, clona
- * y pre-sintetiza los anuncios con la voz nueva.
+ * `voice clone`: clona la voz del usuario en `custom`. Rechaza el
+ * push-to-talk sin terminal antes de invocar al motor; luego, con la versión
+ * mínima y el bloqueo, clona y pre-sintetiza los anuncios con la voz nueva.
  */
 function voiceClone(rest: string[]): number {
   const req = parseClone(rest);
   if (!req) {
     console.error(
-      "Uso: voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise]",
+      'Uso: voice clone [--display-name "<nombre>"] (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise]',
     );
-    return 2;
-  }
-  if (isFactoryVoice(req.name)) {
     console.error(
-      "`default`, `ryan` y `vivian` son voces de fábrica; elige otro nombre.",
+      "El nombre de presentación tiene de 1 a 64 caracteres, sin saltos de línea.",
     );
     return 2;
   }
@@ -310,9 +347,11 @@ function voiceClone(rest: string[]): number {
 
 /**
  * Clona con stdin y stderr heredados (push-to-talk y progreso) y stdout
- * capturado para el JSON, y termina con `presynth --voice <nombre> --force`
- * dentro del mismo bloqueo. Solo con los seis anuncios pre-sintetizados indica
- * el valor de /config.
+ * capturado para el JSON, guarda el nombre de presentación (o borra el
+ * anterior, que
+ * describía la voz reemplazada) y termina con `presynth --voice custom
+ * --force` dentro del mismo bloqueo. Solo con los seis anuncios
+ * pre-sintetizados indica el valor de /config.
  */
 function runClone(cli: string, req: CloneRequest): number {
   const res = runCli(cli, cloneArgs(req), {
@@ -324,16 +363,19 @@ function runClone(cli: string, req: CloneRequest): number {
   if (failure) return reportFailure(failure);
   if (!engineJson(res.stdout))
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
-  console.log(`Voz ${req.name} clonada; pre-sintetizando sus anuncios…`);
-  if (presynth({ voice: req.name, source: "flag" }, true) !== 0) {
+  if (req.displayName) writeCustomDisplayName(req.displayName);
+  else removeCustomDisplayName();
+  const name = voiceDisplayName(CUSTOM_VOICE);
+  console.log(`Voz ${name} clonada; pre-sintetizando sus anuncios…`);
+  if (presynth({ voice: CUSTOM_VOICE, source: "flag" }, true, false) !== 0) {
     console.error(
-      `La huella de la voz ${req.name} ya cambió, pero la pre-síntesis falló; ` +
-        `reintenta con: narrate-ctl presynth --voice ${req.name} --force`,
+      `La huella de la voz ${name} ya cambió, pero la pre-síntesis falló; ` +
+        `reintenta con: narrate-ctl presynth --voice ${CUSTOM_VOICE} --force`,
     );
     return 1;
   }
   console.log(
-    `Voz ${req.name} lista. Para usarla, fija /config → evolutivex-agents.voice = ${req.name}`,
+    `Voz ${name} lista. Para usarla, elige ${CUSTOM_VOICE} en /config → evolutivex-agents.voice`,
   );
   return 0;
 }
@@ -375,8 +417,10 @@ function runRemove(cli: string, name: string): number {
   const removed = engineJson(res.stdout)?.removed_speech;
   if (!Array.isArray(removed))
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
+  const shown = voiceDisplayName(name);
+  if (name === CUSTOM_VOICE) removeCustomDisplayName();
   console.log(
-    `Voz ${name} borrada; locuciones borradas: ${removed.length > 0 ? removed.join(", ") : "ninguna"}.`,
+    `Voz ${shown} borrada; locuciones borradas: ${removed.length > 0 ? removed.join(", ") : "ninguna"}.`,
   );
   const active = readActiveVoice();
   if (active.source === "cache" && active.voice === name)
@@ -399,7 +443,7 @@ function runVoice([sub, ...rest]: string[]): number {
       return voiceRemove(rest);
   }
   console.error(
-    "Uso: voice list | voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise] | voice remove <nombre> --yes",
+    'Uso: voice list | voice clone [--display-name "<nombre>"] (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise] | voice remove <voz> --yes',
   );
   return 2;
 }
