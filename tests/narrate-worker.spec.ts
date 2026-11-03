@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Worker drenador: verifica que narra los payloads encolados en orden, sin
-// duplicados, que sale tras la ventana de inactividad y que rota worker.log por
+// duplicados y con la voz anotada en cada ítem (`--voice`), que sale tras la ventana de inactividad y que rota worker.log por
 // tamaño y antigüedad. Usa dist/narrate-worker.js
 // como subprocesso real con un CLI falso y state dir aislado.
 import { test, afterEach } from "node:test";
@@ -100,7 +100,7 @@ function runWorker(env: NodeJS.ProcessEnv): { status: number | null } {
   return { status: res.status };
 }
 
-test("worker narra dos payloads encolados en orden y sin duplicados", () => {
+test("worker narra dos payloads encolados en orden, sin duplicados y con la voz de cada ítem", () => {
   const dir = makeTempDir("avi-plugin-worker-");
   restoreDirs.push(dir);
   const cliDir = makeTempDir("avi-plugin-cli-");
@@ -123,7 +123,7 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
       hook_event_name: "UserPromptSubmit",
       prompt: "primero",
     },
-    "default",
+    "mi_voz",
   );
   enqueuePayload(
     {
@@ -148,12 +148,14 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
     .map((line) => JSON.parse(line) as string[]);
   assert.equal(calls.length, 2, "debe invocar el CLI exactamente dos veces");
   assert.deepEqual(calls[0]!.slice(0, 3), ["speech", "play", "--label"]);
-  assert.equal(calls[0]![4], "--json");
+  assert.deepEqual(calls[0]!.slice(4), ["--voice", "mi_voz", "--json"]);
   assert.deepEqual(calls[1], [
     "speech",
     "say",
     "--text",
     "segundo",
+    "--voice",
+    "default",
     "--daemon",
     "--json",
   ]);
@@ -227,6 +229,8 @@ test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola"
     "say",
     "--text",
     "recuperado tras caída",
+    "--voice",
+    "default",
     "--daemon",
     "--json",
   ]);
@@ -325,9 +329,13 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.equal(lines.length, 7);
   assert.match(
     lines[0]!,
-    /código 3 \(speech_not_found: .*narrate-ctl presynth\)$/,
+    /código 3 \(speech_not_found: .*voz default; ejecuta narrate-ctl presynth --voice default\)$/,
   );
-  assert.match(lines[1]!, /código 3 \(voice_not_found: .*setup.*presynth\)$/);
+  assert.match(
+    lines[1]!,
+    /código 3 \(voice_not_found: la voz default no existe .*\/config.*\)$/,
+  );
+  assert.ok(!lines[1]!.includes("setup"));
   assert.match(lines[2]!, /código 3 \(no_output_device: .*devices\)$/);
   assert.match(lines[3]!, /código 3 \(audio_backend_unavailable: .*\)$/);
   assert.match(lines[4]!, /código 1 \(playback_failed: .*\)$/);

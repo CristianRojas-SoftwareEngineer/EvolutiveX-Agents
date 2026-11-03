@@ -6,8 +6,9 @@
 
 // WORKER (proceso independiente del hook). Único consumidor de la cola FIFO en
 // disco: reclama un evento, lo narra y lo borra antes de pasar al siguiente, así
-// no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI.
-// Degrada en silencio; los errores van a worker.log.
+// no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI
+// con la voz anotada en el ítem (siempre explícita con `--voice`). Degrada en
+// silencio; los errores van a worker.log.
 import {
   appendFileSync,
   readFileSync,
@@ -25,7 +26,7 @@ import {
   workerPidPath,
 } from "../lib/state-dir.js";
 import { claimNext, clearQueue, pruneQueue } from "./queue.js";
-import type { HookPayload } from "../lib/hook-payload.js";
+import type { QueueItem } from "./queue.js";
 import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
 import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
@@ -78,13 +79,15 @@ const KILL_GRACE_MS = 2_000;
 /**
  * Pista por `reason` del payload de error de `speech play|say --json`
  * (contrato del motor: toda salida ≠ 0 emite `{error, reason}` por stdout).
- * Un `reason` fuera de esta tabla se trata como ausente y el log conserva
- * solo el código, como exige la regla de consumo aditivo del motor.
+ * Las pistas que dependen de la voz son funciones de ella. Un `reason` fuera
+ * de esta tabla se trata como ausente y el log conserva solo el código, como
+ * exige la regla de consumo aditivo del motor.
  */
-const REASON_HINTS: Record<string, string> = {
-  speech_not_found: "locución no pre-sintetizada; ejecuta narrate-ctl presynth",
-  voice_not_found:
-    "voz no encontrada en el motor; ejecuta ai-voice-interconnector setup y luego narrate-ctl presynth",
+const REASON_HINTS: Record<string, string | ((voice: string) => string)> = {
+  speech_not_found: (voice) =>
+    `locución no pre-sintetizada para la voz ${voice}; ejecuta narrate-ctl presynth --voice ${voice}`,
+  voice_not_found: (voice) =>
+    `la voz ${voice} no existe en el motor; elige otra en /config → evolutivex-agents.voice`,
   no_output_device:
     "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
   audio_backend_unavailable:
@@ -97,14 +100,15 @@ const REASON_HINTS: Record<string, string> = {
 };
 
 /** Sufijo de diagnóstico ` (<reason>: <pista>)` o "" si el reason no es conocido. */
-function failureDetail(stdout: string): string {
+function failureDetail(stdout: string, voice: string): string {
   const payload = parseSingleJsonObject(stdout);
   if (typeof payload !== "object" || payload === null) return "";
   const reason = (payload as Record<string, unknown>).reason;
   if (typeof reason !== "string" || !Object.hasOwn(REASON_HINTS, reason)) {
     return "";
   }
-  return ` (${reason}: ${REASON_HINTS[reason]})`;
+  const hint = REASON_HINTS[reason];
+  return ` (${reason}: ${typeof hint === "function" ? hint(voice) : hint})`;
 }
 
 // Pausa de respiración entre narraciones: evita que dos locuciones suenen pegadas.
@@ -159,14 +163,19 @@ function releaseLock(): void {
 }
 
 /**
- * Ejecuta `speech play --label <label> --json` con timeout. Política de fallo:
+ * Ejecuta `speech play --label <label> --voice <voz> --json` con timeout.
+ * Política de fallo:
  * cualquier exit ≠ 0 se registra en worker.log con su `reason` y su pista
  * cuando el envelope `--json` trae uno conocido (exit 3: `speech_not_found`,
  * `voice_not_found`, `no_output_device` o `audio_backend_unavailable`) y el
  * turno queda sin audio — sin re-sintetizado ni fallback a `speech say`.
  */
-async function runPlay(cliPath: string, label: string): Promise<void> {
-  const args = ["speech", "play", "--label", label, "--json"];
+async function runPlay(
+  cliPath: string,
+  label: string,
+  voice: string,
+): Promise<void> {
+  const args = ["speech", "play", "--label", label, "--voice", voice, "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
     windowsHide: true,
     timeoutMs: PLAY_TIMEOUT_MS,
@@ -177,15 +186,30 @@ async function runPlay(cliPath: string, label: string): Promise<void> {
     return;
   }
   if (res.code !== 0)
-    log(`speech play salió con código ${res.code}${failureDetail(res.stdout)}`);
+    log(
+      `speech play salió con código ${res.code}${failureDetail(res.stdout, voice)}`,
+    );
 }
 
 /**
- * Ejecuta `speech say --text <texto> --daemon --json` con timeout; un exit ≠ 0
- * se registra con su `reason` y su pista si es conocido.
+ * Ejecuta `speech say --text <texto> --voice <voz> --daemon --json` con
+ * timeout; un exit ≠ 0 se registra con su `reason` y su pista si es conocido.
  */
-async function runSay(cliPath: string, text: string): Promise<void> {
-  const args = ["speech", "say", "--text", text, "--daemon", "--json"];
+async function runSay(
+  cliPath: string,
+  text: string,
+  voice: string,
+): Promise<void> {
+  const args = [
+    "speech",
+    "say",
+    "--text",
+    text,
+    "--voice",
+    voice,
+    "--daemon",
+    "--json",
+  ];
   const timeoutMs = sayTimeoutMs(text);
   const res = await runCliWithTimeout(cliPath, args, {
     windowsHide: true,
@@ -199,15 +223,17 @@ async function runSay(cliPath: string, text: string): Promise<void> {
     return;
   }
   if (res.code !== 0)
-    log(`speech say salió con código ${res.code}${failureDetail(res.stdout)}`);
+    log(
+      `speech say salió con código ${res.code}${failureDetail(res.stdout, voice)}`,
+    );
 }
 
 /**
- * Narra un payload: construye el mensaje y lo reproduce o sintetiza vía el
- * CLI. Devuelve false si la narración está desactivada, tras descartar el
- * resto de la cola.
+ * Narra un ítem: construye el mensaje y lo reproduce o sintetiza vía el CLI
+ * con la voz del ítem. Devuelve false si la narración está desactivada, tras
+ * descartar el resto de la cola.
  */
-async function narrate(payload: HookPayload): Promise<boolean> {
+async function narrate({ payload, voice }: QueueItem): Promise<boolean> {
   const cfg = loadConfig();
   if (!cfg.voiceEnabled) {
     clearQueue();
@@ -226,8 +252,8 @@ async function narrate(payload: HookPayload): Promise<boolean> {
     return true;
   }
 
-  if (request.kind === "play") await runPlay(cli, request.label);
-  else await runSay(cli, request.text);
+  if (request.kind === "play") await runPlay(cli, request.label, voice);
+  else await runSay(cli, request.text, voice);
 
   // Hueco entre narraciones para que no suenen pegadas.
   if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
@@ -250,7 +276,7 @@ async function drainQueue(): Promise<void> {
       continue;
     }
     lastActivity = Date.now();
-    if (!(await narrate(item.payload))) return;
+    if (!(await narrate(item))) return;
   }
 }
 
