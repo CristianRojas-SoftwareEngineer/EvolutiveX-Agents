@@ -27,6 +27,7 @@ const LOCAL: Config = {
   voiceEnabled: true,
   notificationsEnabled: false,
   messageMode: "local",
+  voice: "default",
   geminiApiKey: undefined,
 };
 
@@ -34,6 +35,7 @@ const LLM: Config = {
   voiceEnabled: true,
   notificationsEnabled: false,
   messageMode: "llm",
+  voice: "default",
   geminiApiKey: "dummy",
 };
 

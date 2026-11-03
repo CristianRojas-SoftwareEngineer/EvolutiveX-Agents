@@ -11,11 +11,18 @@ import { readFileSync as readFileSync2 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join as join3 } from "node:path";
 
+// src/voice/voice.ts
+var DEFAULT_VOICE = "default";
+function normalizeVoiceName(raw) {
+  return raw.trim().toLowerCase();
+}
+
 // src/lib/config.ts
 var DEFAULTS = {
   voiceEnabled: true,
   notificationsEnabled: true,
-  messageMode: "local"
+  messageMode: "local",
+  voice: DEFAULT_VOICE
 };
 function loadConfig() {
   const env = process.env;
@@ -30,6 +37,7 @@ function loadConfig() {
       DEFAULTS.notificationsEnabled
     ),
     messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    voice: normalizeVoiceName(env.CLAUDE_PLUGIN_OPTION_VOICE ?? "") || DEFAULTS.voice,
     geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
   };
 }

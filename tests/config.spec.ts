@@ -17,6 +17,7 @@ const UNSET = {
   CLAUDE_PLUGIN_OPTION_VOICEENABLED: undefined,
   CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: undefined,
   CLAUDE_PLUGIN_OPTION_MESSAGEMODE: undefined,
+  CLAUDE_PLUGIN_OPTION_VOICE: undefined,
   GEMINI_API_KEY: undefined,
 };
 
@@ -35,7 +36,35 @@ test("loadConfig sin variables devuelve los defaults", () => {
   assert.equal(cfg.voiceEnabled, true);
   assert.equal(cfg.notificationsEnabled, true);
   assert.equal(cfg.messageMode, "local");
+  assert.equal(cfg.voice, "default");
   assert.equal(cfg.geminiApiKey, undefined);
+});
+
+test("loadConfig trata la voz vacía o de solo espacios como default", () => {
+  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "   " });
+  try {
+    assert.equal(loadConfig().voice, "default");
+  } finally {
+    undo();
+  }
+});
+
+test("loadConfig normaliza la voz fijada (recorte y minúsculas)", () => {
+  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "  Mi_Voz " });
+  try {
+    assert.equal(loadConfig().voice, "mi_voz");
+  } finally {
+    undo();
+  }
+});
+
+test("loadConfig conserva un nombre de voz implausible sin sustituirlo por default", () => {
+  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "mi voz/../x" });
+  try {
+    assert.equal(loadConfig().voice, "mi voz/../x");
+  } finally {
+    undo();
+  }
 });
 
 test("loadConfig respeta las opciones fijadas en /config", () => {
