@@ -20,8 +20,8 @@
 //   presynth [--force] pre-sintetiza los anuncios estáticos (idempotente; --force reescribe)
 import { loadConfig, updateConfig } from "./lib/config.js";
 import { configPath, stateDir } from "./lib/state-dir.js";
-import { resolveCli, runCli } from "./lib/resolve-cli.js";
-import { ANNOUNCEMENTS } from "./message/static-announcements.js";
+import { resolveCli, runCli } from "./voice/resolve-cli.js";
+import { ANNOUNCEMENTS } from "./voice/message/static-announcements.js";
 
 function printStatus(): void {
   const cfg = loadConfig();

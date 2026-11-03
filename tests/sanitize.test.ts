@@ -12,7 +12,10 @@
 // paréntesis, comillas y guiones. SIN truncamiento de oraciones.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPlainText, sanitizeForSpeech } from "../src/message/sanitize.js";
+import {
+  toPlainText,
+  sanitizeForSpeech,
+} from "../src/voice/message/sanitize.js";
 
 test("toPlainText descarta el cuerpo del bloque cercado y conserva la prosa circundante", () => {
   const input = 'Antes.\n```js\nconst clave = "secreto";\n```\nDespués.';

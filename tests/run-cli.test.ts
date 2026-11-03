@@ -10,7 +10,7 @@ import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { writeFileSync, chmodSync } from "node:fs";
 import { join } from "node:path";
-import { runCliWithTimeout } from "../src/lib/resolve-cli.js";
+import { runCliWithTimeout } from "../src/voice/resolve-cli.js";
 import { makeTempDir, removeDir } from "./helpers.js";
 
 let restoreDirs: string[] = [];

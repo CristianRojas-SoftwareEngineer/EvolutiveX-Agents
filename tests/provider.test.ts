@@ -8,8 +8,8 @@
 // material del turno y el cierre anti-invención; nunca inyecta historial.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildUserContent } from "../src/message/provider.js";
-import { SUMMARY_CLOSING } from "../src/message/prompts.js";
+import { buildUserContent } from "../src/voice/message/provider.js";
+import { SUMMARY_CLOSING } from "../src/voice/message/prompts.js";
 
 test("buildUserContent devuelve el contenido del mensaje user con material y cierre", () => {
   const out = buildUserContent({ text: "Creé el componente principal." });

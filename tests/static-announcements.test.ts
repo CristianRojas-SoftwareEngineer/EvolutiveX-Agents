@@ -10,7 +10,7 @@
 // derivado del texto).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ANNOUNCEMENTS } from "../src/message/static-announcements.js";
+import { ANNOUNCEMENTS } from "../src/voice/message/static-announcements.js";
 
 test("el catálogo fija el texto literal de los seis anuncios", () => {
   assert.equal(ANNOUNCEMENTS.UserPromptSubmit.text, "Procesando con Claude.");

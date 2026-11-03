@@ -17,7 +17,7 @@ import {
   decideHealthAction,
   parseSingleJsonObject,
   NOT_PROVISIONED_MESSAGE,
-} from "../src/lib/health-decision.js";
+} from "../src/voice/health-decision.js";
 import { ENGINE_VERSION } from "./helpers.js";
 
 /** Reporte mínimo del contrato vigente (shape congelado desde DOCTOR.md). */

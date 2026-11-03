@@ -16,18 +16,18 @@
 // `pending_artifacts`) se avisan sin impedir el arranque, y ese aviso se
 // combina con el del daemon en un único systemMessage. Nunca falla la sesión:
 // exit 0 siempre.
-import { loadConfig } from "./lib/config.js";
-import { resolveCli, runCli } from "./lib/resolve-cli.js";
-import { readStdin } from "./lib/hook-payload.js";
+import { loadConfig } from "../lib/config.js";
+import { resolveCli, runCli } from "./resolve-cli.js";
+import { readStdin } from "../lib/hook-payload.js";
 import {
   getDaemonStatus,
   startDaemonDetached,
   type DaemonStatusResult,
-} from "./lib/daemon.js";
+} from "./daemon.js";
 import {
   parseSingleJsonObject,
   decideHealthAction,
-} from "./lib/health-decision.js";
+} from "./health-decision.js";
 
 /** Emite un aviso systemMessage por stdout al usuario y termina con exit 0. */
 function exitWithSystemMessage(message: string): never {

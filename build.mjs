@@ -44,9 +44,9 @@ const REQUIRED_VENDOR_FILES = [
 ];
 
 const ENTRY_POINTS = {
-  "narrate-hook": "src/narrate-hook.ts",
-  "narrate-worker": "src/narrate-worker.ts",
-  "health-check": "src/health-check.ts",
+  "narrate-hook": "src/voice/narrate-hook.ts",
+  "narrate-worker": "src/voice/narrate-worker.ts",
+  "health-check": "src/voice/health-check.ts",
   "narrate-ctl": "src/narrate-ctl.ts",
   "notification-hook": "src/notifications/notification-hook.ts",
   "notification-cli": "src/notifications/cli.ts",

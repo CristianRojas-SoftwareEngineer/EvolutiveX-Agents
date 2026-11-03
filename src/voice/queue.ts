@@ -20,8 +20,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { ensureStateDir, queueDir } from "./state-dir.js";
-import { parsePayload, type HookPayload } from "./hook-payload.js";
+import { ensureStateDir, queueDir } from "../lib/state-dir.js";
+import { parsePayload, type HookPayload } from "../lib/hook-payload.js";
 
 const MAX_PENDING = 64;
 const MAX_AGE_MS = 60 * 60 * 1000; // 1 h

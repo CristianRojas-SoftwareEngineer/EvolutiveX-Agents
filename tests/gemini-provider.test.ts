@@ -9,9 +9,9 @@
 // tocan la red.
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { GeminiProvider } from "../src/message/gemini-provider.js";
-import type { GenerationInput } from "../src/message/provider.js";
-import { SUMMARY_CLOSING } from "../src/message/prompts.js";
+import { GeminiProvider } from "../src/voice/message/gemini-provider.js";
+import type { GenerationInput } from "../src/voice/message/provider.js";
+import { SUMMARY_CLOSING } from "../src/voice/message/prompts.js";
 
 const INPUT: GenerationInput = { text: "Terminé la tarea." };
 const EXPECTED_CONTENT = `Material del turno:\n\nTerminé la tarea.\n\n${SUMMARY_CLOSING}`;

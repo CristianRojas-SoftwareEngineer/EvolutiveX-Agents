@@ -15,7 +15,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as daemon from "../src/lib/daemon.js";
+import * as daemon from "../src/voice/daemon.js";
 import { makeTempDir, removeDir } from "./helpers.js";
 
 /**

@@ -243,7 +243,7 @@ Reglas:
 - `narrate-ctl status` muestra `voice: <nombre>`.
 - No se guardan la ruta del WAV ni `reference.qvoice`.
 
-### 7.2 Módulo `src/lib/voice.ts`
+### 7.2 Módulo `src/voice/voice.ts`
 
 Nuevo módulo puro, sin I/O:
 
@@ -397,13 +397,13 @@ ai-voice-interconnector speech synthesize \
 texto). La voz es una preocupación de transporte y se añade en el worker y en
 `narrate-ctl`.
 
-| Componente                                  | Cambio                                                   |
-| ------------------------------------------- | -------------------------------------------------------- |
-| `src/narrate-worker.ts` → `runPlay`         | `speech play --label <label> --voice <cfg.voice>`        |
-| `src/narrate-worker.ts` → `runSay`          | `speech say --text <texto> --voice <cfg.voice> --daemon` |
-| `src/narrate-ctl.ts` → `say`                | `speech say --text <texto> --voice <cfg.voice> --daemon` |
-| `src/narrate-ctl.ts` → `presynth`           | `speech synthesize … --voice <cfg.voice> --daemon`       |
-| `src/lib/daemon.ts` → `startDaemonDetached` | acepta `warmVoice` y añade `--warm-voice`                |
+| Componente                                    | Cambio                                                   |
+| --------------------------------------------- | -------------------------------------------------------- |
+| `src/voice/narrate-worker.ts` → `runPlay`     | `speech play --label <label> --voice <cfg.voice>`        |
+| `src/voice/narrate-worker.ts` → `runSay`      | `speech say --text <texto> --voice <cfg.voice> --daemon` |
+| `src/narrate-ctl.ts` → `say`                  | `speech say --text <texto> --voice <cfg.voice> --daemon` |
+| `src/narrate-ctl.ts` → `presynth`             | `speech synthesize … --voice <cfg.voice> --daemon`       |
+| `src/voice/daemon.ts` → `startDaemonDetached` | acepta `warmVoice` y añade `--warm-voice`                |
 
 `buildMessage()` no debe recibir ni devolver la voz. Esto evita mezclar la
 selección editorial del mensaje con la identidad de la voz.

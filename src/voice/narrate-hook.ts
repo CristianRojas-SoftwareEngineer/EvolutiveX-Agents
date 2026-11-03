@@ -13,11 +13,11 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { loadConfig } from "./lib/config.js";
-import { workerPidPath } from "./lib/state-dir.js";
-import { enqueuePayload } from "./lib/queue.js";
-import { isAlive, spawnDetached } from "./lib/spawn.js";
-import { readStdin, parsePayload } from "./lib/hook-payload.js";
+import { loadConfig } from "../lib/config.js";
+import { workerPidPath } from "../lib/state-dir.js";
+import { enqueuePayload } from "./queue.js";
+import { isAlive, spawnDetached } from "./spawn.js";
+import { readStdin, parsePayload } from "../lib/hook-payload.js";
 
 async function main(): Promise<void> {
   const raw = await readStdin();

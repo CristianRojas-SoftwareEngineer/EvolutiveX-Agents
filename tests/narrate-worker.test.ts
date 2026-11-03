@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { enqueuePayload, listPending } from "../src/lib/queue.js";
+import { enqueuePayload, listPending } from "../src/voice/queue.js";
 import {
   ensureStateDir,
   workerLogPath,

@@ -15,7 +15,7 @@ import {
   claimNext,
   pruneQueue,
   clearQueue,
-} from "../src/lib/queue.js";
+} from "../src/voice/queue.js";
 import { isolateStateDir } from "./helpers.js";
 
 let restore: () => void;

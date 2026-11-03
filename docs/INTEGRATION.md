@@ -72,10 +72,10 @@ El único punto de acoplamiento es el ejecutable `ai-voice-interconnector` en el
   `warming` no bloquea. El aviso de checks de instalación y el del daemon se
   combinan en un **único** `systemMessage`. Termina siempre con exit `0`.
 - **Instalación** (`/evolutivex-agents:install`) → `narrate-ctl presynth`
-  pre-sintetiza los anuncios del catálogo (`src/message/static-announcements.ts`) con
+  pre-sintetiza los anuncios del catálogo (`src/voice/message/static-announcements.ts`) con
   `speech synthesize … --daemon`, una sola vez y de forma idempotente.
 
-La resolución del ejecutable la hace `lib/resolve-cli.ts`, que escanea el `PATH` (honrando `PATHEXT` en Windows).
+La resolución del ejecutable la hace `src/voice/resolve-cli.ts`, que escanea el `PATH` (honrando `PATHEXT` en Windows).
 
 ## Requisitos sobre el motor
 

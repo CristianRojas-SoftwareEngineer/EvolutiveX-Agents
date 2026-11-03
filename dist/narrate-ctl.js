@@ -82,7 +82,7 @@ function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
-// src/lib/resolve-cli.ts
+// src/voice/resolve-cli.ts
 import {
   spawn,
   spawnSync
@@ -126,7 +126,7 @@ function runCli(cli, args, opts) {
 }
 var MAX_STDOUT_BYTES = 64 * 1024;
 
-// src/message/static-announcements.ts
+// src/voice/message/static-announcements.ts
 function announcement(text, label) {
   return { text, label };
 }

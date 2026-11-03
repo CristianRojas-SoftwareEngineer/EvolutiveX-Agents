@@ -18,8 +18,8 @@
 // de proveedor: cualquier fallo de Gemini cae directamente al resumen local.
 // El sano descarta el cuerpo de los bloques de código cercados, así que una
 // respuesta que solo sea código no entra en ninguna ruta dinámica.
-import type { Config } from "../lib/config.js";
-import type { HookPayload } from "../lib/hook-payload.js";
+import type { Config } from "../../lib/config.js";
+import type { HookPayload } from "../../lib/hook-payload.js";
 import type { GenerationInput } from "./provider.js";
 import { GeminiProvider } from "./gemini-provider.js";
 import {

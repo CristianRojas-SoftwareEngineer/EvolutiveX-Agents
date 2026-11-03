@@ -9,16 +9,16 @@
 // no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI.
 // Degrada en silencio; los errores van a worker.log.
 import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { loadConfig } from "./lib/config.js";
-import { parseSingleJsonObject } from "./lib/health-decision.js";
+import { loadConfig } from "../lib/config.js";
+import { parseSingleJsonObject } from "./health-decision.js";
 import {
   ensureStateDir,
   workerLogPath,
   workerPidPath,
-} from "./lib/state-dir.js";
-import { claimNext, clearQueue, pruneQueue } from "./lib/queue.js";
-import { resolveCli, runCliWithTimeout } from "./lib/resolve-cli.js";
-import { isAlive } from "./lib/spawn.js";
+} from "../lib/state-dir.js";
+import { claimNext, clearQueue, pruneQueue } from "./queue.js";
+import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
+import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
 
 function log(msg: string): void {

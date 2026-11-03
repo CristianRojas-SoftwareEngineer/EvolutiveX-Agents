@@ -16,7 +16,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { makeTempDir, removeDir } from "./helpers.js";
-import { ANNOUNCEMENTS } from "../src/message/static-announcements.js";
+import { ANNOUNCEMENTS } from "../src/voice/message/static-announcements.js";
 
 const CTL = join(process.cwd(), "dist", "narrate-ctl.js");
 

@@ -63,7 +63,7 @@ function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
-// src/lib/resolve-cli.ts
+// src/voice/resolve-cli.ts
 import {
   spawn,
   spawnSync
@@ -128,7 +128,7 @@ function readStdin() {
   });
 }
 
-// src/lib/daemon.ts
+// src/voice/daemon.ts
 function normalizeWarm(value) {
   return value === "warming" || value === "warm" || value === "warm_failed" ? value : void 0;
 }
@@ -195,7 +195,7 @@ function startDaemonDetached(cliPath) {
   }
 }
 
-// src/lib/health-decision.ts
+// src/voice/health-decision.ts
 var NOT_PROVISIONED_MESSAGE = "EvolutiveX Agents: el entorno de voz no est\xE1 provisionado. Ejecuta ai-voice-interconnector setup para habilitar la narraci\xF3n por voz.";
 var DOCTOR_FAILED_MESSAGE = "EvolutiveX Agents: el diagn\xF3stico del motor (doctor) fall\xF3 y no produjo un veredicto. Ejecuta ai-voice-interconnector doctor --json manualmente.";
 var DOCTOR_JSON_HINT = "Ejecuta ai-voice-interconnector doctor --json para el detalle.";
@@ -295,7 +295,7 @@ function decideHealthAction(input) {
   return { kind: "uncertain" };
 }
 
-// src/health-check.ts
+// src/voice/health-check.ts
 function exitWithSystemMessage(message) {
   process.stdout.write(JSON.stringify({ systemMessage: message }));
   process.exit(0);

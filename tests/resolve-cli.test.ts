@@ -15,7 +15,7 @@ import {
   resolveCli,
   needsShell,
   buildShellCommand,
-} from "../src/lib/resolve-cli.js";
+} from "../src/voice/resolve-cli.js";
 import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
 
 function makeBinDir(...fileNames: string[]): string {

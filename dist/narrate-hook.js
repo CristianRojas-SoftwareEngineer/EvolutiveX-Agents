@@ -6,7 +6,7 @@ const require = __createRequire(import.meta.url);
 const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
-// src/narrate-hook.ts
+// src/voice/narrate-hook.ts
 import { readFileSync as readFileSync3 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join as join3 } from "node:path";
@@ -80,7 +80,7 @@ function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
-// src/lib/queue.ts
+// src/voice/queue.ts
 import {
   mkdirSync as mkdirSync2,
   readFileSync as readFileSync2,
@@ -118,7 +118,7 @@ function readStdin() {
   });
 }
 
-// src/lib/queue.ts
+// src/voice/queue.ts
 var MAX_AGE_MS = 60 * 60 * 1e3;
 var lastTimeMs = 0;
 var seq = 0;
@@ -152,7 +152,7 @@ function enqueuePayload(payload) {
   return finalPath;
 }
 
-// src/lib/spawn.ts
+// src/voice/spawn.ts
 import { spawn, spawnSync } from "node:child_process";
 function spawnDetached(cmd, args) {
   const child = spawn(cmd, args, {
@@ -172,7 +172,7 @@ function isAlive(pid) {
   }
 }
 
-// src/narrate-hook.ts
+// src/voice/narrate-hook.ts
 async function main() {
   const raw = await readStdin();
   const cfg = loadConfig();

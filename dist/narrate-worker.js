@@ -6,7 +6,7 @@ const require = __createRequire(import.meta.url);
 const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
-// src/narrate-worker.ts
+// src/voice/narrate-worker.ts
 import { appendFileSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
 
 // src/lib/config.ts
@@ -81,7 +81,7 @@ function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
-// src/lib/health-decision.ts
+// src/voice/health-decision.ts
 function parseSingleJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return void 0;
@@ -113,7 +113,7 @@ function parseSingleJsonObject(text) {
   return void 0;
 }
 
-// src/lib/queue.ts
+// src/voice/queue.ts
 import {
   mkdirSync as mkdirSync2,
   readFileSync as readFileSync2,
@@ -135,7 +135,7 @@ function parsePayload(raw) {
   return {};
 }
 
-// src/lib/queue.ts
+// src/voice/queue.ts
 var MAX_PENDING = 64;
 var MAX_AGE_MS = 60 * 60 * 1e3;
 function listPending() {
@@ -197,7 +197,7 @@ function clearQueue() {
   }
 }
 
-// src/lib/resolve-cli.ts
+// src/voice/resolve-cli.ts
 import {
   spawn as spawn2,
   spawnSync as spawnSync2
@@ -205,7 +205,7 @@ import {
 import { existsSync, statSync as statSync2 } from "node:fs";
 import { delimiter, join as join3 } from "node:path";
 
-// src/lib/spawn.ts
+// src/voice/spawn.ts
 import { spawn, spawnSync } from "node:child_process";
 function isAlive(pid) {
   try {
@@ -238,7 +238,7 @@ function killProcessTree(pid, opts = {}) {
   }
 }
 
-// src/lib/resolve-cli.ts
+// src/voice/resolve-cli.ts
 var BASE = "ai-voice-interconnector";
 function candidateNames() {
   if (process.platform !== "win32") return [BASE];
@@ -322,11 +322,11 @@ function codeOrNull(child) {
   return typeof child.exitCode === "number" ? child.exitCode : null;
 }
 
-// src/message/prompts.ts
+// src/voice/message/prompts.ts
 var SUMMARY_SYSTEM_PROMPT = "Eres un desarrollador que habla por voz sintetizada en tiempo real. Narra en primera persona, en una o dos frases breves en espa\xF1ol, \xFAnicamente lo que muestra el material de este turno. Si el turno fue una conversaci\xF3n breve, un saludo o una respuesta sin cambios t\xE9cnicos, n\xE1rralo con naturalidad como tal. No inventes trabajo, comandos, rutas ni identificadores que no aparezcan expl\xEDcitos. Conserva los identificadores y rutas que s\xED est\xE9n presentes cuando aporten claridad. Texto plano, sin markdown ni s\xEDmbolos.";
 var SUMMARY_CLOSING = "Cu\xE9ntamelo en voz alta en primera persona, de forma fiel a lo que ocurri\xF3 en este turno.";
 
-// src/message/provider.ts
+// src/voice/message/provider.ts
 var REQUEST_TIMEOUT_MS = 8e3;
 var MAX_OUTPUT_TOKENS = 512;
 function buildUserContent(input) {
@@ -338,7 +338,7 @@ ${text}
 ${SUMMARY_CLOSING}`;
 }
 
-// src/message/gemini-provider.ts
+// src/voice/message/gemini-provider.ts
 var MODEL = "gemini-3.1-flash-lite";
 var buildEndpointUrl = (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 var GeminiProvider = class {
@@ -377,7 +377,7 @@ var GeminiProvider = class {
   }
 };
 
-// src/message/static-announcements.ts
+// src/voice/message/static-announcements.ts
 function announcement(text, label) {
   return { text, label };
 }
@@ -402,7 +402,7 @@ var ANNOUNCEMENTS = {
   Default: announcement("Notificaci\xF3n de Claude.", "voice-default")
 };
 
-// src/message/sanitize.ts
+// src/voice/message/sanitize.ts
 function toPlainText(input) {
   let t = input ?? "";
   t = t.replace(/```[\s\S]*?```/g, " ");
@@ -425,7 +425,7 @@ function sanitizeForSpeech(input) {
   return toPlainText(input);
 }
 
-// src/message/clamp.ts
+// src/voice/message/clamp.ts
 var LLM_INPUT_MAX_CHARS = 16e3;
 var LOCAL_SPEECH_MAX_SENTENCES = 2;
 var LOCAL_SPEECH_MAX_CHARS = 500;
@@ -484,7 +484,7 @@ function isDigit(char) {
   return char !== void 0 && char >= "0" && char <= "9";
 }
 
-// src/message/build-message.ts
+// src/voice/message/build-message.ts
 async function buildMessage(payload, cfg) {
   const event = payload.hook_event_name;
   if (event === "Notification") {
@@ -524,7 +524,7 @@ async function buildMessage(payload, cfg) {
   };
 }
 
-// src/narrate-worker.ts
+// src/voice/narrate-worker.ts
 function log(msg) {
   try {
     appendFileSync(workerLogPath(), `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}

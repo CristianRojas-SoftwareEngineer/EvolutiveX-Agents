@@ -16,7 +16,7 @@ import {
   clampSentences,
   LLM_INPUT_MAX_CHARS,
   LOCAL_SPEECH_MAX_SENTENCES,
-} from "../src/message/clamp.js";
+} from "../src/voice/message/clamp.js";
 
 // --- clampHead ---
 
