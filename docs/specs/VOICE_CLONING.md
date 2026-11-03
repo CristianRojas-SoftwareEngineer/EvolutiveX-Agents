@@ -98,21 +98,21 @@ Consecuencias del diseño actual:
 
 ## 4. Glosario
 
-| Término              | Definición                                                                                                                                                                                                                                                   |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Voz**              | Entrada del registro `VoiceStore` del motor. Puede ser de fábrica (`default`, `ryan`, `vivian`) o clonada por el usuario.                                                                                                                                    |
-| **Voz clonada**      | Voz creada por `voice clone` a partir de una referencia de audio. El almacén de voces conserva la huella `reference.qvoice`, no el WAV; pueden existir temporales de trabajo.                                                                                |
-| **Voz activa**       | Nombre de la voz que el plugin persiste en el campo `voice` del `userConfig` (/config → evolutivex-agents.voice) y usa en todas las rutas de narración.                                                                                                      |
-| **Referencia**       | Muestra de audio que el usuario entrega a `voice clone` (archivo WAV o captura de micrófono). Se recomiendan ~10 s; el motor rechaza más de 30 s.                                                                                                            |
-| **Huella de timbre** | Archivo `reference.qvoice` que produce el clonado. No contiene transcripción ni idioma.                                                                                                                                                                      |
-| **Etiqueta**         | Identificador fijo de una locución pre-sintetizada (`voice-user-prompt-submit`, `voice-stop`, etc.).                                                                                                                                                         |
-| **Locución**         | WAV pre-sintetizado y persistido por el motor bajo `(voz, etiqueta)`.                                                                                                                                                                                        |
-| **Pre-síntesis**     | Ejecución única de `speech synthesize` para cada etiqueta del catálogo, con el fin de que `speech play` sea instantáneo.                                                                                                                                     |
-| **Cache miss**       | `speech play` no encuentra la locución (`speech_not_found`) o la voz (`voice_not_found`) solicitadas; el motor sale con exit `3`. El mismo exit con `no_output_device` o `audio_backend_unavailable` no es cache miss, sino un problema del entorno de audio |
-| **Denoise**          | Limpieza opcional con DPDFNet antes de extraer la huella; requiere `native-denoise` y `dpdfnet8`. Su preservación de identidad vocal no se ha evaluado en una prueba humana controlada.                                                                      |
-| **`reason`**         | Identificador de error en el JSON; el exit code solo identifica la clase y puede compartirse entre causas distintas.                                                                                                                                         |
-| **`precomputed`**    | En ruta daemon indica que se inició el calentamiento, no que haya terminado.                                                                                                                                                                                 |
-| **`schema_version`** | Versión del envelope CLI, independiente de la versión del protocolo del daemon.                                                                                                                                                                              |
+| Término              | Definición                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Voz**              | Entrada del registro `VoiceStore` del motor. Puede ser de fábrica (`default`, `ryan`, `vivian`) o clonada por el usuario.                                                                                                                                                                        |
+| **Voz clonada**      | Voz creada por `voice clone` a partir de una referencia de audio. El almacén de voces conserva la huella `reference.qvoice`, no el WAV; pueden existir temporales de trabajo.                                                                                                                    |
+| **Voz activa**       | Nombre de la voz fijado en el campo `voice` del `userConfig` (`/config` → `evolutivex-agents.voice`). Lo leen los hooks (worker y `SessionStart`); `narrate-ctl`, que corre desde la herramienta de shell y no recibe las opciones de `userConfig`, no lo conoce y recibe la voz como argumento. |
+| **Referencia**       | Muestra de audio que el usuario entrega a `voice clone` (archivo WAV o captura de micrófono). Se recomiendan ~10 s; el motor rechaza más de 30 s.                                                                                                                                                |
+| **Huella de timbre** | Archivo `reference.qvoice` que produce el clonado. No contiene transcripción ni idioma.                                                                                                                                                                                                          |
+| **Etiqueta**         | Identificador fijo de una locución pre-sintetizada (`voice-user-prompt-submit`, `voice-stop`, etc.).                                                                                                                                                                                             |
+| **Locución**         | WAV pre-sintetizado y persistido por el motor bajo `(voz, etiqueta)`.                                                                                                                                                                                                                            |
+| **Pre-síntesis**     | Ejecución única de `speech synthesize` para cada etiqueta del catálogo, con el fin de que `speech play` sea instantáneo.                                                                                                                                                                         |
+| **Cache miss**       | `speech play` no encuentra la locución (`speech_not_found`) o la voz (`voice_not_found`) solicitadas; el motor sale con exit `3`. El mismo exit con `no_output_device` o `audio_backend_unavailable` no es cache miss, sino un problema del entorno de audio                                     |
+| **Denoise**          | Limpieza opcional con DPDFNet antes de extraer la huella; requiere `native-denoise` y `dpdfnet8`. Su preservación de identidad vocal no se ha evaluado en una prueba humana controlada.                                                                                                          |
+| **`reason`**         | Identificador de error en el JSON; el exit code solo identifica la clase y puede compartirse entre causas distintas.                                                                                                                                                                             |
+| **`precomputed`**    | En ruta daemon indica que se inició el calentamiento, no que haya terminado.                                                                                                                                                                                                                     |
+| **`schema_version`** | Versión del envelope CLI, independiente de la versión del protocolo del daemon.                                                                                                                                                                                                                  |
 
 ## 5. Requisitos
 
@@ -122,15 +122,15 @@ Consecuencias del diseño actual:
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **RF-01** | El plugin debe clonar delegando en `voice clone --name <nombre> (--speech-reference <wav> \| --mic [--duration <seg>]) [--force] [--denoise] --daemon --json`: exactamente una fuente y duración de 1 a 30 s solo con micrófono. |
 | **RF-02** | El plugin debe validar el nombre y bloquear el clonado sobre voces de fábrica (`default`, `ryan`, `vivian`) en el MVP.                                                                                                           |
-| **RF-03** | El plugin debe listar las voces disponibles con `voice list --json` y señalar cuál es la activa y cuáles son de fábrica.                                                                                                         |
-| **RF-04** | El plugin debe permitir activar una voz existente y persistir su nombre en el campo `voice` del `userConfig`.                                                                                                                    |
-| **RF-05** | La activación debe pre-sintetizar los seis anuncios bajo la voz candidata antes de persistirla; solo la configuración se conserva ante un fallo, no se revierten los WAV escritos.                                               |
-| **RF-06** | La pre-síntesis manual (`narrate-ctl presynth`) debe usar la voz activa y aceptar `--force` para re-sintetizar tras cambios de texto o de timbre.                                                                                |
+| **RF-03** | El plugin debe listar las voces disponibles con `voice list --json` y señalar cuáles son de fábrica.                                                                                                                             |
+| **RF-04** | La voz activa se elige en `/config` (`evolutivex-agents.voice`); el plugin no la escribe.                                                                                                                                        |
+| **RF-05** | `voice clone` debe terminar pre-sintetizando los seis anuncios bajo la voz nueva (`presynth --voice <nombre> --force`) e indicando el valor que hay que fijar en `/config`; los WAV escritos no se revierten ante un fallo.      |
+| **RF-06** | La pre-síntesis manual (`narrate-ctl presynth`) debe recibir la voz con `--voice <nombre>` (`default` si se omite) y aceptar `--force` para re-sintetizar tras cambios de texto o de timbre.                                     |
 | **RF-07** | `speech play --label` debe ejecutarse con `--voice <activa>` en todos los hooks estáticos.                                                                                                                                       |
-| **RF-08** | `speech say --text … --daemon` debe ejecutarse con `--voice <activa>` en la ruta `Stop` y en `narrate-ctl say`.                                                                                                                  |
+| **RF-08** | `speech say --text … --daemon` debe ejecutarse con `--voice <activa>` en la ruta `Stop`, y con la voz de `--voice` (`default` si se omite) en `narrate-ctl say`.                                                                 |
 | **RF-09** | El arranque del daemon debe pasar `daemon start --warm-voice <activa>` explícitamente, también para `default`.                                                                                                                   |
-| **RF-10** | El plugin debe permitir borrar voces de usuario con confirmación explícita, protección de fábrica y protección de la voz activa.                                                                                                 |
-| **RF-11** | El plugin debe mostrar la voz activa en `narrate-ctl status` y advertir en `SessionStart` si la voz activa no existe.                                                                                                            |
+| **RF-10** | El plugin debe permitir borrar voces de usuario con confirmación explícita y protección de fábrica, advirtiendo que, si la voz borrada es la activa en `/config`, la narración fallará hasta elegir otra.                        |
+| **RF-11** | El plugin debe advertir en `SessionStart` si la voz activa no existe.                                                                                                                                                            |
 | **RF-12** | Si la voz activa no existe en tiempo de ejecución, el plugin no debe caer silenciosamente a otra voz: registra el fallo y deja el turno sin audio.                                                                               |
 | **RF-13** | El plugin no debe copiar, mover ni borrar el archivo de referencia ni manipular buffers de micrófono; delega la I/O de audio al motor.                                                                                           |
 | **RF-14** | El plugin no debe guardar audio, rutas de referencia ni secretos en la configuración.                                                                                                                                            |
@@ -170,11 +170,11 @@ Consecuencias del diseño actual:
 
 ### 6.3 Momento de la pre-síntesis
 
-| Alternativa                                                                | Valoración                                                                                                              |
-| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **`voice use` pre-sintetiza con `--force` y solo después persiste la voz** | **Elegida.** Evita persistir la candidata antes de seis éxitos; los WAV escritos no se revierten si falla a mitad.      |
-| Pre-síntesis perezosa en el primer `play`                                  | El primer turno quedaría sin audio o pagaría una síntesis dentro de la ruta caliente. Descartada.                       |
-| `presynth` idempotente sin `--force`                                       | No detecta un re-clonado del mismo nombre ni un cambio de texto: dejaría WAVs obsoletos. Descartada para la activación. |
+| Alternativa                                                                          | Valoración                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`voice clone` pre-sintetiza con `--force` antes de indicar el valor de `/config`** | **Elegida.** La voz nueva tiene sus seis locuciones antes de que el usuario la active; el plugin no puede condicionar la escritura de `/config`, que hace el usuario. Los WAV escritos no se revierten si falla a mitad. |
+| Pre-síntesis perezosa en el primer `play`                                            | El primer turno quedaría sin audio o pagaría una síntesis dentro de la ruta caliente. Descartada.                                                                                                                        |
+| `presynth` idempotente sin `--force`                                                 | No detecta un re-clonado del mismo nombre ni un cambio de texto: dejaría WAVs obsoletos. Descartada para la activación.                                                                                                  |
 
 El costo aceptado es seis síntesis por cambio de voz. Es una operación manual y
 poco frecuente; la latencia no afecta a los hooks.
@@ -185,7 +185,7 @@ El residente TTS del motor es de una sola voz: al sintetizar con otra voz,
 termina el residente anterior y arranca uno nuevo. Por eso:
 
 - **no hace falta reiniciar el daemon** al cambiar de voz;
-- la pre-síntesis de `voice use` ya deja caliente la voz nueva;
+- la pre-síntesis al final de `voice clone` (o `presynth --voice`) ya deja caliente la voz nueva;
 - en `SessionStart`, si el daemon está parado, se arranca con la voz activa;
 - si el daemon ya está corriendo, no se reinicia: la primera síntesis con otra
   voz paga el cold-start de reemplazo.
@@ -200,23 +200,23 @@ termina el residente anterior y arranca uno nuevo. Por eso:
 
 ### 6.6 Decisiones cerradas
 
-| ID       | Decisión                                                                                                                                                        |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D-01** | Una sola voz activa global, persistida como `voice` en el `userConfig`.                                                                                         |
-| **D-02** | `narrate-ctl` expone `voice list`, `voice clone`, `voice use` y `voice remove`; el comando `/evolutivex-agents:voice` es la capa de explicación y confirmación. |
-| **D-03** | `voice clone` usa siempre el daemon en el MVP.                                                                                                                  |
-| **D-04** | `voice use` valida la voz, pre-sintetiza con `--force` y solo entonces escribe la configuración.                                                                |
-| **D-05** | La voz activa se pasa siempre de forma explícita (`--voice`), incluido `default`, para no depender del default implícito del motor.                             |
-| **D-06** | Las voces de fábrica no se clonan encima ni se borran desde el plugin.                                                                                          |
-| **D-07** | La voz activa no se puede borrar: primero hay que activar otra.                                                                                                 |
-| **D-08** | `voice remove` exige `--yes` en `narrate-ctl`; el comando de Claude Code pide la confirmación conversacional.                                                   |
-| **D-09** | No hay fallback automático a `default` en runtime. `SessionStart` avisa si la voz activa no existe.                                                             |
-| **D-10** | El plugin no guarda audio, rutas de referencia ni secretos; solo el nombre de la voz.                                                                           |
-| **D-11** | `sessionStart` arranca el daemon con `--warm-voice <activa>` solo cuando está parado y la voz existe.                                                           |
-| **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                     |
-| **D-13** | Las operaciones manuales de clonado, activación, borrado, pre-síntesis y escritura de preferencias se coordinan entre procesos del plugin.                      |
-| **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                          |
-| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.42.0 o posterior.                                                   |
+| ID       | Decisión                                                                                                                                                                                 |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D-01** | Una sola voz activa global, fijada por el usuario como `voice` en el `userConfig`.                                                                                                       |
+| **D-02** | `narrate-ctl` expone `voice list`, `voice clone` y `voice remove`, y `presynth`/`say` aceptan `--voice`; el comando `/evolutivex-agents:voice` es la capa de explicación y confirmación. |
+| **D-03** | `voice clone` usa siempre el daemon en el MVP.                                                                                                                                           |
+| **D-04** | `voice clone` termina con `presynth --voice <nombre> --force` y, solo si las seis síntesis van bien, indica fijar `evolutivex-agents.voice` en `/config`.                                |
+| **D-05** | La voz activa se pasa siempre de forma explícita (`--voice`), incluido `default`, para no depender del default implícito del motor.                                                      |
+| **D-06** | Las voces de fábrica no se clonan encima ni se borran desde el plugin.                                                                                                                   |
+| **D-07** | `narrate-ctl` no conoce la voz activa: `voice remove` advierte del efecto de borrar la voz activa, y el comando de Claude Code pide al usuario confirmarlo.                              |
+| **D-08** | `voice remove` exige `--yes` en `narrate-ctl`; el comando de Claude Code pide la confirmación conversacional.                                                                            |
+| **D-09** | No hay fallback automático a `default` en runtime. `SessionStart` avisa si la voz activa no existe.                                                                                      |
+| **D-10** | El plugin no guarda audio, rutas de referencia ni secretos; solo el nombre de la voz.                                                                                                    |
+| **D-11** | `sessionStart` arranca el daemon con `--warm-voice <activa>` solo cuando está parado y la voz existe.                                                                                    |
+| **D-12** | `--denoise` es optativo, sin fallback a audio sin limpiar; la calidad de identidad vocal no se ha validado en una prueba humana controlada.                                              |
+| **D-13** | Las operaciones manuales de clonado, borrado y pre-síntesis se coordinan entre procesos del plugin.                                                                                      |
+| **D-14** | `SessionStart` comprueba la voz activa no predeterminada incluso con daemon en marcha.                                                                                                   |
+| **D-15** | La instalación ofrece una pregunta opcional de clonado y la funcionalidad requiere motor v0.42.0 o posterior.                                                                            |
 
 ## 7. Diseño
 
@@ -240,8 +240,8 @@ Reglas:
 - Un nombre válido cuya voz desapareció no se sustituye: se avisa y se conserva la configuración.
 - Se normaliza a minúsculas y se recorta.
 - `loadConfig()` no consulta al motor; lee CLAUDE_PLUGIN_OPTION_* y el entorno.
-- `updateConfig()` acepta `voice` en el parche y lo persiste en el userConfig.
-- `narrate-ctl status` muestra `voice: <nombre>`.
+- El plugin no escribe `voice`: lo fija el usuario en `/config`.
+- `narrate-ctl` no lee `voice` (la herramienta de shell no recibe las opciones de `userConfig`); `status` no la muestra.
 - No se guardan la ruta del WAV ni `reference.qvoice`.
 
 ### 7.2 Módulo `src/voice/voice.ts`
@@ -273,17 +273,16 @@ Responsabilidades:
 node dist/narrate-ctl.js voice list
 node dist/narrate-ctl.js voice clone <nombre> <ruta.wav> [--force] [--denoise]
 node dist/narrate-ctl.js voice clone <nombre> --mic [--duration <segs>] [--force] [--denoise]
-node dist/narrate-ctl.js voice use <nombre>
 node dist/narrate-ctl.js voice remove <nombre> --yes
 node dist/narrate-ctl.js status
-node dist/narrate-ctl.js presynth [--force]
-node dist/narrate-ctl.js say "<texto>"
+node dist/narrate-ctl.js presynth [--voice <nombre>] [--force]
+node dist/narrate-ctl.js say [--voice <nombre>] "<texto>"
 ```
 
 Comportamiento:
 
-- **`voice list`**: ejecuta `voice list --json`; imprime todas las voces, marca
-  la activa y las de fábrica.
+- **`voice list`**: ejecuta `voice list --json`; imprime todas las voces y marca
+  las de fábrica.
 - **`voice clone`**:
   - Valida nombre y bloquea voces de fábrica.
   - Si se pasa `<ruta.wav>`: valida que el archivo exista; ejecuta
@@ -293,16 +292,13 @@ Comportamiento:
     heredando stdin y stderr para permitir push-to-talk y capturando stdout para interpretar el envelope JSON. Esta disposición también se prueba con shims `.cmd`.
   - `--denoise` se transmite solo si se solicita; requiere `native-denoise` y `dpdfnet8`, sin degradar a audio sin limpiar.
   - Si el motor devuelve `voice_exists` sin `--force`, informa exit `6`; no atribuye ese significado a otros errores con el mismo exit.
-  - Si hay `--force` y la voz es la activa, re-sintetiza con `presynth --force`.
-- **`voice use`**: verifica que la voz exista con `voice list --json`; ejecuta
-  la pre-síntesis forzada de las seis etiquetas; solo si todas terminan bien
-  escribe `voice` en el userConfig.
-- **`voice remove`**: exige `--yes`; rechaza voces de fábrica y la voz activa;
+  - Tras clonar, ejecuta `presynth --voice <nombre> --force` (también al re-clonar con `--force`) y, si las seis síntesis terminan bien, indica fijar `evolutivex-agents.voice` en `/config`.
+- **`voice remove`**: exige `--yes`; rechaza voces de fábrica; advierte que, si es la voz activa en `/config`, la narración fallará hasta elegir otra;
   ejecuta `voice remove --name <nombre> --yes --json` y reporta las locuciones
   arrastradas.
-- **`presynth`**: usa `cfg.voice`; añade `--voice`, `--daemon` y `--json` para capturar el resultado; sin `--force`, solo `reason: label_exists` con exit `6` cuenta como éxito idempotente. Si una invocación falla, identifica la etiqueta y termina con código distinto de cero.
-- **`say`**: usa `cfg.voice`; añade `--voice` a `speech say --daemon`.
-- **`status`**: incluye `voice: <nombre>` además de los campos actuales.
+- **`presynth`**: usa la voz de `--voice` (`default` si se omite); añade `--voice`, `--daemon` y `--json` para capturar el resultado; sin `--force`, solo `reason: label_exists` con exit `6` cuenta como éxito idempotente. Si una invocación falla, identifica la etiqueta y termina con código distinto de cero.
+- **`say`**: usa la voz de `--voice` (`default` si se omite); añade `--voice` a `speech say --daemon`.
+- **`status`**: sin cambios; no muestra la voz activa.
 
 El comando de Claude Code puede orientar al usuario, pero no debe prometer una
 TTY para procesos lanzados por la herramienta de shell del host. La captura sin
@@ -325,14 +321,14 @@ narrate-ctl
   │  3. comprueba CLI, nombre, argumento de entrada y voces de fábrica
   │  4. ejecuta voice clone --name … (--speech-reference … | --mic …) [--denoise] --daemon --json
   │  5. interpreta {name, speech, precomputed}
-  │  6. si --force y la voz es la activa → presynth --force
+  │  6. presynth --voice <nombre> --force (seis etiquetas)
   ▼
 Motor AI Voice-InterConnector
   │  Adquiere audio (lee WAV o graba de cpal vía avi-audio)
   │  VoiceStore::save_reference(nombre, reference.qvoice)
   │  warm-on-clone de la voz nueva en segundo plano
   ▼
-Usuario recibe: voz creada y siguiente paso (voice use <nombre>)
+Usuario recibe: voz creada y siguiente paso (/config → evolutivex-agents.voice = <nombre>)
 ```
 
 Detalles:
@@ -343,33 +339,27 @@ Detalles:
 - `precomputed: true` significa «precarga en caliente iniciada», no que la voz
   esté lista para el primer uso.
 - Si el nombre ya existe y no hay `--force`, no se sobrescribe nada.
-- Si se sobrescribe la voz activa, la pre-síntesis forzada es obligatoria para
-  que las locuciones no conserven el timbre anterior.
+- Si se sobrescribe una voz, la pre-síntesis forzada es obligatoria para que
+  las locuciones no conserven el timbre anterior.
 - Si falla esa pre-síntesis, la huella nueva ya está guardada y puede haber locuciones antiguas o parcialmente renovadas; se informa y se indica reintentar `presynth --force`.
-- El plugin no activa automáticamente la voz recién clonada.
+- El plugin no activa la voz recién clonada: la activa el usuario en `/config`.
 
 ### 7.5 Flujo de activación
 
-```text
-voice use <nombre>
-  │
-  ├─ ¿nombre válido? ── no → exit 2
-  ├─ ¿voz existe? ──── no → exit 3
-  ├─ ¿daemon disponible? ─ no → exit 5 con remedio
-  │
-  ├─ presynth --force --voice <nombre>  (seis etiquetas)
-  │     ├─ exit 0 → etiqueta sintetizada
-  │     ├─ exit 6 → conflicto, no se acepta como éxito con --force
-  │     └─ otro   → fallo; no se toca config
-  │
-  └─ updateConfig({ voice: <nombre> })
-```
+La activación la hace el usuario en `/config` → `evolutivex-agents.voice`; el
+plugin no escribe la configuración. Para que los anuncios suenen desde el primer
+evento, la voz debe tener sus seis locuciones:
 
-Solo la actualización de configuración se pospone hasta los seis éxitos. Los
-WAV ya escritos no se revierten; un reintento forzado los sobrescribe de nuevo.
-Si la candidata ya era la activa, durante la operación o tras un fallo pueden
-coexistir locuciones antiguas y nuevas. Las operaciones externas al plugin no
-quedan incluidas en la serialización ni en esta garantía.
+- una voz recién clonada ya las tiene (`voice clone` termina con
+  `presynth --voice <nombre> --force`);
+- para volver a una voz existente, `presynth --voice <nombre>` (idempotente)
+  completa las que falten; tras re-clonarla o cambiar el catálogo, con
+  `--force`.
+
+Si el usuario fija una voz sin locuciones, los anuncios estáticos fallan con
+`speech_not_found` (registrado en `worker.log`, sin audio) hasta ejecutar
+`presynth --voice <nombre>`. Un ítem ya reclamado puede narrarse con la voz
+anterior; el siguiente evento lee el valor nuevo.
 
 ### 7.6 Flujo de pre-síntesis
 
@@ -379,13 +369,13 @@ Para cada entrada de `ANNOUNCEMENTS`:
 ai-voice-interconnector speech synthesize \
   --text "<texto>" \
   --label "<label>" \
-  --voice "<voz activa>" \
+  --voice "<voz de --voice>" \
   --daemon \
   --json \
   [--force]
 ```
 
-- `--force` se usa en `voice use` y en `presynth --force`.
+- `--force` se usa al final de `voice clone` y en `presynth --force`.
 - Sin `--force`, únicamente exit `6` con `reason: label_exists` se considera éxito idempotente; cualquier otro conflicto es fallo.
 - Un cambio de texto del catálogo no cambia el label: hay que ejecutar
   `presynth --force` para re-sintetizar.
@@ -402,8 +392,8 @@ texto). La voz es una preocupación de transporte y se añade en el worker y en
 | --------------------------------------------- | -------------------------------------------------------- |
 | `src/voice/narrate-worker.ts` → `runPlay`     | `speech play --label <label> --voice <cfg.voice>`        |
 | `src/voice/narrate-worker.ts` → `runSay`      | `speech say --text <texto> --voice <cfg.voice> --daemon` |
-| `src/narrate-ctl.ts` → `say`                  | `speech say --text <texto> --voice <cfg.voice> --daemon` |
-| `src/narrate-ctl.ts` → `presynth`             | `speech synthesize … --voice <cfg.voice> --daemon`       |
+| `src/narrate-ctl.ts` → `say`                  | `speech say --text <texto> --voice <--voice> --daemon`   |
+| `src/narrate-ctl.ts` → `presynth`             | `speech synthesize … --voice <--voice> --daemon`         |
 | `src/voice/daemon.ts` → `startDaemonDetached` | acepta `warmVoice` y añade `--warm-voice`                |
 
 `buildMessage()` no debe recibir ni devolver la voz. Esto evita mezclar la
@@ -438,12 +428,13 @@ locuciones**. El plugin:
 
 1. exige `--yes` en `narrate-ctl`;
 2. rechaza voces de fábrica antes de invocar al motor;
-3. rechaza la voz activa y pide activar otra primero;
+3. advierte que, si es la voz activa en `/config`, la narración fallará hasta
+   elegir otra (no puede comprobarlo: no recibe la configuración);
 4. invoca `voice remove --name <nombre> --yes --json`;
 5. reporta `removed_speech` para que el usuario sepa qué locuciones se borraron.
 
-El comando de Claude Code pide confirmación explícita y muestra el aviso de
-arrastre antes de ejecutar.
+El comando de Claude Code pide confirmación explícita, muestra el aviso de
+arrastre y pregunta si la voz está activa en `/config` antes de ejecutar.
 
 ### 7.10 Contrato del motor ampliado
 
@@ -490,7 +481,6 @@ Se añade `commands/voice.md`:
 ```text
 /evolutivex-agents:voice clone <nombre> [<ruta.wav> | --mic [--duration <segs>]]
 /evolutivex-agents:voice list
-/evolutivex-agents:voice use <nombre>
 /evolutivex-agents:voice remove <nombre>
 ```
 
@@ -499,8 +489,8 @@ El comando debe explicar en español:
 - qué es una referencia de voz y cuánto debe durar (~10 s, máx 30 s);
 - que se puede clonar pasando un archivo WAV o grabando directamente desde el micrófono con `--mic`;
 - que el motor guarda solo el timbre (`reference.qvoice`), no el audio;
-- que la voz no se activa sola;
-- que cambiar de voz re-sintetiza los anuncios;
+- que la voz no se activa sola: se elige en `/config` → `evolutivex-agents.voice`;
+- que una voz necesita sus anuncios pre-sintetizados (`presynth --voice`) antes de activarla;
 - que borrar una voz borra sus locuciones;
 - que el audio de referencia no se sube a ninguna nube.
 
@@ -510,20 +500,21 @@ predeterminada» y las enrute a `narrate-ctl`.
 
 El instalador guiado añade un paso opcional después de la pre-síntesis de
 `default`: si el usuario acepta, clona su voz (guiándolo con micrófono o archivo)
-y ejecuta `voice use`. Si no acepta, `default` queda lista para la narración.
+e indica fijar `evolutivex-agents.voice` en `/config`. Si no acepta, `default`
+queda lista para la narración.
 
 ### 7.12 Concurrencia
 
 - El launcher de hooks no cambia: sigue encolando y lanzando el worker.
-- `voice use` es una operación manual; puede convivir con un worker en curso.
-  Un ítem ya reclamado puede narrarse con la voz anterior; el siguiente lee la
-  configuración nueva. Es una ventana aceptable.
-- El motor serializa síntesis, pero no la secuencia completa del plugin. Por cada directorio de estado, el plugin coordina `voice clone`, `voice use`, `voice remove`, `presynth` y las escrituras de preferencias en /config, desde antes de leer la configuración relevante hasta completar las mutaciones. Las operaciones externas no participan.
+- El cambio de voz en `/config` puede convivir con un worker en curso: un ítem
+  ya reclamado puede narrarse con la voz anterior; el siguiente lee el valor
+  nuevo. Es una ventana aceptable.
+- El motor serializa síntesis, pero no la secuencia completa del plugin. Por cada directorio de estado, el plugin coordina `voice clone`, `voice remove` y `presynth`, desde antes de consultar el almacén de voces hasta completar las mutaciones. Las operaciones externas no participan.
 - La coordinación usa dos directorios hermanos dentro de `stateDir()`: `voice-operation.lock` es el bloqueo principal y `voice-operation.gate` es la compuerta de sus cambios. Ambos se crean mediante `mkdir` exclusivo, sin `recursive`: `EEXIST` nunca concede propiedad. Todos los procesos del plugin adquieren la compuerta antes de crear, examinar, recuperar o liberar el bloqueo principal; nadie opera sobre este fuera de ella.
 - Bajo la compuerta, el dueño del bloqueo principal escribe un registro con su PID, identidad de proceso verificable y token aleatorio único. Solo comienza a modificar configuración o locuciones después de escribir el registro completo y liberar la compuerta. Si la publicación falla, no ejecuta la operación y conserva cualquier estado que no pueda retirar con seguridad.
 - Antes de despachar cada operación del motor que pueda modificar voces o locuciones, el dueño marca de forma persistente y bajo la compuerta que existe trabajo delegado pendiente; solo elimina esa marca tras recibir y procesar el resultado terminal. Si el dueño desaparece con la marca presente, el bloqueo se conserva para intervención manual: en particular, el daemon puede completar un clonado después de que el cliente se desconecte. La muerte del proceso del plugin por sí sola no prueba que haya cesado el trabajo delegado.
 - Si el bloqueo principal existe, se lee su registro bajo la compuerta. Un dueño vivo o de identidad no verificable bloquea la operación sin mutar; solo tras comprobar que la identidad registrada ya no corresponde a un proceso vivo se vuelve a comprobar el mismo registro y se retira. La comprobación y el reemplazo ocurren con la compuerta aún adquirida. Un PID reutilizado nunca autoriza a tratar el proceso nuevo como dueño anterior. Un registro ausente, incompleto o ilegible es estado incierto y no se elimina automáticamente.
-- Para liberar el bloqueo principal, el dueño vuelve a adquirir la compuerta, comprueba que el registro conserva su token e identidad y solo entonces lo retira. Si no puede comprobarlo, no borra nada y comunica el fallo. La pre-síntesis interna de `voice use` y del reclonado de la voz activa reutiliza el bloqueo ya adquirido, sin adquirirlo de nuevo.
+- Para liberar el bloqueo principal, el dueño vuelve a adquirir la compuerta, comprueba que el registro conserva su token e identidad y solo entonces lo retira. Si no puede comprobarlo, no borra nada y comunica el fallo. La pre-síntesis interna de `voice clone` reutiliza el bloqueo ya adquirido, sin adquirirlo de nuevo.
 - La compuerta se mantiene únicamente durante las transiciones del bloqueo principal, no durante la síntesis. Si está ocupada, la operación termina con error accionable sin modificar datos. Si un proceso termina mientras mantiene la compuerta, esta no se recupera automáticamente: se indica cerrar todas las operaciones manuales del plugin y verificar que no queden procesos participantes antes de retirarla manualmente. No se elimina una compuerta cuyo dueño pueda seguir activo.
 - La observación de identidad es trivalente: dueño coincidente vivo, dueño anterior confirmado terminado o identidad incierta. Un error de permisos, observación no disponible o PID no verificable se clasifica como incierto; no se reutiliza `isAlive()` como prueba de muerte, porque reduce errores distintos de `EPERM` a falso. El mecanismo concreto de observación debe cumplir el mismo contrato en los tres sistemas, sin añadir dependencias de runtime.
 - Los tests multiproceso deben demostrar exclusión durante adquisición, recuperación y liberación; interrupción antes de publicar el registro, interrupción con la compuerta adquirida, muerte con trabajo delegado pendiente, recuperación simultánea, PID reutilizado, errores de observación y reintento manual seguro. Si una plataforma no permite verificar la identidad, conserva el bloqueo y exige intervención; no inventa una confirmación de muerte.
@@ -533,13 +524,14 @@ y ejecuta `voice use`. Si no acepta, `default` queda lista para la narración.
 
 ## 8. Invariantes y casos límite
 
-1. **Una voz activa global**: cada operación usa la voz leída de `config.voice`; un elemento ya reclamado puede completar con la voz anterior.
-2. **Activación condicionada**: `voice use` no persiste la voz hasta seis éxitos; no garantiza permanencia de los WAV ante fallos o cambios externos.
+1. **Una voz activa global**: los hooks usan la voz de `userConfig`; `narrate-ctl`, la de `--voice`. Un elemento ya reclamado puede completar con la voz anterior.
+2. **Pre-síntesis antes de activar**: `voice clone` solo indica el valor de `/config` tras seis éxitos; no garantiza permanencia de los WAV ante fallos o cambios externos, ni impide que el usuario active una voz sin locuciones.
 3. **No hay copia de locuciones entre voces**: cambiar de voz no reutiliza WAVs
    de `default` ni de otra voz; por eso la pre-síntesis es obligatoria.
 4. **Las voces de fábrica son intocables desde el plugin**: no se clonan encima
    ni se borran.
-5. **La voz activa no se borra**: primero hay que activar otra.
+5. **Borrar la voz activa deja la narración sin audio**: el plugin lo advierte
+   y `SessionStart` lo avisa hasta que se elija otra.
 6. **El audio de referencia es del usuario**: el plugin no lo copia, no lo mueve y
    no lo borra.
 7. **Sin secretos en configuración**: el `userConfig` solo contiene preferencias.
@@ -573,8 +565,8 @@ y ejecuta `voice use`. Si no acepta, `default` queda lista para la narración.
 | Label existente sin `--force`              | Motor exit `6`, `label_exists`                                | Éxito idempotente                              | «Ya pre-sintetizado.»                                                                                    |
 | Label o voz ausente en `play`              | Motor exit `3` `speech_not_found`/`voice_not_found`           | Log en `worker.log`; sin audio                 | «Ejecuta `presynth` o revisa la voz activa.»                                                             |
 | Sin salida de audio en `play`/`say`        | Motor exit `3` `no_output_device`/`audio_backend_unavailable` | Log en `worker.log` con el `reason`; sin audio | «Configura una salida de audio predeterminada.»                                                          |
-| Voz activa eliminada externamente          | `SessionStart`                                                | `systemMessage`; no arranca daemon             | «La voz activa no existe; activa otra con `voice use` o vuelve a `default`.»                             |
-| Borrar voz activa                          | Plugin                                                        | Exit 2; no invoca                              | «Activa otra voz antes de borrar esta.»                                                                  |
+| Voz activa eliminada externamente          | `SessionStart`                                                | `systemMessage`; no arranca daemon             | «La voz activa no existe; elige otra en `/config` → `evolutivex-agents.voice` o vuelve a `default`.»     |
+| Voz activa sin locuciones                  | Motor exit `3` `speech_not_found` en `play`                   | Log en `worker.log`; sin audio                 | «Ejecuta `presynth --voice <nombre>`.»                                                                   |
 | JSON inválido del motor                    | Plugin                                                        | Exit 1; log                                    | «El motor devolvió una respuesta inesperada.»                                                            |
 | Captura vacía                              | `2 empty_audio`                                               | Exit 2                                         | «No se capturó audio.»                                                                                   |
 | Duración o techo excesivo                  | `2 audio_too_long`                                            | Exit 2                                         | «El máximo de clonado es 30 s.»                                                                          |
@@ -604,15 +596,13 @@ su informe y exit 1, no necesariamente un objeto de error.
   - validación conservadora de nombres.
 - `tests/config.spec.ts`
   - `voice` por defecto;
-  - lectura de configs antiguas sin `voice`;
-  - persistencia de `voice` sin secretos;
+  - lectura de `CLAUDE_PLUGIN_OPTION_VOICE` (normalización y recorte);
   - valores inválidos → `default`.
 - `tests/narrate-ctl.spec.ts`
-  - argumentos de `voice clone` (archivo y `--mic`), `voice list`, `voice use`, `voice remove`;
-  - `voice use` usa `presynth --force` y no escribe config si falla;
-  - `voice remove` exige `--yes`, bloquea fábrica y voz activa;
-  - `voice clone --force` sobre la voz activa dispara `presynth --force`;
-  - `presynth`, `say` y `status` usan la voz activa;
+  - argumentos de `voice clone` (archivo y `--mic`), `voice list`, `voice remove`;
+  - `voice clone` termina con `presynth --voice <nombre> --force` y solo indica `/config` si las seis van bien;
+  - `voice remove` exige `--yes`, bloquea fábrica y advierte de la voz activa;
+  - `presynth` y `say` usan `--voice` y `default` si se omite;
   - mapeo de exit codes.
 - `tests/narrate-worker.spec.ts`
   - `play` incluye `--voice`;
@@ -640,30 +630,30 @@ Casos:
 1. clonar una voz nueva desde archivo WAV;
 2. clonar una voz nueva desde micrófono (`--mic` con y sin `--duration`);
 3. nombre ocupado con y sin `--force`;
-4. activar una voz y verificar las seis llamadas con `--voice`;
-5. fallo de pre-síntesis sin escritura de configuración y con WAV parciales;
+4. clonar y verificar las seis llamadas de pre-síntesis con `--voice`;
+5. fallo de pre-síntesis al clonar: no se indica `/config` y se informan los WAV parciales;
 6. reproducir y narrar con la voz activa;
 7. arrancar el daemon con `--warm-voice`;
 8. borrar una voz de usuario;
-9. borrar la voz activa: rechazo;
+9. borrar una voz: aviso de la voz activa;
 10. voz activa ausente en `SessionStart`;
 11. motor sin soporte de `voice`: mensaje de función no disponible.
 12. fuente ausente o duplicada y duración sin micrófono; límites 0, 1, 30 y 31.
 13. TTY y no-TTY, variable PTT ausente, inválida, válida y superior a 30; stdin interactivo y stdout JSON separados.
 14. `--denoise` con modelo ausente, `denoise_busy` y fallo, sin fallback; exit 6 con razones distintas.
 15. `lifecycle_locked`, captura vacía, fallo al lanzar proceso, señal, timeout y razón desconocida.
-16. `voice remove --json` reporta `removed_speech`; `voice use` de voz activa con fallo deja estado parcial informado.
+16. `voice remove --json` reporta `removed_speech`; un re-clonado con fallo de pre-síntesis deja estado parcial informado.
 17. operaciones manuales simultáneas, recuperación simultánea de dueño terminado, PID reutilizado, dueño no verificable y liberación sin propiedad; verificar que nunca haya dos dueños.
 18. voz ausente con daemon activo, `degraded`, `warm_failed` y veredicto integral de `doctor`.
 19. versión inferior a v0.42.0 o ilegible no habilita la feature y mantiene narración existente.
-20. `presynth` concurrente con `voice use` y `voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode` concurrentes con `voice use`: sin WAV ni preferencias perdidas por carreras del plugin; sin bloqueo reentrante en pre-síntesis interna.
+20. `presynth` concurrente con `voice clone`: sin WAV perdidos por carreras del plugin; sin bloqueo reentrante en la pre-síntesis interna.
 
 ### 10.3 E2E opcional
 
 Con el motor real, en una máquina de desarrollo:
 
 1. clonar una voz de prueba (desde micrófono o archivo WAV);
-2. activarla;
+2. activarla en `/config`;
 3. verificar que los seis anuncios suenan con esa voz;
 4. narrar un `Stop` dinámico;
 5. volver a `default`;
@@ -685,48 +675,47 @@ que exista un micrófono de entrada.
 
 ## 11. Criterios de aceptación
 
-| ID        | Dado                                                                        | Cuando                                             | Entonces                                                                                                                                                   |
-| --------- | --------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **AC-01** | Una configuración existente sin `voice`                                     | Se carga la configuración                          | `voice` es `"default"` y todas las rutas siguen funcionando como hoy.                                                                                      |
-| **AC-02** | CLI, daemon, WAV válido y nombre libre                                      | Se ejecuta `voice clone nombre ref.wav`            | Exit 0; el motor recibe `voice clone --name nombre --speech-reference ref.wav --daemon --json`; la configuración no cambia.                                |
-| **AC-03** | CLI, daemon, micrófono y nombre libre                                       | Se ejecuta `voice clone nombre --mic --duration 5` | Exit 0; el motor recibe `voice clone --name nombre --mic --duration 5 --daemon --json`; la configuración no cambia.                                        |
-| **AC-04** | Un nombre de voz ya existente                                               | Se clona sin `--force`                             | Exit 6, no se sobrescribe y el mensaje ofrece `--force`.                                                                                                   |
-| **AC-05** | Un nombre ya existente y `--force`                                          | Se clona                                           | El motor recibe `--force`; si la voz es la activa, se ejecuta `presynth --force`; si esa pre-síntesis falla, se informa y no se deja un estado silencioso. |
-| **AC-06** | Un nombre de fábrica (`default`, `ryan`, `vivian`)                          | Se intenta clonar o borrar                         | Exit 2 antes de invocar al motor; no se modifica nada.                                                                                                     |
-| **AC-07** | Un WAV inexistente o un nombre inválido                                     | Se clona                                           | Exit 3 o 2 respectivamente; no se invoca al motor.                                                                                                         |
-| **AC-08** | CLI y daemon disponibles                                                    | Se ejecuta `voice list`                            | Exit 0; se listan todas las voces, marcando la activa y las de fábrica.                                                                                    |
-| **AC-09** | Una voz existente y daemon disponible                                       | Se ejecuta `voice use nombre`                      | Se llama `voice list --json`; se ejecuta `speech synthesize --voice nombre --force` para las seis etiquetas; solo después se persiste `voice`; exit 0.     |
-| **AC-10** | Una pre-síntesis falla durante `voice use`                                  | Se activa la voz                                   | La configuración conserva la voz anterior; exit distinto de 0; se informa la etiqueta fallida.                                                             |
-| **AC-11** | Una voz activa configurada                                                  | Se ejecuta `presynth`                              | Cada `speech synthesize` incluye `--voice <activa> --daemon`; solo `label_exists` sin `--force` cuenta como éxito; `--force` añade `--force`.              |
-| **AC-12** | Una voz activa configurada                                                  | El worker narra un evento estático                 | `speech play --label <label> --voice <activa>`; no requiere daemon.                                                                                        |
-| **AC-13** | Una voz activa configurada                                                  | El worker narra un `Stop` dinámico                 | `speech say --text <texto> --voice <activa> --daemon`.                                                                                                     |
-| **AC-14** | Una voz activa configurada y daemon parado                                  | `SessionStart` diagnostica un entorno sano         | El arranque incluye `daemon start --warm-voice <activa>`.                                                                                                  |
-| **AC-15** | Una voz activa que no existe                                                | `SessionStart`                                     | Se emite `systemMessage`; no se arranca el daemon con la voz ausente; no se muta la configuración.                                                         |
-| **AC-16** | Una voz de usuario no activa                                                | Se ejecuta `voice remove nombre --yes`             | Se llama `voice remove --name nombre --yes --json`; se reportan las locuciones arrastradas; exit 0.                                                        |
-| **AC-17** | La voz activa                                                               | Se intenta `voice remove`                          | Exit 2 sin invocar al motor; se pide activar otra voz primero.                                                                                             |
-| **AC-18** | `voice remove` sin `--yes`                                                  | Se ejecuta                                         | Exit 2 sin invocar al motor.                                                                                                                               |
-| **AC-19** | Una instalación sin clonado                                                 | Se ejecuta el instalador                           | La pregunta de clonado es opcional; al rechazarla, `default` queda pre-sintetizada y funcional.                                                            |
-| **AC-20** | Un cambio de texto en el catálogo                                           | Se ejecuta `presynth --force`                      | Las seis locuciones se re-sintetizan con la voz activa.                                                                                                    |
-| **AC-21** | Un re-clonado del mismo nombre                                              | Se ejecuta `voice use nombre`                      | La pre-síntesis forzada actualiza el timbre de las seis locuciones.                                                                                        |
-| **AC-22** | Uso normal de la feature                                                    | Se inspecciona el `userConfig`                     | No contiene audio, rutas de referencia, claves ni secretos; solo preferencias en userConfig.                                                               |
-| **AC-23** | Un hook se dispara                                                          | Se mide el launcher                                | Sigue por debajo de 100 ms y no ejecuta `voice list`, `voice clone` ni `daemon`.                                                                           |
-| **AC-24** | Windows, Linux y macOS                                                      | Se ejecutan los tests                              | Pasan los mismos casos, incluidas rutas con espacios y shims `.cmd` en Windows.                                                                            |
-| **AC-25** | La implementación termina                                                   | Se ejecutan los gates                              | `lint`, `format:check`, `typecheck`, `test` y `check-dist` pasan; `claude plugin validate --strict .` pasa; CI verde.                                      |
-| **AC-26** | La implementación termina                                                   | Se revisa la documentación                         | `docs/INTEGRATION.md`, `README.md`, `SECURITY.md`, `CHANGELOG.md` y este documento reflejan la feature y las nuevas superficies.                           |
-| **AC-27** | Un motor anterior a v0.42.0 o versión ilegible                              | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                      |
-| **AC-28** | Una fuente WAV o micrófono                                                  | Se clona con `--denoise`                           | Se transmite el flag; ausencia de modelo, saturación o fallo se informan sin clonar audio sin limpiar.                                                     |
-| **AC-29** | Motor corregido, TTY y variable PTT ausente                                 | Se clona con `--mic` sin duración                  | El límite es 30 s; la captura real solo se verifica con dispositivo disponible.                                                                            |
-| **AC-30** | Una operación manual tiene el bloqueo                                       | Otra intenta clonar, activar o borrar              | No muta y comunica el conflicto; un dueño no verificable no se elimina automáticamente.                                                                    |
-| **AC-31** | Diagnóstico sano, voz activa no predeterminada ausente y daemon activo      | Se inicia sesión                                   | Se avisa sin cambiar la configuración ni reiniciar el daemon.                                                                                              |
-| **AC-32** | Reclonado de voz activa completado y falla una síntesis                     | Termina el comando                                 | Se informa que la huella ya cambió y que pueden quedar WAV mezclados; se indica `presynth --force`.                                                        |
-| **AC-33** | `voice use` con seis síntesis forzadas                                      | Una falla                                          | La configuración no se escribe; los WAV ya escritos no se revierten, incluso si la candidata era la activa.                                                |
-| **AC-34** | `voice use` y una escritura de preferencias en /config simultáneas          | Ambas operaciones terminan                         | La configuración conserva ambas actualizaciones; ninguna sobrescribe preferencias leídas antes de adquirir el bloqueo.                                     |
-| **AC-35** | Dos procesos intentan recuperar el mismo bloqueo de un dueño terminado      | Compiten con otra operación manual                 | Se verifica que nunca haya dos dueños simultáneos; un dueño de identidad no verificable no se elimina.                                                     |
-| **AC-36** | `voice list` falla o devuelve JSON inválido durante `SessionStart`          | Se consulta una voz no predeterminada              | Se informa diagnóstico incierto, no se afirma que la voz no existe y no se arranca el daemon.                                                              |
-| **AC-37** | `narrate-ctl voice clone --mic` sin duración y sin TTY                      | Se invoca el comando                               | Exit 2 con orientación; no se inicia la captura.                                                                                                           |
-| **AC-38** | Un proceso termina durante la recuperación y deja la compuerta              | Otra operación manual intenta ejecutarse           | No entra ni borra la compuerta; informa que debe verificarse y retirarse manualmente tras cerrar las operaciones participantes.                            |
-| **AC-39** | Un bloqueo tiene registro ausente, ilegible o de identidad no verificable   | Se intenta recuperar                               | Se conserva y se informa; ningún error de observación se interpreta como muerte.                                                                           |
-| **AC-40** | El dueño termina con un clonado o síntesis delegados sin resultado terminal | Otra operación intenta recuperar el bloqueo        | Conserva el bloqueo e informa intervención manual; no presupone que la muerte del cliente canceló el trabajo del daemon.                                   |
+| ID        | Dado                                                                        | Cuando                                             | Entonces                                                                                                                                                                |
+| --------- | --------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AC-01** | Sin `voice` fijado en `/config`                                             | Se carga la configuración                          | `voice` es `"default"` y todas las rutas siguen funcionando como hoy.                                                                                                   |
+| **AC-02** | CLI, daemon, WAV válido y nombre libre                                      | Se ejecuta `voice clone nombre ref.wav`            | Exit 0; el motor recibe `voice clone --name nombre --speech-reference ref.wav --daemon --json`; la configuración no cambia.                                             |
+| **AC-03** | CLI, daemon, micrófono y nombre libre                                       | Se ejecuta `voice clone nombre --mic --duration 5` | Exit 0; el motor recibe `voice clone --name nombre --mic --duration 5 --daemon --json`; la configuración no cambia.                                                     |
+| **AC-04** | Un nombre de voz ya existente                                               | Se clona sin `--force`                             | Exit 6, no se sobrescribe y el mensaje ofrece `--force`.                                                                                                                |
+| **AC-05** | Un nombre ya existente y `--force`                                          | Se clona                                           | El motor recibe `--force` y se ejecuta `presynth --voice <nombre> --force`; si esa pre-síntesis falla, se informa y no se deja un estado silencioso.                    |
+| **AC-06** | Un nombre de fábrica (`default`, `ryan`, `vivian`)                          | Se intenta clonar o borrar                         | Exit 2 antes de invocar al motor; no se modifica nada.                                                                                                                  |
+| **AC-07** | Un WAV inexistente o un nombre inválido                                     | Se clona                                           | Exit 3 o 2 respectivamente; no se invoca al motor.                                                                                                                      |
+| **AC-08** | CLI y daemon disponibles                                                    | Se ejecuta `voice list`                            | Exit 0; se listan todas las voces, marcando las de fábrica.                                                                                                             |
+| **AC-09** | CLI, daemon y clonado correcto                                              | Termina `voice clone nombre …`                     | Se ejecuta `speech synthesize --voice nombre --force` para las seis etiquetas y, tras seis éxitos, se indica fijar `evolutivex-agents.voice` en `/config`; exit 0.      |
+| **AC-10** | Una pre-síntesis falla al final de `voice clone`                            | Termina el comando                                 | No se indica `/config`; exit distinto de 0; se informa la etiqueta fallida.                                                                                             |
+| **AC-11** | Una voz pasada con `--voice`                                                | Se ejecuta `presynth`                              | Cada `speech synthesize` incluye `--voice <nombre> --daemon` (`default` sin `--voice`); solo `label_exists` sin `--force` cuenta como éxito; `--force` añade `--force`. |
+| **AC-12** | Una voz activa configurada                                                  | El worker narra un evento estático                 | `speech play --label <label> --voice <activa>`; no requiere daemon.                                                                                                     |
+| **AC-13** | Una voz activa configurada                                                  | El worker narra un `Stop` dinámico                 | `speech say --text <texto> --voice <activa> --daemon`.                                                                                                                  |
+| **AC-14** | Una voz activa configurada y daemon parado                                  | `SessionStart` diagnostica un entorno sano         | El arranque incluye `daemon start --warm-voice <activa>`.                                                                                                               |
+| **AC-15** | Una voz activa que no existe                                                | `SessionStart`                                     | Se emite `systemMessage`; no se arranca el daemon con la voz ausente; no se muta la configuración.                                                                      |
+| **AC-16** | Una voz de usuario no activa                                                | Se ejecuta `voice remove nombre --yes`             | Se llama `voice remove --name nombre --yes --json`; se reportan las locuciones arrastradas; exit 0.                                                                     |
+| **AC-17** | Una voz de usuario                                                          | Se ejecuta `voice remove nombre --yes`             | Se advierte que, si es la voz activa en `/config`, la narración fallará hasta elegir otra.                                                                              |
+| **AC-18** | `voice remove` sin `--yes`                                                  | Se ejecuta                                         | Exit 2 sin invocar al motor.                                                                                                                                            |
+| **AC-19** | Una instalación sin clonado                                                 | Se ejecuta el instalador                           | La pregunta de clonado es opcional; al rechazarla, `default` queda pre-sintetizada y funcional.                                                                         |
+| **AC-20** | Un cambio de texto en el catálogo                                           | Se ejecuta `presynth --voice <nombre> --force`     | Las seis locuciones se re-sintetizan con esa voz.                                                                                                                       |
+| **AC-21** | Un re-clonado del mismo nombre                                              | Termina `voice clone nombre … --force`             | La pre-síntesis forzada actualiza el timbre de las seis locuciones.                                                                                                     |
+| **AC-22** | Uso normal de la feature                                                    | Se inspecciona el `userConfig`                     | No contiene audio, rutas de referencia, claves ni secretos; solo preferencias en userConfig.                                                                            |
+| **AC-23** | Un hook se dispara                                                          | Se mide el launcher                                | Sigue por debajo de 100 ms y no ejecuta `voice list`, `voice clone` ni `daemon`.                                                                                        |
+| **AC-24** | Windows, Linux y macOS                                                      | Se ejecutan los tests                              | Pasan los mismos casos, incluidas rutas con espacios y shims `.cmd` en Windows.                                                                                         |
+| **AC-25** | La implementación termina                                                   | Se ejecutan los gates                              | `lint`, `format:check`, `typecheck`, `test` y `check-dist` pasan; `claude plugin validate --strict .` pasa; CI verde.                                                   |
+| **AC-26** | La implementación termina                                                   | Se revisa la documentación                         | `docs/INTEGRATION.md`, `README.md`, `SECURITY.md`, `CHANGELOG.md` y este documento reflejan la feature y las nuevas superficies.                                        |
+| **AC-27** | Un motor anterior a v0.42.0 o versión ilegible                              | Se invoca la feature                               | Se informa que no está disponible y se conserva la narración existente con `default`.                                                                                   |
+| **AC-28** | Una fuente WAV o micrófono                                                  | Se clona con `--denoise`                           | Se transmite el flag; ausencia de modelo, saturación o fallo se informan sin clonar audio sin limpiar.                                                                  |
+| **AC-29** | Motor corregido, TTY y variable PTT ausente                                 | Se clona con `--mic` sin duración                  | El límite es 30 s; la captura real solo se verifica con dispositivo disponible.                                                                                         |
+| **AC-30** | Una operación manual tiene el bloqueo                                       | Otra intenta clonar, pre-sintetizar o borrar       | No muta y comunica el conflicto; un dueño no verificable no se elimina automáticamente.                                                                                 |
+| **AC-31** | Diagnóstico sano, voz activa no predeterminada ausente y daemon activo      | Se inicia sesión                                   | Se avisa sin cambiar la configuración ni reiniciar el daemon.                                                                                                           |
+| **AC-32** | Re-clonado completado y falla una síntesis                                  | Termina el comando                                 | Se informa que la huella ya cambió y que pueden quedar WAV mezclados; se indica `presynth --voice <nombre> --force`.                                                    |
+| **AC-33** | Una voz activa sin locuciones                                               | El worker narra un evento estático                 | `speech play` sale con `speech_not_found`; se registra en `worker.log` con el remedio `presynth --voice <nombre>`.                                                      |
+| **AC-35** | Dos procesos intentan recuperar el mismo bloqueo de un dueño terminado      | Compiten con otra operación manual                 | Se verifica que nunca haya dos dueños simultáneos; un dueño de identidad no verificable no se elimina.                                                                  |
+| **AC-36** | `voice list` falla o devuelve JSON inválido durante `SessionStart`          | Se consulta una voz no predeterminada              | Se informa diagnóstico incierto, no se afirma que la voz no existe y no se arranca el daemon.                                                                           |
+| **AC-37** | `narrate-ctl voice clone --mic` sin duración y sin TTY                      | Se invoca el comando                               | Exit 2 con orientación; no se inicia la captura.                                                                                                                        |
+| **AC-38** | Un proceso termina durante la recuperación y deja la compuerta              | Otra operación manual intenta ejecutarse           | No entra ni borra la compuerta; informa que debe verificarse y retirarse manualmente tras cerrar las operaciones participantes.                                         |
+| **AC-39** | Un bloqueo tiene registro ausente, ilegible o de identidad no verificable   | Se intenta recuperar                               | Se conserva y se informa; ningún error de observación se interpreta como muerte.                                                                                        |
+| **AC-40** | El dueño termina con un clonado o síntesis delegados sin resultado terminal | Otra operación intenta recuperar el bloqueo        | Conserva el bloqueo e informa intervención manual; no presupone que la muerte del cliente canceló el trabajo del daemon.                                                |
 
 ## 12. Documentación afectada
 
@@ -751,11 +740,14 @@ que exista un micrófono de entrada.
 - **Cold-start del daemon al cambiar de voz**: el residente es de una sola voz;
   la primera síntesis tras un cambio externo puede tardar. La pre-síntesis lo
   mitiga.
-- **Re-clonado del mismo nombre**: si el usuario reemplaza una voz activa, las
-  locuciones viejas quedan obsoletas hasta `presynth --force`. El flujo lo
+- **Re-clonado del mismo nombre**: si el usuario reemplaza una voz, sus
+  locuciones viejas quedan obsoletas hasta `presynth --voice <nombre> --force`. El flujo lo
   automatiza, pero un fallo deja un estado que hay que reparar.
 - **Borrado destructivo**: `voice remove` arrastra las locuciones. La
-  confirmación y la protección de la voz activa son obligatorias.
+  confirmación es obligatoria; el plugin no conoce la voz activa y solo puede
+  advertir.
+- **Voz activa sin locuciones**: el usuario puede fijar en `/config` una voz
+  sin pre-sintetizar; los anuncios fallan hasta `presynth --voice <nombre>`.
 - **Deriva del contrato del motor**: las superficies de voz no estaban en el
   contrato estable del plugin; hay que documentarlas y verificarlas.
 - **Modelo Base**: el clonado y las voces clonadas requieren

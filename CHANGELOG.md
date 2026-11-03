@@ -6,12 +6,6 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
-### Corregido
-
-- Transcript enriquecido: los rechazos que vienen de abajo de la cadena (por ejemplo, una herramienta interrumpida) ya no cuentan como fallos propios ni pueden apagar el transcript.
-- CI: `validate-manifest` ya no ejecuta `npx tsc -p src/transcript`, que necesita tipos que solo genera una sesión interactiva de Claude Code.
-- Documentación: README, `SECURITY.md`, `docs/RELEASING.md`, la skill `narrate` y la especificación de clonado describen la configuración en `/config`, sin restos de los subcomandos retirados.
-
 ## [0.1.0] — 2026-11-03
 
 Primera beta pública, solo en español. Verificado contra **AI Voice-InterConnector v0.42.0** en **Windows 11**; Linux y macOS son experimentales.
