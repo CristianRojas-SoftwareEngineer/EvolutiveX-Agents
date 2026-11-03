@@ -136,6 +136,19 @@ Interpreta el resultado:
     y re-ejecuta `presynth`. No uses `cleanup --all` ni `cleanup --synthetic-speech`
     como primer remedio.
 
+## Paso 4b — Clonar tu voz (opcional)
+
+Con `default` ya pre-sintetizada, pregunta al usuario si quiere que la narración use **su propia voz**. Si no, sigue al **Paso 5**: `default` queda lista y funcional.
+
+Si acepta, sigue el flujo `clone` del comando `/evolutivex-agents:voice` (explicación de la referencia y de la privacidad, confirmación, timeout de la herramienta de shell en 600000 ms y `--duration 10` para el micrófono):
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone <nombre> <ruta.wav>
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice clone <nombre> --mic --duration 10
+```
+
+Con exit `0`, la voz queda clonada y con sus anuncios pre-sintetizados: indica al usuario que fije `/config` → `evolutivex-agents.voice` = `<nombre>`. Desde el siguiente evento, la narración usa esa voz.
+
 ## Paso 5 — Activar la narración, las notificaciones de escritorio y, opcionalmente, el modo LLM
 
 1. Asegura que tanto la narración por voz como las notificaciones de escritorio están activas y revisa el estado:
@@ -188,16 +201,18 @@ Interpreta el resultado:
 3. Reproducción de un anuncio pre-sintetizado (verifica la ruta `speech play` que usará
    `UserPromptSubmit`): toma un label de la salida del Paso 4 (por ejemplo el de
    `UserPromptSubmit`, con forma de slug fijo como `voice-user-prompt-submit`) y
-   reprodúcelo:
+   reprodúcelo con la voz activa (`default`, o la clonada en el **Paso 4b** si
+   el usuario ya la fijó en `/config`):
 
    ```bash
-   ai-voice-interconnector speech play --label <label-del-anuncio> --json
+   ai-voice-interconnector speech play --label <label-del-anuncio> --voice <voz> --json
    ```
 
    Debe sonar el anuncio con exit `0`. Un exit `3` tiene cuatro causas, que el
    campo `reason` del JSON distingue: `speech_not_found` (anuncio no
-   pre-sintetizado → repite el **Paso 4**); `voice_not_found` (voz de fábrica
-   ausente → **Paso 2** y luego **Paso 4**); `no_output_device` (el sistema no
+   pre-sintetizado para esa voz → `narrate-ctl.js presynth --voice <voz>`);
+   `voice_not_found` (la voz no existe → consulta `narrate-ctl.js voice list` y
+   elige otra en `/config` → `evolutivex-agents.voice`); `no_output_device` (el sistema no
    tiene salida de audio predeterminada → configúrala;
    `ai-voice-interconnector devices` la muestra); `audio_backend_unavailable`
    (falta el backend de audio del sistema, en Linux ALSA/`libasound.so.2`). Un
@@ -217,6 +232,6 @@ Interpreta el resultado:
 
 ## Cierre
 
-Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/evolutivex-agents:narrate` (`status`, `say` y `presynth`); las preferencias se cambian en `/config` → `evolutivex-agents.*`. Cuéntale también que existe el **transcript enriquecido** (hora de inicio, duración y contadores en vivo en cada bloque del transcript), desactivado por defecto, que se activa en `/config` → `evolutivex-agents.enhancedTranscript`.
+Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/evolutivex-agents:narrate` (`status`, `say` y `presynth`); las preferencias se cambian en `/config` → `evolutivex-agents.*`. Explícale que puede narrar con **su propia voz**: la clona con `/evolutivex-agents:voice clone` (o la clonó en el **Paso 4b**) y la activa en `/config` → `evolutivex-agents.voice`; para volver a la predeterminada, fija `default`. Cuéntale también que existe el **transcript enriquecido** (hora de inicio, duración y contadores en vivo en cada bloque del transcript), desactivado por defecto, que se activa en `/config` → `evolutivex-agents.enhancedTranscript`.
 
 Menciona también el mantenimiento de los anuncios pre-sintetizados: si se borran las locuciones del almacén del motor (`<data_dir>/speech/<voz>/<etiqueta>.wav`), basta re-ejecutar `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth` con el daemon caliente (es idempotente; los anuncios vigentes no se re-sintetizan). Ten en cuenta que `--synthetic-speech` es una categoría de `cleanup`, no una carpeta. Como los labels son slugs fijos, si en una actualización del plugin **cambia la frase** de un anuncio, `presynth` a secas no lo detecta (el label no cambió): hay que forzar la sobreescritura con `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --force`.
