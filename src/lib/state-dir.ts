@@ -7,9 +7,10 @@
 // State dir por convención de cada SO. Equivalente en miniatura al data_root()
 // de AI Voice-InterConnector, sin depender de él. Contiene worker.pid (el lock
 // del worker), queue/ (cola de payloads de narración), worker.log y su
-// rotación worker.log.1. Las
-// preferencias viven en el userConfig del plugin y la API key en el entorno:
-// ninguna se guarda aquí.
+// rotación worker.log.1, active-voice (caché de la voz activa que escriben los
+// hooks para narrate-ctl) y voice-operation.lock (exclusión entre operaciones
+// manuales de voz). Las preferencias viven en el userConfig del plugin y la
+// API key en el entorno: ninguna se guarda aquí.
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
@@ -55,4 +56,14 @@ export function workerLogPath(): string {
 /** Generación anterior de worker.log, tras su rotación por tamaño. */
 export function rotatedWorkerLogPath(): string {
   return join(stateDir(), "worker.log.1");
+}
+
+/** Caché de la voz activa: derivada de /config, no es una preferencia. */
+export function activeVoicePath(): string {
+  return join(stateDir(), "active-voice");
+}
+
+/** Directorio de exclusión entre operaciones manuales de voz. */
+export function voiceOperationLockPath(): string {
+  return join(stateDir(), "voice-operation.lock");
 }

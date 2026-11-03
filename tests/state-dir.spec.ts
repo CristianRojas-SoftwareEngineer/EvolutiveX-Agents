@@ -19,6 +19,8 @@ import {
   queueDir,
   workerLogPath,
   rotatedWorkerLogPath,
+  activeVoicePath,
+  voiceOperationLockPath,
 } from "../src/lib/state-dir.js";
 import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
 
@@ -85,6 +87,11 @@ test("las rutas derivadas cuelgan del state dir con sus nombres fijos", () => {
   assert.equal(queueDir(), join(stateDir(), "queue"));
   assert.equal(workerLogPath(), join(stateDir(), "worker.log"));
   assert.equal(rotatedWorkerLogPath(), join(stateDir(), "worker.log.1"));
+  assert.equal(activeVoicePath(), join(stateDir(), "active-voice"));
+  assert.equal(
+    voiceOperationLockPath(),
+    join(stateDir(), "voice-operation.lock"),
+  );
 });
 
 test("ensureStateDir crea el directorio (recursivo) y devuelve su ruta", () => {
