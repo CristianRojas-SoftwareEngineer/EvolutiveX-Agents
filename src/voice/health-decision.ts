@@ -72,11 +72,25 @@ const RESOURCE_CHECKS: readonly string[] = [
 export function parseSingleJsonObject(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return undefined;
+  const end = objectEnd(trimmed);
+  if (end < 0 || trimmed.slice(end + 1).trim() !== "") return undefined;
+  try {
+    return JSON.parse(trimmed.slice(0, end + 1));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Índice de la `}` que cierra el objeto abierto por `text[0]`, saltando las
+ * llaves dentro de strings; -1 si el objeto no cierra.
+ */
+function objectEnd(text: string): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -87,17 +101,10 @@ export function parseSingleJsonObject(text: string): unknown {
     else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) {
-        if (trimmed.slice(i + 1).trim() !== "") return undefined;
-        try {
-          return JSON.parse(trimmed.slice(0, i + 1));
-        } catch {
-          return undefined;
-        }
-      }
+      if (depth === 0) return i;
     }
   }
-  return undefined;
+  return -1;
 }
 
 /** ¿El valor parseado tiene el shape mínimo del reporte? */

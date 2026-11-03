@@ -3401,32 +3401,36 @@ var REG_SHORTCUT_ENGINE = "ShortcutEngine";
 async function readRegistry(aumid) {
   try {
     const { stdout } = await execReg(["query", buildKey(aumid)]);
-    const result = { exists: true };
-    for (const line of stdout.split(/\r?\n/)) {
-      const match = /^\s+(DisplayName|Icon|IconUri|ShortcutEngine)\s+REG_(?:SZ|EXPAND_SZ|DWORD)\s+(.*?)\s*$/i.exec(
-        line
-      );
-      if (match) {
-        const name = String(match[1]).toLowerCase();
-        const value = String(match[2]);
-        if (name === "displayname") result.displayName = value;
-        if (name === "icon") result.icon = value;
-        if (name === "iconuri") result.iconUri = value;
-        if (name === "shortcutengine") result.shortcutEngine = value;
-      }
-    }
-    return result;
+    return parseRegistryQuery(stdout);
   } catch (err) {
-    const code = err.code;
-    if (code === REG_NOT_FOUND_EXIT_CODE || code === String(REG_NOT_FOUND_EXIT_CODE)) {
-      return { exists: false };
-    }
-    const stderr = err.stderr ?? "";
-    if (/unable to find/i.test(stderr)) {
-      return { exists: false };
-    }
+    if (isKeyNotFound(err)) return { exists: false };
     throw err;
   }
+}
+function parseRegistryQuery(stdout) {
+  const result = { exists: true };
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = /^\s+(DisplayName|Icon|IconUri|ShortcutEngine)\s+REG_(?:SZ|EXPAND_SZ|DWORD)\s+(.*?)\s*$/i.exec(
+      line
+    );
+    if (match) {
+      const name = String(match[1]).toLowerCase();
+      const value = String(match[2]);
+      if (name === "displayname") result.displayName = value;
+      if (name === "icon") result.icon = value;
+      if (name === "iconuri") result.iconUri = value;
+      if (name === "shortcutengine") result.shortcutEngine = value;
+    }
+  }
+  return result;
+}
+function isKeyNotFound(err) {
+  const code = err.code;
+  if (code === REG_NOT_FOUND_EXIT_CODE || code === String(REG_NOT_FOUND_EXIT_CODE)) {
+    return true;
+  }
+  const stderr = err.stderr ?? "";
+  return /unable to find/i.test(stderr);
 }
 async function writeRegistry(aumid, displayName, iconIcoPath, iconUriPath) {
   const key = buildKey(aumid);

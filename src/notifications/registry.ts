@@ -87,36 +87,44 @@ export interface RegistryState {
 export async function readRegistry(aumid: string): Promise<RegistryState> {
   try {
     const { stdout } = await execReg(["query", buildKey(aumid)]);
-    const result: RegistryState = { exists: true };
-    for (const line of stdout.split(/\r?\n/)) {
-      const match =
-        /^\s+(DisplayName|Icon|IconUri|ShortcutEngine)\s+REG_(?:SZ|EXPAND_SZ|DWORD)\s+(.*?)\s*$/i.exec(
-          line,
-        );
-      if (match) {
-        const name = String(match[1]).toLowerCase();
-        const value = String(match[2]);
-        if (name === "displayname") result.displayName = value;
-        if (name === "icon") result.icon = value;
-        if (name === "iconuri") result.iconUri = value;
-        if (name === "shortcutengine") result.shortcutEngine = value;
-      }
-    }
-    return result;
+    return parseRegistryQuery(stdout);
   } catch (err) {
-    const code = (err as RegExecError).code;
-    if (
-      code === REG_NOT_FOUND_EXIT_CODE ||
-      code === String(REG_NOT_FOUND_EXIT_CODE)
-    ) {
-      return { exists: false };
-    }
-    const stderr = (err as { stderr?: string }).stderr ?? "";
-    if (/unable to find/i.test(stderr)) {
-      return { exists: false };
-    }
+    if (isKeyNotFound(err)) return { exists: false };
     throw err;
   }
+}
+
+/** Valores del AUMID en la salida de `reg query` de una clave existente. */
+function parseRegistryQuery(stdout: string): RegistryState {
+  const result: RegistryState = { exists: true };
+  for (const line of stdout.split(/\r?\n/)) {
+    const match =
+      /^\s+(DisplayName|Icon|IconUri|ShortcutEngine)\s+REG_(?:SZ|EXPAND_SZ|DWORD)\s+(.*?)\s*$/i.exec(
+        line,
+      );
+    if (match) {
+      const name = String(match[1]).toLowerCase();
+      const value = String(match[2]);
+      if (name === "displayname") result.displayName = value;
+      if (name === "icon") result.icon = value;
+      if (name === "iconuri") result.iconUri = value;
+      if (name === "shortcutengine") result.shortcutEngine = value;
+    }
+  }
+  return result;
+}
+
+/** ¿El fallo de `reg query` significa que la clave no existe? */
+function isKeyNotFound(err: unknown): boolean {
+  const code = (err as RegExecError).code;
+  if (
+    code === REG_NOT_FOUND_EXIT_CODE ||
+    code === String(REG_NOT_FOUND_EXIT_CODE)
+  ) {
+    return true;
+  }
+  const stderr = (err as { stderr?: string }).stderr ?? "";
+  return /unable to find/i.test(stderr);
 }
 
 /**

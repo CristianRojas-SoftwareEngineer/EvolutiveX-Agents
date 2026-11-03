@@ -25,6 +25,7 @@ import {
   workerPidPath,
 } from "../lib/state-dir.js";
 import { claimNext, clearQueue, pruneQueue } from "./queue.js";
+import type { HookPayload } from "../lib/hook-payload.js";
 import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
 import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
@@ -201,6 +202,58 @@ async function runSay(cliPath: string, text: string): Promise<void> {
     log(`speech say salió con código ${res.code}${failureDetail(res.stdout)}`);
 }
 
+/**
+ * Narra un payload: construye el mensaje y lo reproduce o sintetiza vía el
+ * CLI. Devuelve false si la narración está desactivada, tras descartar el
+ * resto de la cola.
+ */
+async function narrate(payload: HookPayload): Promise<boolean> {
+  const cfg = loadConfig();
+  if (!cfg.voiceEnabled) {
+    clearQueue();
+    return false;
+  }
+
+  const request = await buildMessage(payload, cfg);
+  if (request.kind === "say" && !request.text) {
+    log("mensaje vacío tras la construcción; nada que narrar");
+    return true;
+  }
+
+  const cli = resolveCli();
+  if (!cli) {
+    log("ai-voice-interconnector no encontrado en PATH; se omite la narración");
+    return true;
+  }
+
+  if (request.kind === "play") await runPlay(cli, request.label);
+  else await runSay(cli, request.text);
+
+  // Hueco entre narraciones para que no suenen pegadas.
+  if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
+  return true;
+}
+
+/**
+ * Drena la cola en orden hasta pasar la ventana de inactividad sin trabajo,
+ * o hasta encontrar la narración desactivada.
+ */
+async function drainQueue(): Promise<void> {
+  let lastActivity = Date.now();
+  while (true) {
+    const item = claimNext();
+    if (!item) {
+      // Nada pendiente: esperar un poco y reevaluar. Si pasa la ventana de
+      // inactividad, salir.
+      if (Date.now() - lastActivity > IDLE_MS) return;
+      sleepSync(IDLE_POLL_MS);
+      continue;
+    }
+    lastActivity = Date.now();
+    if (!(await narrate(item.payload))) return;
+  }
+}
+
 async function main(): Promise<void> {
   ensureStateDir();
 
@@ -210,47 +263,7 @@ async function main(): Promise<void> {
   try {
     // Podar cola expirada y sobrante antes de empezar.
     pruneQueue({ max: 64, maxAgeMs: 60 * 60 * 1000 });
-
-    let lastActivity = Date.now();
-
-    while (true) {
-      const item = claimNext();
-      if (!item) {
-        // Nada pendiente: esperar un poco y reevaluar. Si pasa la ventana de
-        // inactividad, salir.
-        if (Date.now() - lastActivity > IDLE_MS) break;
-        sleepSync(IDLE_POLL_MS);
-        continue;
-      }
-      lastActivity = Date.now();
-
-      const cfg = loadConfig();
-      if (!cfg.voiceEnabled) {
-        // Narración desactivada: descartar el resto de la cola y salir.
-        clearQueue();
-        return;
-      }
-
-      const request = await buildMessage(item.payload, cfg);
-      if (request.kind === "say" && !request.text) {
-        log("mensaje vacío tras la construcción; nada que narrar");
-        continue;
-      }
-
-      const cli = resolveCli();
-      if (!cli) {
-        log(
-          "ai-voice-interconnector no encontrado en PATH; se omite la narración",
-        );
-        continue;
-      }
-
-      if (request.kind === "play") await runPlay(cli, request.label);
-      else await runSay(cli, request.text);
-
-      // Hueco entre narraciones para que no suenen pegadas.
-      if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
-    }
+    await drainQueue();
   } finally {
     releaseLock();
     process.exit(0);

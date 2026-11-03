@@ -51,11 +51,20 @@ function emptyToUndef(v) {
 function parseSingleJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return void 0;
+  const end = objectEnd(trimmed);
+  if (end < 0 || trimmed.slice(end + 1).trim() !== "") return void 0;
+  try {
+    return JSON.parse(trimmed.slice(0, end + 1));
+  } catch {
+    return void 0;
+  }
+}
+function objectEnd(text) {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -66,17 +75,10 @@ function parseSingleJsonObject(text) {
     else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) {
-        if (trimmed.slice(i + 1).trim() !== "") return void 0;
-        try {
-          return JSON.parse(trimmed.slice(0, i + 1));
-        } catch {
-          return void 0;
-        }
-      }
+      if (depth === 0) return i;
     }
   }
-  return void 0;
+  return -1;
 }
 
 // src/lib/state-dir.ts
@@ -649,41 +651,46 @@ async function runSay(cliPath, text) {
   if (res.code !== 0)
     log(`speech say sali\xF3 con c\xF3digo ${res.code}${failureDetail(res.stdout)}`);
 }
+async function narrate(payload) {
+  const cfg = loadConfig();
+  if (!cfg.voiceEnabled) {
+    clearQueue();
+    return false;
+  }
+  const request = await buildMessage(payload, cfg);
+  if (request.kind === "say" && !request.text) {
+    log("mensaje vac\xEDo tras la construcci\xF3n; nada que narrar");
+    return true;
+  }
+  const cli = resolveCli();
+  if (!cli) {
+    log("ai-voice-interconnector no encontrado en PATH; se omite la narraci\xF3n");
+    return true;
+  }
+  if (request.kind === "play") await runPlay(cli, request.label);
+  else await runSay(cli, request.text);
+  if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
+  return true;
+}
+async function drainQueue() {
+  let lastActivity = Date.now();
+  while (true) {
+    const item = claimNext();
+    if (!item) {
+      if (Date.now() - lastActivity > IDLE_MS) return;
+      sleepSync(IDLE_POLL_MS);
+      continue;
+    }
+    lastActivity = Date.now();
+    if (!await narrate(item.payload)) return;
+  }
+}
 async function main() {
   ensureStateDir();
   if (!acquireLock()) return;
   try {
     pruneQueue({ max: 64, maxAgeMs: 60 * 60 * 1e3 });
-    let lastActivity = Date.now();
-    while (true) {
-      const item = claimNext();
-      if (!item) {
-        if (Date.now() - lastActivity > IDLE_MS) break;
-        sleepSync(IDLE_POLL_MS);
-        continue;
-      }
-      lastActivity = Date.now();
-      const cfg = loadConfig();
-      if (!cfg.voiceEnabled) {
-        clearQueue();
-        return;
-      }
-      const request = await buildMessage(item.payload, cfg);
-      if (request.kind === "say" && !request.text) {
-        log("mensaje vac\xEDo tras la construcci\xF3n; nada que narrar");
-        continue;
-      }
-      const cli = resolveCli();
-      if (!cli) {
-        log(
-          "ai-voice-interconnector no encontrado en PATH; se omite la narraci\xF3n"
-        );
-        continue;
-      }
-      if (request.kind === "play") await runPlay(cli, request.label);
-      else await runSay(cli, request.text);
-      if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
-    }
+    await drainQueue();
   } finally {
     releaseLock();
     process.exit(0);

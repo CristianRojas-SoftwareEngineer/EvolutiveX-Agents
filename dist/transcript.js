@@ -248,13 +248,66 @@ async function onTurnComplete($, e, next) {
 }
 var BLOCK_KINDS = /* @__PURE__ */ new Set(["text", "thinking", "tool", "input"]);
 var isBlockChunk = (chunk) => BLOCK_KINDS.has(chunk.kind);
+function registerBlock(agent, b) {
+  if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
+  modelBlocks.get(agent).push(b);
+}
+function unregisterBlock(agent, b) {
+  const list = modelBlocks.get(agent);
+  const idx = list ? list.indexOf(b) : -1;
+  if (idx >= 0) list.splice(idx, 1);
+}
+function reveal(step, b) {
+  b.visible = true;
+  step.previous = b;
+  registerBlock(step.agent, b);
+}
+function blockFor(step, chunk, now) {
+  let b = step.byIndex.get(chunk.index);
+  if (b) return b;
+  b = {
+    kind: chunk.kind,
+    text: "",
+    first: now,
+    last: now,
+    attributedStart: step.previous?.last ?? step.start,
+    visible: false
+  };
+  step.byIndex.set(chunk.index, b);
+  if (b.kind === "tool") reveal(step, b);
+  return b;
+}
+function updateVisibility($, step, b, chunk, now) {
+  if (b.visible) return;
+  if (b.kind === "text") {
+    const previous = step.previous;
+    if (previous?.kind === "thinking") {
+      b.attributedStart = previous.attributedStart;
+      unregisterBlock(step.agent, previous);
+    }
+  } else if (b.kind === "thinking" && chunk.kind === "thinking" && chunk.text.trim()) {
+    b.attributedStart = step.previous?.last ?? step.start;
+  } else {
+    return;
+  }
+  reveal(step, b);
+  lastCall.delete(step.agent);
+  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
+}
+function accountChunk($, step, chunk) {
+  const now = Date.now();
+  const b = blockFor(step, chunk, now);
+  updateVisibility($, step, b, chunk, now);
+  b.last = now;
+  if (chunk.kind === "tool") b.toolId = chunk.id;
+  if (chunk.kind === "text" || chunk.kind === "thinking") b.text += chunk.text;
+}
 async function* onStep($, e, next) {
   const agent = agentOf(e);
-  const stepStart = Date.now();
+  const start = Date.now();
   if (turns.get(agent)?.turnId !== e.turnId)
-    turns.set(agent, { turnId: e.turnId, start: stepStart });
-  const byIndex = /* @__PURE__ */ new Map();
-  let previous;
+    turns.set(agent, { turnId: e.turnId, start });
+  const step = { agent, start, byIndex: /* @__PURE__ */ new Map() };
   const stream = next(e)[Symbol.asyncIterator]();
   for (; ; ) {
     const { value: chunk, done } = await stream.next();
@@ -262,53 +315,7 @@ async function* onStep($, e, next) {
       prune();
       return chunk;
     }
-    if (isBlockChunk(chunk)) {
-      const now = Date.now();
-      let b = byIndex.get(chunk.index);
-      if (!b) {
-        b = {
-          kind: chunk.kind,
-          text: "",
-          first: now,
-          last: now,
-          attributedStart: previous?.last ?? stepStart,
-          visible: false
-        };
-        byIndex.set(chunk.index, b);
-        if (b.kind === "tool") {
-          b.visible = true;
-          previous = b;
-          if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-          modelBlocks.get(agent).push(b);
-        }
-      }
-      if (b.kind === "text" && !b.visible) {
-        if (previous?.kind === "thinking") {
-          b.attributedStart = previous.attributedStart;
-          const list = modelBlocks.get(agent);
-          const idx = list ? list.indexOf(previous) : -1;
-          if (idx >= 0) list.splice(idx, 1);
-        }
-        b.visible = true;
-        previous = b;
-        lastCall.delete(agent);
-        void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
-        if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent).push(b);
-      } else if (b.kind === "thinking" && !b.visible && chunk.text.trim()) {
-        b.visible = true;
-        b.attributedStart = previous?.last ?? stepStart;
-        previous = b;
-        lastCall.delete(agent);
-        void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
-        if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent).push(b);
-      }
-      b.last = now;
-      if (chunk.kind === "tool") b.toolId = chunk.id;
-      if (chunk.kind === "text" || chunk.kind === "thinking")
-        b.text += chunk.text;
-    }
+    if (isBlockChunk(chunk)) accountChunk($, step, chunk);
     yield chunk;
   }
 }
@@ -378,56 +385,62 @@ async function onCommandRun($, e, next) {
 var textOf = (message) => message.content.map(
   (b) => b.type === "text" ? b.text ?? "" : b.type === "thinking" ? b.thinking ?? "" : ""
 ).join("");
+function appendPrompt($, e, row) {
+  if (!e.agentId && isUserOrigin(e.origin) && currentPrompt && currentPrompt.rowKey === void 0) {
+    currentPrompt.rowKey = e.uuid;
+    completePrompt($);
+  } else {
+    pinTiming($, e.uuid, row);
+  }
+}
+function appendResponse($, e, text, row) {
+  if (!text.trim()) return;
+  lastCall.delete(agentOf(e));
+  const b = consumeBlock(
+    agentOf(e),
+    (b2) => (b2.kind === "text" || b2.kind === "thinking") && b2.text.trim() === text.trim()
+  );
+  pinTiming(
+    $,
+    e.uuid,
+    b ? {
+      time: b.attributedStart,
+      duration: b.last - b.attributedStart,
+      persist: true
+    } : row
+  );
+  $.ui.invalidate("ui.render");
+  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, row.time);
+}
+function appendCommand($, e, text, row) {
+  const name = /<command-name>\/?([^<]+)<\/command-name>/.exec(text)?.[1];
+  if (name !== void 0) {
+    const i = commands.findLastIndex((c) => c.command === name);
+    commandAwaitingOutput = i < 0 ? void 0 : commands.splice(i, 1)[0];
+  } else if (/<local-command-std(out|err)>/.test(text)) {
+    const c = commandAwaitingOutput;
+    commandAwaitingOutput = void 0;
+    pinTiming(
+      $,
+      e.uuid,
+      c ? { time: c.start, duration: c.end - c.start, persist: true } : row
+    );
+  }
+}
 async function onAppend($, e, next) {
   if (!DRAWN_DOORS.has(e.door)) return next(e);
-  const now = Date.now();
   const text = textOf(e.message);
-  const row = { time: now, persist: true };
+  const row = { time: Date.now(), persist: true };
   switch (e.door) {
     case "prompt":
-      if (!e.agentId && isUserOrigin(e.origin) && currentPrompt && currentPrompt.rowKey === void 0) {
-        currentPrompt.rowKey = e.uuid;
-        completePrompt($);
-      } else {
-        pinTiming($, e.uuid, row);
-      }
+      appendPrompt($, e, row);
       break;
-    case "response": {
-      if (!text.trim()) break;
-      lastCall.delete(agentOf(e));
-      const b = consumeBlock(
-        agentOf(e),
-        (b2) => (b2.kind === "text" || b2.kind === "thinking") && b2.text.trim() === text.trim()
-      );
-      pinTiming(
-        $,
-        e.uuid,
-        b ? {
-          time: b.attributedStart,
-          duration: b.last - b.attributedStart,
-          persist: true
-        } : row
-      );
-      $.ui.invalidate("ui.render");
-      void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
+    case "response":
+      appendResponse($, e, text, row);
       break;
-    }
-    case "command": {
-      const name = /<command-name>\/?([^<]+)<\/command-name>/.exec(text)?.[1];
-      if (name !== void 0) {
-        const i = commands.findLastIndex((c) => c.command === name);
-        commandAwaitingOutput = i < 0 ? void 0 : commands.splice(i, 1)[0];
-      } else if (/<local-command-std(out|err)>/.test(text)) {
-        const c = commandAwaitingOutput;
-        commandAwaitingOutput = void 0;
-        pinTiming(
-          $,
-          e.uuid,
-          c ? { time: c.start, duration: c.end - c.start, persist: true } : row
-        );
-      }
+    case "command":
+      appendCommand($, e, text, row);
       break;
-    }
     case "notice":
       if (e.message.name === "turn_duration") pinTiming($, e.uuid, row);
       break;
@@ -518,12 +531,22 @@ var RESOLVER = {
 };
 
 // src/transcript/render.ts
-async function withTimestamp($, e, next) {
+function trackExpandedView(e) {
   if (e.component === "UserMessage" && isUserOrigin(e.props.origin) && !e.props.from && !e.props.task) {
     session.expandedView = Boolean(e.props.isExpanded);
   } else if (e.component === "ToolResult" && typeof e.props.isExpanded === "boolean") {
     session.expandedView = e.props.isExpanded;
   }
+}
+function footerTextOf(b) {
+  const figures = [];
+  if (b.duration !== void 0)
+    figures.push(`${b.icon} ${formatDuration(b.duration)}`);
+  if (b.counter !== void 0) figures.push(`\u{1F527} ${formatRunning(b.counter)}`);
+  return figures.length ? ` ${figures.join(" \xB7 ")} ` : "";
+}
+async function withTimestamp($, e, next) {
+  trackExpandedView(e);
   await loadStore($);
   const b = RESOLVER[e.component](e);
   if (b.unwrapped) return next(e);
@@ -544,15 +567,7 @@ async function withTimestamp($, e, next) {
       ]
     };
   }
-  const figures = [];
-  if (b.counter !== void 0) {
-    if (b.duration !== void 0)
-      figures.push(`${b.icon} ${formatDuration(b.duration)}`);
-    figures.push(`\u{1F527} ${formatRunning(b.counter)}`);
-  } else if (b.duration !== void 0) {
-    figures.push(`${b.icon} ${formatDuration(b.duration)}`);
-  }
-  const footerText = figures.length ? ` ${figures.join(" \xB7 ")} ` : "";
+  const footerText = footerTextOf(b);
   const minWidth = e.viewport?.columns ? Math.max(0, e.viewport.columns - 2) : Math.max(headerText.length, footerText.length) + 2;
   return {
     type: "Box",

@@ -5,6 +5,7 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import sonarjs from "eslint-plugin-sonarjs";
 
 export default tseslint.config(
   {
@@ -36,6 +37,15 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  // Tope de complejidad cognitiva por función en el código del plugin: impide
+  // que vuelvan a crecer funciones difíciles de seguir (como lo fueron onStep
+  // y onAppend). Solo esta regla de sonarjs; el plugin es una dependencia de
+  // desarrollo y no se distribuye.
+  {
+    files: ["src/**"],
+    plugins: { sonarjs },
+    rules: { "sonarjs/cognitive-complexity": ["error", 15] },
   },
   prettier,
 );

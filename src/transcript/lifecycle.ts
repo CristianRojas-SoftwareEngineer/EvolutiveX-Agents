@@ -149,6 +149,103 @@ type BlockChunk =
 const isBlockChunk = (chunk: TurnStepChunk): chunk is BlockChunk =>
   BLOCK_KINDS.has(chunk.kind);
 
+// Paso en curso de un agente: su inicio, sus bloques por índice y el último
+// bloque visible, del que el siguiente toma su inicio atribuido.
+type StepState = {
+  agent: string;
+  start: number;
+  byIndex: Map<number, ModelBlock>;
+  previous?: ModelBlock;
+};
+
+// Añade un bloque visible al registro de su agente. La lista se crea aquí y
+// no al empezar el paso: prune() borra las listas vacías, también las de
+// pasos de otros agentes en curso.
+function registerBlock(agent: string, b: ModelBlock): void {
+  if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
+  modelBlocks.get(agent)!.push(b);
+}
+
+// Saca `b` del registro de su agente, si sigue ahí.
+function unregisterBlock(agent: string, b: ModelBlock): void {
+  const list = modelBlocks.get(agent);
+  const idx = list ? list.indexOf(b) : -1;
+  if (idx >= 0) list!.splice(idx, 1);
+}
+
+// Hace visible `b` como el último bloque visible del paso y lo registra.
+function reveal(step: StepState, b: ModelBlock): void {
+  b.visible = true;
+  step.previous = b;
+  registerBlock(step.agent, b);
+}
+
+// Bloque del índice del chunk, dado de alta con su primer chunk. Un bloque
+// `tool` es visible desde ese primer chunk.
+function blockFor(step: StepState, chunk: BlockChunk, now: number): ModelBlock {
+  let b = step.byIndex.get(chunk.index);
+  if (b) return b;
+  b = {
+    kind: chunk.kind,
+    text: "",
+    first: now,
+    last: now,
+    attributedStart: step.previous?.last ?? step.start,
+    visible: false,
+  };
+  step.byIndex.set(chunk.index, b);
+  if (b.kind === "tool") reveal(step, b);
+  return b;
+}
+
+// Un bloque `text` se hace visible con su primer chunk y absorbe el thinking
+// que lo precede (su inicio atribuido pasa a ser el de ese thinking); uno
+// `thinking`, con su primer chunk no vacío (narración de adaptive thinking,
+// que se dibuja como AssistantMessage). Ambos cierran el ToolGroup abierto de
+// su agente.
+function updateVisibility(
+  $: EngineInterface,
+  step: StepState,
+  b: ModelBlock,
+  chunk: BlockChunk,
+  now: number,
+): void {
+  if (b.visible) return;
+  if (b.kind === "text") {
+    const previous = step.previous;
+    if (previous?.kind === "thinking") {
+      b.attributedStart = previous.attributedStart;
+      unregisterBlock(step.agent, previous);
+    }
+  } else if (
+    b.kind === "thinking" &&
+    chunk.kind === "thinking" &&
+    chunk.text.trim()
+  ) {
+    b.attributedStart = step.previous?.last ?? step.start;
+  } else {
+    return;
+  }
+  reveal(step, b);
+  lastCall.delete(step.agent);
+  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
+}
+
+// Contabilidad de un chunk de content block: alta de su bloque, visibilidad,
+// último chunk y texto acumulado.
+function accountChunk(
+  $: EngineInterface,
+  step: StepState,
+  chunk: BlockChunk,
+): void {
+  const now = Date.now();
+  const b = blockFor(step, chunk, now);
+  updateVisibility($, step, b, chunk, now);
+  b.last = now;
+  if (chunk.kind === "tool") b.toolId = chunk.id;
+  if (chunk.kind === "text" || chunk.kind === "thinking") b.text += chunk.text;
+}
+
 // Registra cada content block de la respuesta con su primer y último chunk,
 // en el registro de su agente. `attributedStart` es el fin del bloque visible
 // anterior del mismo paso (o el inicio del paso): así el thinking previo
@@ -160,11 +257,10 @@ export async function* onStep(
   next: Parameters<Hook<"turn.step">>[2],
 ) {
   const agent = agentOf(e);
-  const stepStart = Date.now();
+  const start = Date.now();
   if (turns.get(agent)?.turnId !== e.turnId)
-    turns.set(agent, { turnId: e.turnId, start: stepStart });
-  const byIndex = new Map<number, ModelBlock>();
-  let previous: ModelBlock | undefined;
+    turns.set(agent, { turnId: e.turnId, start });
+  const step: StepState = { agent, start, byIndex: new Map() };
   const stream = next(e)[Symbol.asyncIterator]();
   for (;;) {
     const { value: chunk, done } = await stream.next();
@@ -172,62 +268,7 @@ export async function* onStep(
       prune();
       return chunk;
     }
-    if (isBlockChunk(chunk)) {
-      const now = Date.now();
-      let b = byIndex.get(chunk.index);
-      if (!b) {
-        b = {
-          kind: chunk.kind,
-          text: "",
-          first: now,
-          last: now,
-          attributedStart: previous?.last ?? stepStart,
-          visible: false,
-        };
-        byIndex.set(chunk.index, b);
-        if (b.kind === "tool") {
-          b.visible = true;
-          previous = b;
-          // La lista se crea aquí y no al empezar el paso: prune() borra
-          // las listas vacías, también las de pasos de otros agentes en curso.
-          if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-          modelBlocks.get(agent)!.push(b);
-        }
-      }
-      if (b.kind === "text" && !b.visible) {
-        if (previous?.kind === "thinking") {
-          b.attributedStart = previous.attributedStart;
-          const list = modelBlocks.get(agent);
-          const idx = list ? list.indexOf(previous) : -1;
-          if (idx >= 0) list!.splice(idx, 1);
-        }
-        b.visible = true;
-        previous = b;
-        // Un bloque de texto cierra el ToolGroup abierto de su agente.
-        lastCall.delete(agent);
-        void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
-        if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent)!.push(b);
-      } else if (
-        b.kind === "thinking" &&
-        !b.visible &&
-        (chunk as TurnStepThinkingChunk).text.trim()
-      ) {
-        b.visible = true;
-        b.attributedStart = previous?.last ?? stepStart;
-        previous = b;
-        // Un bloque thinking de narración (adaptive thinking) también cierra
-        // el ToolGroup abierto de su agente y se dibuja como AssistantMessage.
-        lastCall.delete(agent);
-        void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
-        if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent)!.push(b);
-      }
-      b.last = now;
-      if (chunk.kind === "tool") b.toolId = chunk.id;
-      if (chunk.kind === "text" || chunk.kind === "thinking")
-        b.text += chunk.text;
-    }
+    if (isBlockChunk(chunk)) accountChunk($, step, chunk);
     yield chunk;
   }
 }
@@ -330,6 +371,81 @@ const textOf = (message: Parameters<Hook<"session.append">>[1]["message"]) =>
     )
     .join("");
 
+type AppendEvent = Parameters<Hook<"session.append">>[1];
+// Hora de la fila, sin duración, persistida.
+type RowTiming = { time: number; persist: true };
+
+// prompt: el principal del usuario completa su UserMessage (hora = envío; el
+// 🔌 lo completa turn.start); el resto (subagente, notificación) lleva la hora
+// de la fila.
+function appendPrompt($: EngineInterface, e: AppendEvent, row: RowTiming) {
+  if (
+    !e.agentId &&
+    isUserOrigin(e.origin) &&
+    currentPrompt &&
+    currentPrompt.rowKey === undefined
+  ) {
+    currentPrompt.rowKey = e.uuid;
+    completePrompt($);
+  } else {
+    pinTiming($, e.uuid, row);
+  }
+}
+
+// response con texto: hora y 🧠 de su bloque de texto o narración, que se
+// consume; cierra el ToolGroup abierto de su agente.
+function appendResponse(
+  $: EngineInterface,
+  e: AppendEvent,
+  text: string,
+  row: RowTiming,
+) {
+  if (!text.trim()) return;
+  lastCall.delete(agentOf(e));
+  const b = consumeBlock(
+    agentOf(e),
+    (b) =>
+      (b.kind === "text" || b.kind === "thinking") &&
+      b.text.trim() === text.trim(),
+  );
+  pinTiming(
+    $,
+    e.uuid,
+    b
+      ? {
+          time: b.attributedStart,
+          duration: b.last - b.attributedStart,
+          persist: true,
+        }
+      : row,
+  );
+  $.ui.invalidate("ui.render");
+  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, row.time);
+}
+
+// command: la fila eco nombra el comando terminado; la de su stdout/stderr
+// lleva su hora y su 🔧.
+function appendCommand(
+  $: EngineInterface,
+  e: AppendEvent,
+  text: string,
+  row: RowTiming,
+) {
+  const name = /<command-name>\/?([^<]+)<\/command-name>/.exec(text)?.[1];
+  if (name !== undefined) {
+    const i = commands.findLastIndex((c) => c.command === name);
+    commandAwaitingOutput = i < 0 ? undefined : commands.splice(i, 1)[0];
+  } else if (/<local-command-std(out|err)>/.test(text)) {
+    const c = commandAwaitingOutput;
+    commandAwaitingOutput = undefined;
+    pinTiming(
+      $,
+      e.uuid,
+      c ? { time: c.start, duration: c.end - c.start, persist: true } : row,
+    );
+  }
+}
+
 // Fija cada fila dibujada del transcript bajo su uuid (el requestId de su
 // componente), antes de `next`, porque el engine puede dibujarla mientras se
 // guarda:
@@ -340,67 +456,22 @@ const textOf = (message: Parameters<Hook<"session.append">>[1]["message"]) =>
 //     hora = la de la fila, sin duración
 export async function onAppend(
   $: EngineInterface,
-  e: Parameters<Hook<"session.append">>[1],
+  e: AppendEvent,
   next: Parameters<Hook<"session.append">>[2],
 ) {
   if (!DRAWN_DOORS.has(e.door)) return next(e);
-  const now = Date.now();
   const text = textOf(e.message);
-  const row = { time: now, persist: true };
+  const row: RowTiming = { time: Date.now(), persist: true };
   switch (e.door) {
     case "prompt":
-      if (
-        !e.agentId &&
-        isUserOrigin(e.origin) &&
-        currentPrompt &&
-        currentPrompt.rowKey === undefined
-      ) {
-        currentPrompt.rowKey = e.uuid;
-        completePrompt($);
-      } else {
-        pinTiming($, e.uuid, row);
-      }
+      appendPrompt($, e, row);
       break;
-    case "response": {
-      if (!text.trim()) break;
-      lastCall.delete(agentOf(e));
-      const b = consumeBlock(
-        agentOf(e),
-        (b) =>
-          (b.kind === "text" || b.kind === "thinking") &&
-          b.text.trim() === text.trim(),
-      );
-      pinTiming(
-        $,
-        e.uuid,
-        b
-          ? {
-              time: b.attributedStart,
-              duration: b.last - b.attributedStart,
-              persist: true,
-            }
-          : row,
-      );
-      $.ui.invalidate("ui.render");
-      void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
+    case "response":
+      appendResponse($, e, text, row);
       break;
-    }
-    case "command": {
-      const name = /<command-name>\/?([^<]+)<\/command-name>/.exec(text)?.[1];
-      if (name !== undefined) {
-        const i = commands.findLastIndex((c) => c.command === name);
-        commandAwaitingOutput = i < 0 ? undefined : commands.splice(i, 1)[0];
-      } else if (/<local-command-std(out|err)>/.test(text)) {
-        const c = commandAwaitingOutput;
-        commandAwaitingOutput = undefined;
-        pinTiming(
-          $,
-          e.uuid,
-          c ? { time: c.start, duration: c.end - c.start, persist: true } : row,
-        );
-      }
+    case "command":
+      appendCommand($, e, text, row);
       break;
-    }
     case "notice":
       if (e.message.name === "turn_duration") pinTiming($, e.uuid, row);
       break;

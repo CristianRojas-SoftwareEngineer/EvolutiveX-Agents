@@ -69,25 +69,39 @@ function presynth(force: boolean): number {
       stdio: ["ignore", "ignore", "inherit"],
       windowsHide: true,
     });
-    const code = res.status ?? 1;
-    if (code === 0)
-      console.log(
-        `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
-      );
-    else if (code === 6)
-      console.log(`${eventKey}: ya pre-sintetizado (${label})`);
-    else {
-      failed = true;
-      const reason =
-        code === 5
-          ? " — daemon caído; levántalo con `ai-voice-interconnector daemon start`"
-          : code === 4
-            ? " — modelo ausente; provisiónalo con `ai-voice-interconnector setup`"
-            : "";
-      console.error(`${eventKey}: fallo (exit ${code})${reason}`);
-    }
+    if (!reportPresynth(eventKey, label, res.status ?? 1, force)) failed = true;
   }
   return failed ? 1 : 0;
+}
+
+/**
+ * Informa el resultado de pre-sintetizar un anuncio. Devuelve false si falló;
+ * el exit `6` (label ya existente) cuenta como éxito.
+ */
+function reportPresynth(
+  eventKey: string,
+  label: string,
+  code: number,
+  force: boolean,
+): boolean {
+  if (code === 0) {
+    console.log(
+      `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
+    );
+    return true;
+  }
+  if (code === 6) {
+    console.log(`${eventKey}: ya pre-sintetizado (${label})`);
+    return true;
+  }
+  const reason =
+    code === 5
+      ? " — daemon caído; levántalo con `ai-voice-interconnector daemon start`"
+      : code === 4
+        ? " — modelo ausente; provisiónalo con `ai-voice-interconnector setup`"
+        : "";
+  console.error(`${eventKey}: fallo (exit ${code})${reason}`);
+  return false;
 }
 
 function main(): number {

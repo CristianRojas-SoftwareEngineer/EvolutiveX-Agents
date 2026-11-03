@@ -180,11 +180,20 @@ var RESOURCE_CHECKS = [
 function parseSingleJsonObject(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("{")) return void 0;
+  const end = objectEnd(trimmed);
+  if (end < 0 || trimmed.slice(end + 1).trim() !== "") return void 0;
+  try {
+    return JSON.parse(trimmed.slice(0, end + 1));
+  } catch {
+    return void 0;
+  }
+}
+function objectEnd(text) {
   let depth = 0;
   let inString = false;
   let escaped = false;
-  for (let i = 0; i < trimmed.length; i++) {
-    const ch = trimmed[i];
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
     if (inString) {
       if (escaped) escaped = false;
       else if (ch === "\\") escaped = true;
@@ -195,17 +204,10 @@ function parseSingleJsonObject(text) {
     else if (ch === "{") depth++;
     else if (ch === "}") {
       depth--;
-      if (depth === 0) {
-        if (trimmed.slice(i + 1).trim() !== "") return void 0;
-        try {
-          return JSON.parse(trimmed.slice(0, i + 1));
-        } catch {
-          return void 0;
-        }
-      }
+      if (depth === 0) return i;
     }
   }
-  return void 0;
+  return -1;
 }
 function isValidReport(value) {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

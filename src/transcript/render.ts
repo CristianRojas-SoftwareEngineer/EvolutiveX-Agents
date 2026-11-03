@@ -118,6 +118,39 @@ type TimestampHook = MatchedHook<
 type SpinnerHook = MatchedHook<"ui.render", { component: "Spinner" }>;
 type TurnDurationHook = MatchedHook<"ui.render", { component: "TurnDuration" }>;
 
+// La vista ctrl+o se deduce de `isExpanded` en los mensajes de usuario reales
+// (no de otro agente ni de una tarea) y en ToolResult.
+function trackExpandedView(e: Parameters<TimestampHook>[1]): void {
+  if (
+    e.component === "UserMessage" &&
+    isUserOrigin(e.props.origin) &&
+    !e.props.from &&
+    !e.props.task
+  ) {
+    session.expandedView = Boolean(e.props.isExpanded);
+  } else if (
+    e.component === "ToolResult" &&
+    typeof e.props.isExpanded === "boolean"
+  ) {
+    session.expandedView = e.props.isExpanded;
+  }
+}
+
+// Footer en flujo con la duración del bloque una vez definitiva (o con el
+// contador en vivo); sin cifra, "" y el borde inferior queda liso. Con
+// contador en curso: la cifra ya fijada (🧠 en el ToolUse) y `🔧 n s…`.
+function footerTextOf(b: {
+  icon?: string;
+  duration?: number;
+  counter?: number;
+}): string {
+  const figures = [];
+  if (b.duration !== undefined)
+    figures.push(`${b.icon} ${formatDuration(b.duration)}`);
+  if (b.counter !== undefined) figures.push(`🔧 ${formatRunning(b.counter)}`);
+  return figures.length ? ` ${figures.join(" · ")} ` : "";
+}
+
 // Handler unificado para todos los render sites del transcript.
 //
 // Tree-wrapping: en lugar de modificar props.text (que no todos los
@@ -168,19 +201,7 @@ export async function withTimestamp(
   e: Parameters<TimestampHook>[1],
   next: Parameters<TimestampHook>[2],
 ): Promise<RenderElement> {
-  if (
-    e.component === "UserMessage" &&
-    isUserOrigin(e.props.origin) &&
-    !e.props.from &&
-    !e.props.task
-  ) {
-    session.expandedView = Boolean(e.props.isExpanded);
-  } else if (
-    e.component === "ToolResult" &&
-    typeof e.props.isExpanded === "boolean"
-  ) {
-    session.expandedView = e.props.isExpanded;
-  }
+  trackExpandedView(e);
   await loadStore($);
   const b = RESOLVER[e.component](e as never);
   if (b.unwrapped) return next(e);
@@ -216,18 +237,7 @@ export async function withTimestamp(
     };
   }
 
-  // Footer en flujo con la duración del bloque una vez definitiva (o con el
-  // contador en vivo); si no hay cifra, el borde inferior queda liso.
-  // Con contador en curso: la cifra ya fijada (🧠 en el ToolUse) y `🔧 n s…`.
-  const figures = [];
-  if (b.counter !== undefined) {
-    if (b.duration !== undefined)
-      figures.push(`${b.icon} ${formatDuration(b.duration)}`);
-    figures.push(`🔧 ${formatRunning(b.counter)}`);
-  } else if (b.duration !== undefined) {
-    figures.push(`${b.icon} ${formatDuration(b.duration)}`);
-  }
-  const footerText = figures.length ? ` ${figures.join(" · ")} ` : "";
+  const footerText = footerTextOf(b);
 
   // Espaciador de alto 0: fija el ancho interno del recuadro a
   // `e.viewport.columns - 2` (+2 por los bordes verticales `│` = 100% del
