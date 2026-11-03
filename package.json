@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Plugin de Claude Code: narración por voz con AI Voice-InterConnector y notificaciones de escritorio nativas.",
+  "description": "Plugin de Claude Code: narración por voz con AI Voice-InterConnector, notificaciones de escritorio nativas y transcript enriquecido opt-in.",
   "author": "Cristián Rojas Arredondo",
   "license": "MPL-2.0",
   "engine": {

@@ -1,6 +1,6 @@
 ---
 name: narrate
-description: Controla la narración por voz y las notificaciones de escritorio de EvolutiveX Agents (activar/desactivar canales, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración del plugin.
+description: Controla la narración por voz y las notificaciones de escritorio de EvolutiveX Agents (activar/desactivar canales, modo de generación, estado) y narra texto a demanda. Úsala cuando el usuario pida "léeme esto en voz alta", "activa/desactiva la narración", "activa/desactiva las notificaciones de escritorio", "cambia el modo de narración", "narra ...", o pregunte por el estado o la configuración del plugin, incluido cómo activar el transcript enriquecido (que se activa en /config).
 ---
 
 # Narración por voz y notificaciones con EvolutiveX Agents
@@ -34,6 +34,10 @@ Tras `voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`, confi
 ## Narración a demanda ("léeme esto")
 
 Cuando el usuario pida narrar algo, **redacta tú un texto breve y natural en español** (una o dos frases, sin markdown ni símbolos, apto para leerse en voz alta) y pásalo a `say`. No narres bloques de código, rutas ni markdown crudo: parafrasea. Requiere que AI Voice-InterConnector esté instalado y aprovisionado (`ai-voice-interconnector setup`); si `say` reporta que el CLI no está en el PATH, indícalo.
+
+## Transcript enriquecido (no se controla aquí)
+
+El transcript enriquecido (hora de inicio, duración y contadores en vivo en cada bloque del transcript) **no** se controla con `narrate-ctl`. Si el usuario pide activarlo o desactivarlo, indícale que lo haga desde `/config`, en la opción `evolutivex-agents.enhancedTranscript` (desactivada por defecto); el cambio se aplica al momento.
 
 ## Configuración de claves (modo LLM)
 

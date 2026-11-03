@@ -38,6 +38,7 @@ invisible cuando todo va bien y fácil de reparar cuando no.
 - Perfiles de voz por evento (`voice-stop`, `voice-notification`, …).
 - Umbral de oraciones de la degradación local configurable.
 - Activación selectiva de hooks sin editar `hooks/hooks.json`.
+- Unificar los canales externos (`voiceEnabled`, `notificationsEnabled`, `messageMode`) en `userConfig`, junto a `enhancedTranscript`. Los hooks de comando solo reciben `CLAUDE_PLUGIN_OPTION_*` cuando el valor está fijado explícitamente, no sus defaults, así que el código debe aplicar los valores por defecto.
 
 ### Pruebas
 

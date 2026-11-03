@@ -11,6 +11,7 @@ Verificado contra **AI Voice-InterConnector v0.42.0**.
 ### Modificado
 
 - Renombrado canónico a **EvolutiveX Agents** (`evolutivex-agents`).
+- `src/` organizado por funcionalidad: `lib/` (compartido), `voice/`, `notifications/` y `transcript/`.
 
 ### Añadido
 
@@ -25,5 +26,10 @@ Verificado contra **AI Voice-InterConnector v0.42.0**.
 - `narrate-ctl` con `voice-on`/`voice-off`, `notifications-on`/`notifications-off`, `mode`, `status`, `say` y `presynth [--force]`.
 - Instalación guiada `/evolutivex-agents:install` y skill `/evolutivex-agents:narrate`.
 - Licencia MPL-2.0.
+- Transcript enriquecido opt-in (`/config` → `enhancedTranscript`): recuadros con la hora de inicio y la duración de cada bloque del transcript, hora en Spinner y TurnDuration, contadores en vivo y persistencia local para sesiones reanudadas.
+
+### Eliminado
+
+- Lecturas del payload de hooks ajenas al contrato de Claude Code: `subject` en la raíz y `tool_input.task_subject` en los mensajes de tareas.
 
 [No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/commits/main
