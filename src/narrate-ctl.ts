@@ -4,33 +4,25 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Superficie de control de la narración y las notificaciones (para la skill y uso manual).
-// Lee y escribe config.json en el state dir: solo preferencias no secretas
-// (voiceEnabled, notificationsEnabled y messageMode). La API key se lee del entorno.
-// No participa en el flujo de hooks.
+// Superficie de control de la narración (para la skill y uso manual). Las
+// preferencias se configuran en /config → evolutivex-agents.* y no se leen
+// aquí: la herramienta Bash no recibe las variables de userConfig. La API key
+// se lee del entorno. No participa en el flujo de hooks.
 //
 // Uso: node dist/narrate-ctl.js <comando> [args]
-//   voice-on           activa la narración por voz
-//   voice-off          desactiva la narración por voz
-//   notifications-on   activa las notificaciones de escritorio
-//   notifications-off  desactiva las notificaciones de escritorio
-//   mode <llm|local>   fija el modo de generación
 //   status             muestra el estado (sin revelar las claves)
 //   say "<texto>"      narra un texto a demanda vía ai-voice-interconnector
 //   presynth [--force] pre-sintetiza los anuncios estáticos (idempotente; --force reescribe)
-import { loadConfig, updateConfig } from "./lib/config.js";
-import { configPath, stateDir } from "./lib/state-dir.js";
+import { loadConfig } from "./lib/config.js";
+import { stateDir } from "./lib/state-dir.js";
 import { resolveCli, runCli } from "./voice/resolve-cli.js";
 import { ANNOUNCEMENTS } from "./voice/message/static-announcements.js";
 
 function printStatus(): void {
   const cfg = loadConfig();
   const lines = [
-    `voice:          ${cfg.voiceEnabled}`,
-    `notifications:  ${cfg.notificationsEnabled}`,
-    `messageMode:    ${cfg.messageMode}`,
+    `preferencias:   /config → evolutivex-agents.*`,
     `gemini key:     ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
-    `config:         ${configPath()}`,
     `state dir:      ${stateDir()}`,
   ];
   console.log(lines.join("\n"));
@@ -101,32 +93,6 @@ function presynth(force: boolean): number {
 function main(): number {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
-    case "voice-on":
-      updateConfig({ voiceEnabled: true });
-      console.log("Narración activada.");
-      return 0;
-    case "voice-off":
-      updateConfig({ voiceEnabled: false });
-      console.log("Narración desactivada.");
-      return 0;
-    case "notifications-on":
-      updateConfig({ notificationsEnabled: true });
-      console.log("Notificaciones de escritorio activadas.");
-      return 0;
-    case "notifications-off":
-      updateConfig({ notificationsEnabled: false });
-      console.log("Notificaciones de escritorio desactivadas.");
-      return 0;
-    case "mode": {
-      const mode = rest[0];
-      if (mode !== "llm" && mode !== "local") {
-        console.error("Uso: mode <llm|local>");
-        return 2;
-      }
-      updateConfig({ messageMode: mode });
-      console.log(`messageMode = ${mode}`);
-      return 0;
-    }
     case "status":
     case undefined:
       printStatus();

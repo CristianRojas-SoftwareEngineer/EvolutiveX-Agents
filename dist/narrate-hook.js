@@ -7,12 +7,40 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/voice/narrate-hook.ts
-import { readFileSync as readFileSync3 } from "node:fs";
+import { readFileSync as readFileSync2 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join as join3 } from "node:path";
 
 // src/lib/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
+var DEFAULTS = {
+  voiceEnabled: true,
+  notificationsEnabled: true,
+  messageMode: "local"
+};
+function loadConfig() {
+  const env = process.env;
+  const mode = env.CLAUDE_PLUGIN_OPTION_MESSAGEMODE;
+  return {
+    voiceEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_VOICEENABLED,
+      DEFAULTS.voiceEnabled
+    ),
+    notificationsEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED,
+      DEFAULTS.notificationsEnabled
+    ),
+    messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
+  };
+}
+function parseBoolean(v, fallback) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
+}
+function emptyToUndef(v) {
+  return typeof v === "string" && v.trim() !== "" ? v : void 0;
+}
 
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
@@ -39,9 +67,6 @@ function ensureStateDir() {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
-function configPath() {
-  return join(stateDir(), "config.json");
-}
 function workerPidPath() {
   return join(stateDir(), "worker.pid");
 }
@@ -49,46 +74,15 @@ function queueDir() {
   return join(stateDir(), "queue");
 }
 
-// src/lib/config.ts
-var DEFAULTS = {
-  voiceEnabled: true,
-  notificationsEnabled: true,
-  messageMode: "local"
-};
-function readFileConfig() {
-  try {
-    const raw = readFileSync(configPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
-      return { voiceEnabled, notificationsEnabled, messageMode };
-    }
-  } catch {
-  }
-  return {};
-}
-function loadConfig() {
-  const file = readFileConfig();
-  return {
-    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
-    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
-    messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
-    geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
-  };
-}
-function emptyToUndef(v) {
-  return typeof v === "string" && v.trim() !== "" ? v : void 0;
-}
-
 // src/voice/queue.ts
 import {
   mkdirSync as mkdirSync2,
-  readFileSync as readFileSync2,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   statSync,
-  writeFileSync as writeFileSync2
+  writeFileSync
 } from "node:fs";
 import { join as join2 } from "node:path";
 
@@ -147,9 +141,25 @@ function enqueuePayload(payload) {
   const name = nextQueueFileName();
   const finalPath = join2(dir, name);
   const tmpPath = join2(dir, `.tmp-${name}`);
-  writeFileSync2(tmpPath, JSON.stringify(payload), "utf8");
+  writeFileSync(tmpPath, JSON.stringify(payload), "utf8");
   renameSync(tmpPath, finalPath);
   return finalPath;
+}
+function listPending() {
+  const dir = queueDir();
+  try {
+    return readdirSync(dir).filter((f) => f.endsWith(".json") && !f.startsWith(".tmp-")).sort();
+  } catch {
+    return [];
+  }
+}
+function clearQueue() {
+  try {
+    for (const name of listPending()) {
+      rmSync(join2(queueDir(), name), { force: true });
+    }
+  } catch {
+  }
 }
 
 // src/voice/spawn.ts
@@ -176,7 +186,10 @@ function isAlive(pid) {
 async function main() {
   const raw = await readStdin();
   const cfg = loadConfig();
-  if (!cfg.voiceEnabled) return;
+  if (!cfg.voiceEnabled) {
+    clearQueue();
+    return;
+  }
   const payload = parsePayload(raw);
   enqueuePayload(payload);
   const owner = readOwnerPid();
@@ -188,7 +201,7 @@ async function main() {
 }
 function readOwnerPid() {
   try {
-    return Number.parseInt(readFileSync3(workerPidPath(), "utf8").trim(), 10);
+    return Number.parseInt(readFileSync2(workerPidPath(), "utf8").trim(), 10);
   } catch {
     return NaN;
   }

@@ -8,8 +8,9 @@
 // subproceso real sobre dist/narrate-ctl.js (check-dist garantiza que dist/
 // refleja src/), con el state dir redirigido a un temporal vía env vars del SO
 // anfitrión. El test de status fija por contrato que las claves jamás se
-// imprimen. Cubre presynth idempotente y presynth --force (que pasa --force al
-// motor para reescribir los WAV existentes).
+// imprimen y que las preferencias no se muestran (viven en /config). Cubre
+// presynth idempotente y presynth --force (que pasa --force al motor para
+// reescribir los WAV existentes).
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -53,53 +54,11 @@ function runCtl(
   return { status: res.status, stdout: res.stdout, stderr: res.stderr };
 }
 
-function readConfigFile(): Record<string, unknown> {
-  const sub =
-    process.platform === "darwin" ? join("Library", "Application Support") : "";
-  const path = join(stateBase, sub, "evolutivex-agents", "config.json");
-  return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-}
-
-test("voice-on activa la narración y lo persiste", () => {
-  const res = runCtl(["voice-on"]);
-  assert.equal(res.status, 0);
-  assert.match(res.stdout, /activada/);
-  assert.equal(readConfigFile().voiceEnabled, true);
-});
-
-test("voice-off desactiva la narración y lo persiste", () => {
-  const res = runCtl(["voice-off"]);
-  assert.equal(res.status, 0);
-  assert.match(res.stdout, /desactivada/);
-  assert.equal(readConfigFile().voiceEnabled, false);
-});
-
-test("notifications-off y notifications-on controlan las notificaciones sin alterar voz", () => {
-  assert.equal(runCtl(["notifications-off"]).status, 0);
-  assert.equal(readConfigFile().notificationsEnabled, false);
-  assert.equal(readConfigFile().voiceEnabled, true);
-  assert.equal(runCtl(["notifications-on"]).status, 0);
-  assert.equal(readConfigFile().notificationsEnabled, true);
-});
-
-test("mode fija llm o local; un valor inválido devuelve 2 con uso", () => {
-  assert.equal(runCtl(["mode", "local"]).status, 0);
-  assert.equal(readConfigFile().messageMode, "local");
-  assert.equal(runCtl(["mode", "llm"]).status, 0);
-  assert.equal(readConfigFile().messageMode, "llm");
-
-  const bad = runCtl(["mode", "turbo"]);
-  assert.equal(bad.status, 2);
-  assert.match(bad.stderr, /Uso: mode/);
-});
-
 test("status reporta el estado y jamás imprime el valor de una clave", () => {
   const sentinel = "sk-CLAVE-QUE-NO-DEBE-APARECER";
   const res = runCtl(["status"], { GEMINI_API_KEY: sentinel });
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /voice:/);
-  assert.match(res.stdout, /notifications:/);
-  assert.match(res.stdout, /messageMode: {4}local/);
+  assert.match(res.stdout, /preferencias: {3}\/config → evolutivex-agents\.\*/);
   assert.match(res.stdout, /gemini key: {5}configurada/);
   assert.ok(!res.stdout.includes(sentinel));
   assert.ok(!res.stderr.includes(sentinel));
@@ -108,28 +67,23 @@ test("status reporta el estado y jamás imprime el valor de una clave", () => {
 test("status sin GEMINI_API_KEY reporta la clave ausente", () => {
   const res = runCtl(["status"]);
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /messageMode: {4}local/);
   assert.match(res.stdout, /gemini key: {5}ausente/);
 });
 
-test("config.json solo persiste preferencias no secretas", () => {
-  assert.equal(runCtl(["voice-on"]).status, 0);
-  assert.equal(runCtl(["mode", "llm"]).status, 0);
-  assert.equal(runCtl(["voice-off"]).status, 0);
-  const raw = readConfigFile();
-  assert.deepEqual(Object.keys(raw).sort(), [
-    "messageMode",
-    "notificationsEnabled",
-    "voiceEnabled",
-  ]);
-  assert.equal(raw.voiceEnabled, false);
-  assert.equal(raw.messageMode, "llm");
+test("status no muestra preferencias: solo remite a /config", () => {
+  const res = runCtl(["status"], {
+    CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
+    CLAUDE_PLUGIN_OPTION_MESSAGEMODE: "llm",
+  });
+  assert.equal(res.status, 0);
+  assert.doesNotMatch(res.stdout, /voice|notifications|messageMode|llm/);
+  assert.match(res.stdout, /\/config/);
 });
 
 test("sin comando equivale a status", () => {
   const res = runCtl([]);
   assert.equal(res.status, 0);
-  assert.match(res.stdout, /voice:/);
+  assert.match(res.stdout, /preferencias:/);
 });
 
 test("un comando desconocido devuelve 2", () => {
@@ -137,6 +91,20 @@ test("un comando desconocido devuelve 2", () => {
   assert.equal(res.status, 2);
   assert.match(res.stderr, /Comando desconocido/);
 });
+
+for (const retired of [
+  ["voice-on"],
+  ["voice-off"],
+  ["notifications-on"],
+  ["notifications-off"],
+  ["mode", "llm"],
+]) {
+  test(`el subcomando retirado ${retired[0]} devuelve 2`, () => {
+    const res = runCtl(retired);
+    assert.equal(res.status, 2);
+    assert.match(res.stderr, /Comando desconocido/);
+  });
+}
 
 test("say sin texto devuelve 2 con uso", () => {
   const res = runCtl(["say", "   "]);

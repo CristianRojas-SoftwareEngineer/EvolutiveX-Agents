@@ -7,48 +7,7 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/voice/narrate-worker.ts
-import { appendFileSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync3 } from "node:fs";
-
-// src/lib/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
-
-// src/lib/state-dir.ts
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
-import { mkdirSync } from "node:fs";
-var APP_DIR = "evolutivex-agents";
-function stateDir() {
-  const home = homedir();
-  switch (platform()) {
-    case "win32": {
-      const base = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
-      return join(base, APP_DIR);
-    }
-    case "darwin":
-      return join(home, "Library", "Application Support", APP_DIR);
-    default: {
-      const base = process.env.XDG_STATE_HOME ?? join(home, ".local", "state");
-      return join(base, APP_DIR);
-    }
-  }
-}
-function ensureStateDir() {
-  const dir = stateDir();
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
-function configPath() {
-  return join(stateDir(), "config.json");
-}
-function workerPidPath() {
-  return join(stateDir(), "worker.pid");
-}
-function queueDir() {
-  return join(stateDir(), "queue");
-}
-function workerLogPath() {
-  return join(stateDir(), "worker.log");
-}
+import { appendFileSync, readFileSync as readFileSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 
 // src/lib/config.ts
 var DEFAULTS = {
@@ -56,26 +15,26 @@ var DEFAULTS = {
   notificationsEnabled: true,
   messageMode: "local"
 };
-function readFileConfig() {
-  try {
-    const raw = readFileSync(configPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
-      return { voiceEnabled, notificationsEnabled, messageMode };
-    }
-  } catch {
-  }
-  return {};
-}
 function loadConfig() {
-  const file = readFileConfig();
+  const env = process.env;
+  const mode = env.CLAUDE_PLUGIN_OPTION_MESSAGEMODE;
   return {
-    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
-    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
-    messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
-    geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
+    voiceEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_VOICEENABLED,
+      DEFAULTS.voiceEnabled
+    ),
+    notificationsEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED,
+      DEFAULTS.notificationsEnabled
+    ),
+    messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
   };
+}
+function parseBoolean(v, fallback) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
 }
 function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
@@ -113,15 +72,50 @@ function parseSingleJsonObject(text) {
   return void 0;
 }
 
+// src/lib/state-dir.ts
+import { homedir, platform } from "node:os";
+import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+var APP_DIR = "evolutivex-agents";
+function stateDir() {
+  const home = homedir();
+  switch (platform()) {
+    case "win32": {
+      const base = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
+      return join(base, APP_DIR);
+    }
+    case "darwin":
+      return join(home, "Library", "Application Support", APP_DIR);
+    default: {
+      const base = process.env.XDG_STATE_HOME ?? join(home, ".local", "state");
+      return join(base, APP_DIR);
+    }
+  }
+}
+function ensureStateDir() {
+  const dir = stateDir();
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function workerPidPath() {
+  return join(stateDir(), "worker.pid");
+}
+function queueDir() {
+  return join(stateDir(), "queue");
+}
+function workerLogPath() {
+  return join(stateDir(), "worker.log");
+}
+
 // src/voice/queue.ts
 import {
   mkdirSync as mkdirSync2,
-  readFileSync as readFileSync2,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
   statSync,
-  writeFileSync as writeFileSync2
+  writeFileSync
 } from "node:fs";
 import { join as join2 } from "node:path";
 
@@ -152,7 +146,7 @@ function claimNext() {
   const file = join2(queueDir(), pending[0]);
   let payload;
   try {
-    payload = parsePayload(readFileSync2(file, "utf8"));
+    payload = parsePayload(readFileSync(file, "utf8"));
   } catch {
     payload = {};
   }
@@ -568,17 +562,17 @@ function sleepSync(ms) {
 function acquireLock() {
   const pidPath = workerPidPath();
   try {
-    writeFileSync3(pidPath, String(process.pid), {
+    writeFileSync2(pidPath, String(process.pid), {
       encoding: "utf8",
       flag: "wx"
     });
     return true;
   } catch {
     try {
-      const owner = Number.parseInt(readFileSync3(pidPath, "utf8").trim(), 10);
+      const owner = Number.parseInt(readFileSync2(pidPath, "utf8").trim(), 10);
       if (Number.isInteger(owner) && isAlive(owner)) return false;
       rmSync2(pidPath, { force: true });
-      writeFileSync3(pidPath, String(process.pid), {
+      writeFileSync2(pidPath, String(process.pid), {
         encoding: "utf8",
         flag: "wx"
       });
@@ -591,7 +585,7 @@ function acquireLock() {
 function releaseLock() {
   try {
     const owner = Number.parseInt(
-      readFileSync3(workerPidPath(), "utf8").trim(),
+      readFileSync2(workerPidPath(), "utf8").trim(),
       10
     );
     if (owner === process.pid) rmSync2(workerPidPath(), { force: true });

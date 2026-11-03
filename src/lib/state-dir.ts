@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // State dir por convención de cada SO. Equivalente en miniatura al data_root()
-// de AI Voice-InterConnector, sin depender de él. Contiene config.json (solo
-// preferencias no secretas), worker.pid, queue/ (cola de payloads de narración)
-// y worker.log. La API key se lee del entorno y no se guarda aquí.
+// de AI Voice-InterConnector, sin depender de él. Contiene worker.pid (el lock
+// del worker), queue/ (cola de payloads de narración) y worker.log. Las
+// preferencias viven en el userConfig del plugin y la API key en el entorno:
+// ninguna se guarda aquí.
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
@@ -36,10 +37,6 @@ export function ensureStateDir(): string {
   const dir = stateDir();
   mkdirSync(dir, { recursive: true });
   return dir;
-}
-
-export function configPath(): string {
-  return join(stateDir(), "config.json");
 }
 
 export function workerPidPath(): string {

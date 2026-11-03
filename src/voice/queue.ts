@@ -135,7 +135,7 @@ export function pruneQueue(options: { max?: number; maxAgeMs?: number }): void {
   }
 }
 
-/** Elimina todos los archivos de la cola (usado por el worker al encontrar la narración desactivada). */
+/** Elimina todos los archivos de la cola (usado por el hook y el worker al encontrar la narración desactivada). */
 export function clearQueue(): void {
   try {
     for (const name of listPending()) {

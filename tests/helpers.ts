@@ -82,7 +82,7 @@ export async function waitFor(
 
 /**
  * Aísla el state dir del plugin en un directorio temporal: falsifica Linux y
- * apunta XDG_STATE_HOME al temporal, de modo que config.ts nunca toque el
+ * apunta XDG_STATE_HOME al temporal, de modo que un test nunca toque el
  * state dir real de la máquina, sea cual sea el SO anfitrión.
  */
 export function isolateStateDir(): { dir: string; restore: () => void } {

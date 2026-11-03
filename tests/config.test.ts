@@ -4,35 +4,33 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Las preferencias viven en config.json y el secreto solo en el entorno:
-// defaults, invariante de seguridad (la clave nunca se lee ni se escribe en el
-// archivo), tolerancia a archivo
-// ausente/corrupto y merge parcial de updateConfig.
-// El state dir se aísla en un temporal (ver helpers) para no tocar el real.
+// Las preferencias llegan del userConfig del plugin como variables
+// CLAUDE_PLUGIN_OPTION_* (solo las fijadas) y el secreto solo del entorno:
+// defaults sin variables, valores fijados, valores inválidos tratados como no
+// fijados e independencia de los dos canales.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { loadConfig, updateConfig } from "../src/lib/config.js";
-import { configPath } from "../src/lib/state-dir.js";
-import { isolateStateDir } from "./helpers.js";
+import { loadConfig } from "../src/lib/config.js";
+import { withEnv } from "./helpers.js";
 
-let state: ReturnType<typeof isolateStateDir>;
+const UNSET = {
+  CLAUDE_PLUGIN_OPTION_VOICEENABLED: undefined,
+  CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: undefined,
+  CLAUDE_PLUGIN_OPTION_MESSAGEMODE: undefined,
+  GEMINI_API_KEY: undefined,
+};
+
+let restore: () => void;
 
 beforeEach(() => {
-  state = isolateStateDir();
+  restore = withEnv(UNSET);
 });
 
 afterEach(() => {
-  state.restore();
+  restore();
 });
 
-function writeConfigFile(contents: string): void {
-  mkdirSync(join(state.dir, "evolutivex-agents"), { recursive: true });
-  writeFileSync(configPath(), contents);
-}
-
-test("loadConfig sin archivo ni env devuelve los defaults", () => {
+test("loadConfig sin variables devuelve los defaults", () => {
   const cfg = loadConfig();
   assert.equal(cfg.voiceEnabled, true);
   assert.equal(cfg.notificationsEnabled, true);
@@ -40,90 +38,65 @@ test("loadConfig sin archivo ni env devuelve los defaults", () => {
   assert.equal(cfg.geminiApiKey, undefined);
 });
 
-test("loadConfig lee las preferencias del archivo", () => {
-  writeConfigFile(JSON.stringify({ voiceEnabled: false, messageMode: "llm" }));
-  const cfg = loadConfig();
-  assert.equal(cfg.voiceEnabled, false);
-  assert.equal(cfg.messageMode, "llm");
+test("loadConfig respeta las opciones fijadas en /config", () => {
+  const undo = withEnv({
+    CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
+    CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "false",
+    CLAUDE_PLUGIN_OPTION_MESSAGEMODE: "llm",
+  });
+  try {
+    const cfg = loadConfig();
+    assert.equal(cfg.voiceEnabled, false);
+    assert.equal(cfg.notificationsEnabled, false);
+    assert.equal(cfg.messageMode, "llm");
+  } finally {
+    undo();
+  }
 });
 
-test("loadConfig ignora las claves presentes en el archivo", () => {
-  writeConfigFile(
-    JSON.stringify({
-      voiceEnabled: false,
-      messageMode: "llm",
-      geminiApiKey: "clave-en-archivo",
-    }),
-  );
-  const cfg = loadConfig();
-  assert.equal(cfg.voiceEnabled, false);
-  assert.equal(cfg.messageMode, "llm");
-  assert.equal(cfg.geminiApiKey, undefined);
-});
-
-test("loadConfig ignora un archivo con JSON inválido y usa defaults", () => {
-  writeConfigFile("{corrupto");
-  const cfg = loadConfig();
-  assert.equal(cfg.voiceEnabled, true);
-  assert.equal(cfg.messageMode, "local");
-});
-
-test("loadConfig normaliza un messageMode desconocido a local", () => {
-  writeConfigFile(JSON.stringify({ messageMode: "otro" }));
-  assert.equal(loadConfig().messageMode, "local");
-});
-
-test("loadConfig lee la API key solo del entorno", () => {
-  writeConfigFile(JSON.stringify({ geminiApiKey: "clave-en-archivo" }));
-  process.env.GEMINI_API_KEY = "del-entorno";
-  assert.equal(loadConfig().geminiApiKey, "del-entorno");
-});
-
-test("una env var vacía o de solo espacios no configura la clave", () => {
-  process.env.GEMINI_API_KEY = "   ";
-  assert.equal(loadConfig().geminiApiKey, undefined);
-});
-
-test("updateConfig escribe solo preferencias y nunca persiste una clave presente en el archivo", () => {
-  writeConfigFile(JSON.stringify({ geminiApiKey: "clave-en-archivo" }));
-  updateConfig({ messageMode: "llm" });
-  const raw = JSON.parse(readFileSync(configPath(), "utf8")) as Record<
-    string,
-    unknown
-  >;
-  assert.deepEqual(Object.keys(raw).sort(), [
-    "messageMode",
-    "notificationsEnabled",
-    "voiceEnabled",
-  ]);
-  assert.equal(raw.voiceEnabled, true);
-  assert.equal(raw.messageMode, "llm");
-});
-
-test("updateConfig hace merge parcial de preferencias", () => {
-  updateConfig({ messageMode: "llm" });
-  updateConfig({ voiceEnabled: false });
-  const raw = JSON.parse(readFileSync(configPath(), "utf8")) as Record<
-    string,
-    unknown
-  >;
-  assert.equal(raw.voiceEnabled, false);
-  assert.equal(raw.messageMode, "llm");
-});
-
-test("updateConfig crea el state dir si no existe y devuelve la config efectiva", () => {
-  const cfg = updateConfig({ voiceEnabled: false });
-  assert.equal(cfg.voiceEnabled, false);
-  assert.equal(cfg.messageMode, "local");
+test("loadConfig trata un valor inválido como el valor por defecto", () => {
+  const undo = withEnv({
+    CLAUDE_PLUGIN_OPTION_VOICEENABLED: "no",
+    CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "",
+    CLAUDE_PLUGIN_OPTION_MESSAGEMODE: "turbo",
+  });
+  try {
+    const cfg = loadConfig();
+    assert.equal(cfg.voiceEnabled, true);
+    assert.equal(cfg.notificationsEnabled, true);
+    assert.equal(cfg.messageMode, "local");
+  } finally {
+    undo();
+  }
 });
 
 test("los controles de notificaciones y narración por voz son independientes", () => {
-  updateConfig({ notificationsEnabled: true });
-  updateConfig({ voiceEnabled: false });
-  assert.equal(loadConfig().notificationsEnabled, true);
-  assert.equal(loadConfig().voiceEnabled, false);
-  updateConfig({ notificationsEnabled: false });
-  updateConfig({ voiceEnabled: true });
-  assert.equal(loadConfig().notificationsEnabled, false);
-  assert.equal(loadConfig().voiceEnabled, true);
+  const undo = withEnv({ CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false" });
+  try {
+    assert.equal(loadConfig().voiceEnabled, false);
+    assert.equal(loadConfig().notificationsEnabled, true);
+  } finally {
+    undo();
+  }
+});
+
+test("loadConfig lee la API key solo de GEMINI_API_KEY", () => {
+  const undo = withEnv({
+    GEMINI_API_KEY: "del-entorno",
+    CLAUDE_PLUGIN_OPTION_GEMINIAPIKEY: "de-userconfig",
+  });
+  try {
+    assert.equal(loadConfig().geminiApiKey, "del-entorno");
+  } finally {
+    undo();
+  }
+});
+
+test("una env var vacía o de solo espacios no configura la clave", () => {
+  const undo = withEnv({ GEMINI_API_KEY: "   " });
+  try {
+    assert.equal(loadConfig().geminiApiKey, undefined);
+  } finally {
+    undo();
+  }
 });

@@ -15,16 +15,20 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadConfig } from "../lib/config.js";
 import { workerPidPath } from "../lib/state-dir.js";
-import { enqueuePayload } from "./queue.js";
+import { clearQueue, enqueuePayload } from "./queue.js";
 import { isAlive, spawnDetached } from "./spawn.js";
 import { readStdin, parsePayload } from "../lib/hook-payload.js";
 
 async function main(): Promise<void> {
   const raw = await readStdin();
 
-  // Toggle del canal de voz: si está desactivado, salir sin efectos.
+  // Voz desactivada en /config: se vacía la cola para que el worker en curso
+  // calle tras el ítem actual, y se sale sin encolar ni lanzar el worker.
   const cfg = loadConfig();
-  if (!cfg.voiceEnabled) return;
+  if (!cfg.voiceEnabled) {
+    clearQueue();
+    return;
+  }
 
   const payload = parsePayload(raw);
 

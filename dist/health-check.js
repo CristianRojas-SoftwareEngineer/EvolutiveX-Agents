@@ -7,57 +7,31 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/lib/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
-
-// src/lib/state-dir.ts
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
-var APP_DIR = "evolutivex-agents";
-function stateDir() {
-  const home = homedir();
-  switch (platform()) {
-    case "win32": {
-      const base = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
-      return join(base, APP_DIR);
-    }
-    case "darwin":
-      return join(home, "Library", "Application Support", APP_DIR);
-    default: {
-      const base = process.env.XDG_STATE_HOME ?? join(home, ".local", "state");
-      return join(base, APP_DIR);
-    }
-  }
-}
-function configPath() {
-  return join(stateDir(), "config.json");
-}
-
-// src/lib/config.ts
 var DEFAULTS = {
   voiceEnabled: true,
   notificationsEnabled: true,
   messageMode: "local"
 };
-function readFileConfig() {
-  try {
-    const raw = readFileSync(configPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
-      return { voiceEnabled, notificationsEnabled, messageMode };
-    }
-  } catch {
-  }
-  return {};
-}
 function loadConfig() {
-  const file = readFileConfig();
+  const env = process.env;
+  const mode = env.CLAUDE_PLUGIN_OPTION_MESSAGEMODE;
   return {
-    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
-    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
-    messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
-    geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
+    voiceEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_VOICEENABLED,
+      DEFAULTS.voiceEnabled
+    ),
+    notificationsEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED,
+      DEFAULTS.notificationsEnabled
+    ),
+    messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
   };
+}
+function parseBoolean(v, fallback) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
 }
 function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
@@ -69,7 +43,7 @@ import {
   spawnSync
 } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { delimiter, join as join2 } from "node:path";
+import { delimiter, join } from "node:path";
 var BASE = "ai-voice-interconnector";
 function candidateNames() {
   if (process.platform !== "win32") return [BASE];
@@ -82,7 +56,7 @@ function resolveCli() {
   const names = candidateNames();
   for (const dir of dirs) {
     for (const name of names) {
-      const full = join2(dir, name);
+      const full = join(dir, name);
       try {
         if (existsSync(full) && statSync(full).isFile()) return full;
       } catch {

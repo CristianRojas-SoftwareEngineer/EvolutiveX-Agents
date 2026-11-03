@@ -7201,57 +7201,31 @@ var require_commander = __commonJS({
 });
 
 // src/lib/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
-
-// src/lib/state-dir.ts
-import { homedir, platform } from "node:os";
-import { join } from "node:path";
-var APP_DIR = "evolutivex-agents";
-function stateDir() {
-  const home = homedir();
-  switch (platform()) {
-    case "win32": {
-      const base = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
-      return join(base, APP_DIR);
-    }
-    case "darwin":
-      return join(home, "Library", "Application Support", APP_DIR);
-    default: {
-      const base = process.env.XDG_STATE_HOME ?? join(home, ".local", "state");
-      return join(base, APP_DIR);
-    }
-  }
-}
-function configPath() {
-  return join(stateDir(), "config.json");
-}
-
-// src/lib/config.ts
 var DEFAULTS = {
   voiceEnabled: true,
   notificationsEnabled: true,
   messageMode: "local"
 };
-function readFileConfig() {
-  try {
-    const raw = readFileSync(configPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
-      return { voiceEnabled, notificationsEnabled, messageMode };
-    }
-  } catch {
-  }
-  return {};
-}
 function loadConfig() {
-  const file = readFileConfig();
+  const env = process.env;
+  const mode = env.CLAUDE_PLUGIN_OPTION_MESSAGEMODE;
   return {
-    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
-    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
-    messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
-    geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
+    voiceEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_VOICEENABLED,
+      DEFAULTS.voiceEnabled
+    ),
+    notificationsEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED,
+      DEFAULTS.notificationsEnabled
+    ),
+    messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
   };
+}
+function parseBoolean(v, fallback) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
 }
 function emptyToUndef(v) {
   return typeof v === "string" && v.trim() !== "" ? v : void 0;
@@ -7333,7 +7307,7 @@ var {
 // src/notifications/cli.ts
 import { existsSync as existsSync2 } from "node:fs";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { resolve as resolvePath2, basename, join as join3 } from "node:path";
+import { resolve as resolvePath2, basename, join as join2 } from "node:path";
 
 // src/notifications/event-notification-profile.ts
 var NOTIFICATION_BRAND_TITLE = "EvolutiveX Agents";
@@ -7418,12 +7392,12 @@ function getProfileForEvent(eventKey) {
 
 // src/notifications/event-image-paths.ts
 import { existsSync } from "node:fs";
-import { dirname, join as join2, resolve as resolvePath } from "node:path";
+import { dirname, join, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
 function resolvePluginRoot(metaUrl = import.meta.url) {
   let dir = dirname(fileURLToPath(metaUrl));
   for (let i = 0; i < 4; i++) {
-    if (existsSync(join2(dir, "assets", "notifications"))) {
+    if (existsSync(join(dir, "assets", "notifications"))) {
       return dir;
     }
     const parent = resolvePath(dir, "..");
@@ -7434,14 +7408,14 @@ function resolvePluginRoot(metaUrl = import.meta.url) {
 }
 var eventIconsDirProvider = {
   get() {
-    return join2(resolvePluginRoot(), "assets", "notifications", "events");
+    return join(resolvePluginRoot(), "assets", "notifications", "events");
   }
 };
 function getEventIconsDir() {
   return eventIconsDirProvider.get();
 }
 function resolveEventImagePath(filename) {
-  const iconPath = join2(getEventIconsDir(), filename);
+  const iconPath = join(getEventIconsDir(), filename);
   return existsSync(iconPath) ? iconPath : void 0;
 }
 
@@ -7596,25 +7570,25 @@ function toWin32NotificationSound(token) {
   }
   return WIN32_NOTIFICATION_SOUND[token] ?? "Notification.Default";
 }
-function resolveNotificationSound(profile, platform2) {
+function resolveNotificationSound(profile, platform) {
   if (!profile) {
     return false;
   }
-  if (platform2 === "win32") {
+  if (platform === "win32") {
     const token = profile.win32;
     if (token === false || token === void 0) {
       return false;
     }
     return toWin32NotificationSound(token);
   }
-  if (platform2 === "darwin") {
+  if (platform === "darwin") {
     const name = profile.darwin;
     if (name === false || name === void 0) {
       return false;
     }
     return name;
   }
-  if (platform2 === "linux") {
+  if (platform === "linux") {
     return profile.linux === true;
   }
   return false;
@@ -7629,7 +7603,7 @@ var ICON_FLAG = "icon";
 var DEFAULT_APP_ID = "EvolutiveX.Agents";
 var globalFallbackIconProvider = {
   get() {
-    return join3(
+    return join2(
       resolvePluginRoot(),
       "assets",
       "notifications",
@@ -7677,7 +7651,7 @@ function resolveBranding(options, eventKey) {
   }
   return { appId };
 }
-function resolveEventSound(options, eventKey, platform2 = process.platform) {
+function resolveEventSound(options, eventKey, platform = process.platform) {
   if (options.silent) {
     return false;
   }
@@ -7685,7 +7659,7 @@ function resolveEventSound(options, eventKey, platform2 = process.platform) {
     return true;
   }
   const profile = eventKey ? getProfileForEvent(eventKey) : void 0;
-  return resolveNotificationSound(profile?.sound, platform2);
+  return resolveNotificationSound(profile?.sound, platform);
 }
 function resolveNotificationTitle(options, eventKey) {
   if (options.title !== void 0 && options.title !== "") {
@@ -7709,7 +7683,7 @@ function resolveNotificationMessage(options, eventKey, stdinPayload) {
   }
   return void 0;
 }
-function buildNotificationPayload(options, stdinPayload, platform2 = process.platform) {
+function buildNotificationPayload(options, stdinPayload, platform = process.platform) {
   if (options.stdinJson && !stdinPayload) {
     return { error: "No se recibi\xF3 payload por stdin con --stdin-json" };
   }
@@ -7728,7 +7702,7 @@ function buildNotificationPayload(options, stdinPayload, platform2 = process.pla
   return {
     title,
     message,
-    sound: resolveEventSound(options, eventKey, platform2),
+    sound: resolveEventSound(options, eventKey, platform),
     silent: options.silent,
     appId: branding.appId,
     ...branding.icon !== void 0 ? { icon: branding.icon } : {}

@@ -76,8 +76,7 @@ import {
   notificationEventKey,
   runNotificationHookFromRaw,
 } from "../src/notifications/notification-hook.js";
-import { updateConfig } from "../src/lib/config.js";
-import { isolateStateDir, makeTempDir, removeDir } from "./helpers.js";
+import { isolateStateDir, makeTempDir, removeDir, withEnv } from "./helpers.js";
 
 const baseCliOptions: CliOptions = {
   eventType: "Stop",
@@ -511,6 +510,7 @@ test("register: installAction, statusAction, uninstallAction y dispatch multipla
 
 test("notification-hook: filtra eventos y funciona con voz desactivada sin bloquear", async () => {
   const state = isolateStateDir();
+  let restoreOptions = () => {};
   try {
     assert.equal(
       notificationEventKey({
@@ -544,7 +544,10 @@ test("notification-hook: filtra eventos y funciona con voz desactivada sin bloqu
     );
 
     // Con voz desactivada (voiceEnabled: false) y notificaciones activas (notificationsEnabled: true)
-    updateConfig({ voiceEnabled: false, notificationsEnabled: true });
+    restoreOptions = withEnv({
+      CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
+      CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "true",
+    });
     const received: unknown[] = [];
     const adapter = {
       notify(ev: unknown) {
@@ -574,7 +577,11 @@ test("notification-hook: filtra eventos y funciona con voz desactivada sin bloqu
     assert.equal(skippedAsk, false);
 
     // Si notificationsEnabled se apaga, no emite aunque voz esté encendida
-    updateConfig({ voiceEnabled: true, notificationsEnabled: false });
+    restoreOptions();
+    restoreOptions = withEnv({
+      CLAUDE_PLUGIN_OPTION_VOICEENABLED: "true",
+      CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "false",
+    });
     const blocked = await runNotificationHookFromRaw(
       JSON.stringify({
         hook_event_name: "Stop",
@@ -585,6 +592,7 @@ test("notification-hook: filtra eventos y funciona con voz desactivada sin bloqu
     assert.equal(blocked, false);
     assert.equal(received.length, 1);
   } finally {
+    restoreOptions();
     state.restore();
   }
 });

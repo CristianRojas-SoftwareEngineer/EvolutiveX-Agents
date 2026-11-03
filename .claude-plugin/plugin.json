@@ -7,6 +7,25 @@
   },
   "types": "./types/index.d.ts",
   "userConfig": {
+    "voiceEnabled": {
+      "type": "boolean",
+      "title": "Narración por voz",
+      "description": "Narra la actividad de la sesión con AI Voice-InterConnector. Al desactivarla se descarta lo pendiente de narrar. Activada por defecto.",
+      "default": true
+    },
+    "notificationsEnabled": {
+      "type": "boolean",
+      "title": "Notificaciones de escritorio",
+      "description": "Emite notificaciones nativas del sistema operativo para los eventos de la sesión. Activadas por defecto.",
+      "default": true
+    },
+    "messageMode": {
+      "type": "string",
+      "title": "Modo de los mensajes narrados",
+      "description": "local: mensajes deterministas sin red. llm: mensajes conversacionales generados con Gemini (requiere GEMINI_API_KEY en el entorno; si falla, degrada a local).",
+      "options": ["local", "llm"],
+      "default": "local"
+    },
     "enhancedTranscript": {
       "type": "boolean",
       "title": "Transcript enriquecido",

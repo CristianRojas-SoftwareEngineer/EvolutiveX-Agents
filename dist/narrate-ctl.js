@@ -7,12 +7,39 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/lib/config.ts
-import { readFileSync, writeFileSync } from "node:fs";
+var DEFAULTS = {
+  voiceEnabled: true,
+  notificationsEnabled: true,
+  messageMode: "local"
+};
+function loadConfig() {
+  const env = process.env;
+  const mode = env.CLAUDE_PLUGIN_OPTION_MESSAGEMODE;
+  return {
+    voiceEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_VOICEENABLED,
+      DEFAULTS.voiceEnabled
+    ),
+    notificationsEnabled: parseBoolean(
+      env.CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED,
+      DEFAULTS.notificationsEnabled
+    ),
+    messageMode: mode === "llm" || mode === "local" ? mode : DEFAULTS.messageMode,
+    geminiApiKey: emptyToUndef(env.GEMINI_API_KEY)
+  };
+}
+function parseBoolean(v, fallback) {
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return fallback;
+}
+function emptyToUndef(v) {
+  return typeof v === "string" && v.trim() !== "" ? v : void 0;
+}
 
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { mkdirSync } from "node:fs";
 var APP_DIR = "evolutivex-agents";
 function stateDir() {
   const home = homedir();
@@ -28,58 +55,6 @@ function stateDir() {
       return join(base, APP_DIR);
     }
   }
-}
-function ensureStateDir() {
-  const dir = stateDir();
-  mkdirSync(dir, { recursive: true });
-  return dir;
-}
-function configPath() {
-  return join(stateDir(), "config.json");
-}
-
-// src/lib/config.ts
-var DEFAULTS = {
-  voiceEnabled: true,
-  notificationsEnabled: true,
-  messageMode: "local"
-};
-function readFileConfig() {
-  try {
-    const raw = readFileSync(configPath(), "utf8");
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      const { voiceEnabled, notificationsEnabled, messageMode } = parsed;
-      return { voiceEnabled, notificationsEnabled, messageMode };
-    }
-  } catch {
-  }
-  return {};
-}
-function loadConfig() {
-  const file = readFileConfig();
-  return {
-    voiceEnabled: typeof file.voiceEnabled === "boolean" ? file.voiceEnabled : DEFAULTS.voiceEnabled,
-    notificationsEnabled: typeof file.notificationsEnabled === "boolean" ? file.notificationsEnabled : DEFAULTS.notificationsEnabled,
-    messageMode: file.messageMode === "llm" ? "llm" : DEFAULTS.messageMode,
-    geminiApiKey: emptyToUndef(process.env.GEMINI_API_KEY)
-  };
-}
-function updateConfig(patch) {
-  ensureStateDir();
-  const current = readFileConfig();
-  const next = {
-    voiceEnabled: patch.voiceEnabled ?? (typeof current.voiceEnabled === "boolean" ? current.voiceEnabled : DEFAULTS.voiceEnabled),
-    notificationsEnabled: patch.notificationsEnabled ?? (typeof current.notificationsEnabled === "boolean" ? current.notificationsEnabled : DEFAULTS.notificationsEnabled),
-    messageMode: patch.messageMode ?? (current.messageMode === "llm" ? "llm" : DEFAULTS.messageMode)
-  };
-  writeFileSync(configPath(), JSON.stringify(next, null, 2) + "\n", {
-    mode: 384
-  });
-  return loadConfig();
-}
-function emptyToUndef(v) {
-  return typeof v === "string" && v.trim() !== "" ? v : void 0;
 }
 
 // src/voice/resolve-cli.ts
@@ -155,11 +130,8 @@ var ANNOUNCEMENTS = {
 function printStatus() {
   const cfg = loadConfig();
   const lines = [
-    `voice:          ${cfg.voiceEnabled}`,
-    `notifications:  ${cfg.notificationsEnabled}`,
-    `messageMode:    ${cfg.messageMode}`,
+    `preferencias:   /config \u2192 evolutivex-agents.*`,
     `gemini key:     ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
-    `config:         ${configPath()}`,
     `state dir:      ${stateDir()}`
   ];
   console.log(lines.join("\n"));
@@ -213,32 +185,6 @@ function presynth(force) {
 function main() {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
-    case "voice-on":
-      updateConfig({ voiceEnabled: true });
-      console.log("Narraci\xF3n activada.");
-      return 0;
-    case "voice-off":
-      updateConfig({ voiceEnabled: false });
-      console.log("Narraci\xF3n desactivada.");
-      return 0;
-    case "notifications-on":
-      updateConfig({ notificationsEnabled: true });
-      console.log("Notificaciones de escritorio activadas.");
-      return 0;
-    case "notifications-off":
-      updateConfig({ notificationsEnabled: false });
-      console.log("Notificaciones de escritorio desactivadas.");
-      return 0;
-    case "mode": {
-      const mode = rest[0];
-      if (mode !== "llm" && mode !== "local") {
-        console.error("Uso: mode <llm|local>");
-        return 2;
-      }
-      updateConfig({ messageMode: mode });
-      console.log(`messageMode = ${mode}`);
-      return 0;
-    }
     case "status":
     case void 0:
       printStatus();
