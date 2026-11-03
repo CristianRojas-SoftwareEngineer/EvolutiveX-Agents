@@ -57,8 +57,10 @@ jobs:
     # prefijo `claude-`, entre otros) y que exige kebab-case para el sync al
     # marketplace de Claude.ai. Sin este gate, un manifiesto inválido llega al
     # commit y al push: typecheck, build y tests no lo miran.
-    # También verifica el tipado y los tests del módulo del sandbox (transcript
-    # enriquecido) con el CLI fijado.
+    # También ejecuta los tests del módulo del sandbox (transcript enriquecido)
+    # con el kit del CLI fijado. Su tipado (npx tsc -p src/transcript) queda
+    # fuera: usa los tipos que Claude Code genera al cargar el plugin en una
+    # sesión interactiva, que no se versionan ni se pueden generar aquí.
     docker:
       # Misma imagen fijada por digest que test-linux (misma política de pin).
       - image: cimg/node:24.13.1@sha256:5d77ee6db8cb46bc53f329d94d84cc7afa8c522e34729abf79026085971c26b9
@@ -110,12 +112,11 @@ jobs:
             npm ci
             echo "[STEP] Install dev deps from lockfile (npm ci) - FIN"
       - run:
-          name: Tipado y tests del transcript enriquecido (npx tsc -p src/transcript y npm run test:transcript)
+          name: Tests del transcript enriquecido (npm run test:transcript)
           command: |
-            echo "[STEP] Tipado y tests del transcript enriquecido - INICIO"
-            npx tsc -p src/transcript
+            echo "[STEP] Tests del transcript enriquecido - INICIO"
             npm run test:transcript
-            echo "[STEP] Tipado y tests del transcript enriquecido - FIN"
+            echo "[STEP] Tests del transcript enriquecido - FIN"
 
   test-linux:
     docker:
