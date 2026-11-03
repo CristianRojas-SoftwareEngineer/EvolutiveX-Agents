@@ -1,5 +1,6 @@
 import type { EngineInterface, Timer } from "claude-code";
 import { runningCalls, counters } from "./session.js";
+import { messageOf, onDisable, recordFailure, recordSuccess } from "./guard.js";
 
 // Próximo tic del reloj de los contadores: `{ timer, at }` (epoch ms).
 let clock: { timer: Timer; at: number } | undefined;
@@ -9,6 +10,13 @@ const TICK_MARGIN_MS = 20;
 // Un grupo abierto que no se dibuja en este plazo (terminó o su vista se
 // cerró mientras no se dibujaba) deja de mantener el reloj.
 const COUNTER_EXPIRY_MS = 3000;
+
+// Cancela el tic pendiente. Al apagarse el transcript, el reloj se detiene.
+export function stopClock(): void {
+  clock?.timer.cancel();
+  clock = undefined;
+}
+onDisable(stopClock);
 
 // Programa el próximo tic en el primer instante en que algún contador cruza
 // un segundo entero desde su inicio: el de un ToolUse (inicio de su llamada) o
@@ -23,8 +31,7 @@ export function scheduleClock($: EngineInterface): void {
     if (c.seen < now - COUNTER_EXPIRY_MS) counters.delete(blockKey);
   }
   if (!runningCalls.size && !counters.size) {
-    clock?.timer.cancel();
-    clock = undefined;
+    stopClock();
     return;
   }
   const starts = [
@@ -41,11 +48,17 @@ export function scheduleClock($: EngineInterface): void {
     at,
     timer: $.clock.after(at - now, () => {
       clock = undefined;
-      void $.state.set(
-        { plugin: "evolutivex-agents", key: "second" },
-        Date.now(),
-      );
-      scheduleClock($);
+      // Un fallo del tic cuenta para el guard bajo el nombre `clock`.
+      try {
+        void $.state.set(
+          { plugin: "evolutivex-agents", key: "second" },
+          Date.now(),
+        );
+        scheduleClock($);
+        recordSuccess("clock");
+      } catch (err) {
+        recordFailure($, "clock", messageOf(err));
+      }
     }),
   };
 }

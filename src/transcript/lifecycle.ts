@@ -18,6 +18,12 @@ import {
   taskRegistry,
   turns,
 } from "./session.js";
+import {
+  isDisabled,
+  messageOf,
+  recordFailure,
+  recordSuccess,
+} from "./guard.js";
 import { pinTiming } from "./timing-store.js";
 import { scheduleClock } from "./live-clock.js";
 
@@ -256,19 +262,32 @@ export async function* onStep(
   e: Parameters<Hook<"turn.step">>[1],
   next: Parameters<Hook<"turn.step">>[2],
 ) {
+  if (isDisabled()) return yield* next(e);
   const agent = agentOf(e);
   const start = Date.now();
   if (turns.get(agent)?.turnId !== e.turnId)
     turns.set(agent, { turnId: e.turnId, start });
   const step: StepState = { agent, start, byIndex: new Map() };
+  // Un fallo de la contabilidad no corta el stream: el chunk se reenvía igual,
+  // el resto del paso deja de contabilizarse y el fallo cuenta para el guard.
+  // (El `.catch` de un hook en streaming perdería el chunk en curso.)
+  let failed = false;
   const stream = next(e)[Symbol.asyncIterator]();
   for (;;) {
     const { value: chunk, done } = await stream.next();
     if (done) {
       prune();
+      if (!failed) recordSuccess("turn.step");
       return chunk;
     }
-    if (isBlockChunk(chunk)) accountChunk($, step, chunk);
+    if (!failed && isBlockChunk(chunk)) {
+      try {
+        accountChunk($, step, chunk);
+      } catch (err) {
+        failed = true;
+        recordFailure($, "turn.step", messageOf(err));
+      }
+    }
     yield chunk;
   }
 }

@@ -19,6 +19,69 @@ var session = {
 };
 var getActiveTaskLabel = () => session.todoActiveLabel ?? [...taskRegistry.values()].find((t) => t.status === "in_progress" && t.label)?.label ?? null;
 
+// src/transcript/guard.ts
+var FAILURE_LIMIT = 3;
+var streaks = /* @__PURE__ */ new Map();
+var disabled = false;
+var disableListeners = [];
+var belowErrors = /* @__PURE__ */ new WeakSet();
+var isDisabled = () => disabled;
+function onDisable(listener) {
+  disableListeners.push(listener);
+}
+function recordSuccess(name) {
+  streaks.delete(name);
+}
+function recordFailure($, name, message) {
+  if (disabled) return;
+  const streak = (streaks.get(name) ?? 0) + 1;
+  streaks.set(name, streak);
+  if (streak < FAILURE_LIMIT) return;
+  disabled = true;
+  for (const listener of disableListeners) listener();
+  runningCalls.clear();
+  counters.clear();
+  void $.session.version().catch(() => void 0).then(
+    (v) => $.ui.toast(
+      `Transcript enriquecido desactivado en esta sesi\xF3n: ${name}: ${message}. Claude Code ${v?.version ?? "desconocida"}`
+    )
+  );
+}
+var messageOf = (err) => err instanceof Error ? err.message : String(err);
+var isBelow = (err) => typeof err === "object" && err !== null && belowErrors.has(err);
+async function guardCall($, name, run, native) {
+  if (disabled) return native();
+  try {
+    const result = await run();
+    recordSuccess(name);
+    return result;
+  } catch (err) {
+    if (!isBelow(err)) recordFailure($, name, messageOf(err));
+    throw err;
+  }
+}
+function countTimeout($, name, error) {
+  if (error.kind === "timeout")
+    recordFailure($, name, error.message ?? "timeout");
+}
+function caught($, name, e, next) {
+  countTimeout($, name, next.error);
+  return next(e);
+}
+function belowStream(stream) {
+  async function* inner() {
+    try {
+      for await (const chunk of stream) yield chunk;
+      return await stream.result;
+    } catch (err) {
+      if (typeof err === "object" && err !== null) belowErrors.add(err);
+      throw err;
+    }
+  }
+  const gen = inner();
+  return Object.assign(gen, { result: stream.result });
+}
+
 // src/transcript/format.ts
 function formatClockTime(ms) {
   const date = new Date(ms);
@@ -118,7 +181,13 @@ function pinTiming($, blockKey, {
 }
 function markForSave($, blockKey) {
   pendingKeys.add(blockKey);
-  flushTimer ??= $.clock.after(1e3, () => flush($));
+  flushTimer ??= $.clock.after(
+    1e3,
+    () => flush($).then(
+      () => recordSuccess("flush"),
+      (err) => recordFailure($, "flush", messageOf(err))
+    )
+  );
 }
 async function flush($) {
   flushTimer = void 0;
@@ -157,14 +226,18 @@ async function flush($) {
 var clock;
 var TICK_MARGIN_MS = 20;
 var COUNTER_EXPIRY_MS = 3e3;
+function stopClock() {
+  clock?.timer.cancel();
+  clock = void 0;
+}
+onDisable(stopClock);
 function scheduleClock($) {
   const now = Date.now();
   for (const [blockKey, c] of counters) {
     if (c.seen < now - COUNTER_EXPIRY_MS) counters.delete(blockKey);
   }
   if (!runningCalls.size && !counters.size) {
-    clock?.timer.cancel();
-    clock = void 0;
+    stopClock();
     return;
   }
   const starts = [
@@ -180,11 +253,16 @@ function scheduleClock($) {
     at,
     timer: $.clock.after(at - now, () => {
       clock = void 0;
-      void $.state.set(
-        { plugin: "evolutivex-agents", key: "second" },
-        Date.now()
-      );
-      scheduleClock($);
+      try {
+        void $.state.set(
+          { plugin: "evolutivex-agents", key: "second" },
+          Date.now()
+        );
+        scheduleClock($);
+        recordSuccess("clock");
+      } catch (err) {
+        recordFailure($, "clock", messageOf(err));
+      }
     })
   };
 }
@@ -303,19 +381,29 @@ function accountChunk($, step, chunk) {
   if (chunk.kind === "text" || chunk.kind === "thinking") b.text += chunk.text;
 }
 async function* onStep($, e, next) {
+  if (isDisabled()) return yield* next(e);
   const agent = agentOf(e);
   const start = Date.now();
   if (turns.get(agent)?.turnId !== e.turnId)
     turns.set(agent, { turnId: e.turnId, start });
   const step = { agent, start, byIndex: /* @__PURE__ */ new Map() };
+  let failed = false;
   const stream = next(e)[Symbol.asyncIterator]();
   for (; ; ) {
     const { value: chunk, done } = await stream.next();
     if (done) {
       prune();
+      if (!failed) recordSuccess("turn.step");
       return chunk;
     }
-    if (isBlockChunk(chunk)) accountChunk($, step, chunk);
+    if (!failed && isBlockChunk(chunk)) {
+      try {
+        accountChunk($, step, chunk);
+      } catch (err) {
+        failed = true;
+        recordFailure($, "turn.step", messageOf(err));
+      }
+    }
     yield chunk;
   }
 }
@@ -686,17 +774,95 @@ function register(on, options) {
     "AskUserQuestion"
     // Diálogo de pregunta de Claude
   ]) {
-    on("ui.render", { component: [component] }, withTimestamp);
+    on(
+      "ui.render",
+      { component: [component] },
+      ($, e, next) => guardCall(
+        $,
+        "withTimestamp",
+        () => withTimestamp($, e, next),
+        () => next(e)
+      )
+    ).catch(($, e, next) => caught($, "withTimestamp", e, next));
   }
-  on("ui.render", { component: "Spinner" }, withSpinner);
-  on("ui.render", { component: "TurnDuration" }, withTurnDuration);
-  on("prompt.submit", onSubmit).catch(($, e, next) => next(e));
-  on("turn.start", onTurnStart);
-  on("turn.step", onStep);
-  on("tool.call", onToolCall).catch(($, e, next) => next(e));
-  on("command.run", onCommandRun).catch(($, e, next) => next(e));
-  on("session.append", onAppend).catch(($, e, next) => next(e));
-  on("turn.complete", onTurnComplete);
+  on(
+    "ui.render",
+    { component: "Spinner" },
+    ($, e, next) => guardCall(
+      $,
+      "withSpinner",
+      () => withSpinner($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "withSpinner", e, next));
+  on(
+    "ui.render",
+    { component: "TurnDuration" },
+    ($, e, next) => guardCall(
+      $,
+      "withTurnDuration",
+      () => withTurnDuration($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "withTurnDuration", e, next));
+  on(
+    "prompt.submit",
+    ($, e, next) => guardCall(
+      $,
+      "prompt.submit",
+      () => onSubmit($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "prompt.submit", e, next));
+  on(
+    "turn.start",
+    ($, e, next) => guardCall(
+      $,
+      "turn.start",
+      () => onTurnStart($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "turn.start", e, next));
+  on("turn.step", onStep).catch(async function* ($, e, next) {
+    countTimeout($, "turn.step", next.error);
+    return yield* belowStream(next(e));
+  });
+  on(
+    "tool.call",
+    ($, e, next) => guardCall(
+      $,
+      "tool.call",
+      () => onToolCall($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "tool.call", e, next));
+  on(
+    "command.run",
+    ($, e, next) => guardCall(
+      $,
+      "command.run",
+      () => onCommandRun($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "command.run", e, next));
+  on(
+    "session.append",
+    ($, e, next) => guardCall(
+      $,
+      "session.append",
+      () => onAppend($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "session.append", e, next));
+  on(
+    "turn.complete",
+    ($, e, next) => guardCall(
+      $,
+      "turn.complete",
+      () => onTurnComplete($, e, next),
+      () => next(e)
+    )
+  ).catch(($, e, next) => caught($, "turn.complete", e, next));
 }
 export {
   register

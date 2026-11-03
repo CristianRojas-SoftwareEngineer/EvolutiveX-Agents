@@ -1,5 +1,6 @@
 import type { EngineInterface, Timer } from "claude-code";
 import { pad2 } from "./format.js";
+import { messageOf, recordFailure, recordSuccess } from "./guard.js";
 
 // ── Registro de bloques y persistencia ──────────────────────────────────────
 //
@@ -123,10 +124,16 @@ export function pinTiming(
 }
 
 // Marca la clave para el próximo volcado, agrupando escrituras en un solo
-// temporizador pendiente.
+// temporizador pendiente. Un fallo del volcado cuenta para el guard bajo el
+// nombre `flush`.
 export function markForSave($: EngineInterface, blockKey: string): void {
   pendingKeys.add(blockKey);
-  flushTimer ??= $.clock.after(1000, () => flush($));
+  flushTimer ??= $.clock.after(1000, () =>
+    flush($).then(
+      () => recordSuccess("flush"),
+      (err: unknown) => recordFailure($, "flush", messageOf(err)),
+    ),
+  );
 }
 
 // Escribe las claves pendientes en el bucket del día de su hora. Relee cada

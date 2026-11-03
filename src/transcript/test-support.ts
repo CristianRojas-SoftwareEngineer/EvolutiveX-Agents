@@ -110,6 +110,16 @@ export async function drain(stream: AsyncIterator<unknown>): Promise<void> {
   for (;;) if ((await stream.next()).done) return;
 }
 
+// Cuenta las escrituras de `second` en `$.state` (usa `on` en lugar de `mock`).
+export function countTicks(on: On): { count: number } {
+  const ticks = { count: 0 };
+  on("state.set", async ($, e, next) => {
+    if (e.key === "second" && e.plugin === "evolutivex-agents") ticks.count++;
+    return next(e);
+  });
+  return ticks;
+}
+
 // Fondo de los eventos de ciclo de vida que el kit no responde por su cuenta.
 export function lifecycleBottom(on: On): void {
   on("prompt.submit", async ($, e) => ({ text: e.text }));
