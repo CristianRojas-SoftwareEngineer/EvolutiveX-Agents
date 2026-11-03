@@ -8,8 +8,26 @@ const __dirname = __pathDirname(__filename);
 
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
+var MAX_VOICE_NAME_LENGTH = 64;
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
+}
+function isPlausibleVoiceName(name) {
+  return name.length > 0 && name.length <= MAX_VOICE_NAME_LENGTH && /^[A-Za-z0-9._-]+$/.test(name) && !name.includes("..");
+}
+function parseVoiceList(stdout) {
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return void 0;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    return void 0;
+  const voices = parsed.voices;
+  if (!Array.isArray(voices) || !voices.every((v) => typeof v === "string"))
+    return void 0;
+  return voices;
 }
 
 // src/lib/config.ts
@@ -117,16 +135,15 @@ function normalizeWarm(value) {
 function normalizeDegraded(value) {
   return value === "unresponsive" || value === "unregistered" || value === "orphan_resident" ? value : void 0;
 }
-function getDaemonStatus(cliPath) {
+var DAEMON_STATUS_TIMEOUT_MS = 5e3;
+function getDaemonStatus(cliPath, timeoutMs = DAEMON_STATUS_TIMEOUT_MS) {
   let stdout;
   let spawnError;
   let status;
   try {
     const res = runCli(cliPath, ["daemon", "status", "--json"], {
       encoding: "utf8",
-      // Presupuesto de SessionStart: doctor ≤20 s + status ≤5 s = 25 s de
-      // subprocesses con ≥5 s de margen bajo el timeout de 30 s del hook.
-      timeout: 5e3,
+      timeout: timeoutMs,
       windowsHide: true
     });
     stdout = res.stdout;
@@ -165,9 +182,10 @@ function getDaemonStatus(cliPath) {
   }
   return { kind: "stopped", exitCode, raw: parsed };
 }
-function startDaemonDetached(cliPath) {
+function startDaemonDetached(cliPath, warmVoice) {
   try {
-    const child = spawnCli(cliPath, ["daemon", "start"], {
+    const args = ["daemon", "start", "--warm-voice", warmVoice];
+    const child = spawnCli(cliPath, args, {
       detached: true,
       stdio: "ignore",
       windowsHide: true
@@ -279,7 +297,66 @@ function decideHealthAction(input) {
   return { kind: "uncertain" };
 }
 
+// src/voice/active-voice.ts
+import { readFileSync, writeFileSync } from "node:fs";
+
+// src/lib/state-dir.ts
+import { homedir, platform } from "node:os";
+import { join as join2 } from "node:path";
+import { mkdirSync } from "node:fs";
+var APP_DIR = "evolutivex-agents";
+function stateDir() {
+  const home = homedir();
+  switch (platform()) {
+    case "win32": {
+      const base = process.env.LOCALAPPDATA ?? join2(home, "AppData", "Local");
+      return join2(base, APP_DIR);
+    }
+    case "darwin":
+      return join2(home, "Library", "Application Support", APP_DIR);
+    default: {
+      const base = process.env.XDG_STATE_HOME ?? join2(home, ".local", "state");
+      return join2(base, APP_DIR);
+    }
+  }
+}
+function ensureStateDir() {
+  const dir = stateDir();
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function activeVoicePath() {
+  return join2(stateDir(), "active-voice");
+}
+
+// src/voice/active-voice.ts
+function writeActiveVoice(voice) {
+  try {
+    ensureStateDir();
+    const path = activeVoicePath();
+    if (readOrUndefined(path) === voice) return;
+    writeFileSync(path, `${voice}
+`, "utf8");
+  } catch {
+  }
+}
+function readOrUndefined(path) {
+  try {
+    return readFileSync(path, "utf8").trim() || void 0;
+  } catch {
+    return void 0;
+  }
+}
+
 // src/voice/health-check.ts
+var DEADLINE_MS = 28e3;
+var DOCTOR_TIMEOUT_MS = 2e4;
+var DAEMON_STATUS_TIMEOUT_MS2 = 5e3;
+var VOICE_LIST_TIMEOUT_MS = 2e3;
+var deadline = Date.now() + DEADLINE_MS;
+function budget(ms) {
+  return Math.max(1, Math.min(ms, deadline - Date.now()));
+}
 function exitWithSystemMessage(message) {
   process.stdout.write(JSON.stringify({ systemMessage: message }));
   process.exit(0);
@@ -291,10 +368,53 @@ function daemonStatusMessage(status) {
   const reason = status.kind === "degraded" ? `el daemon reporta degraded (${status.degraded})` : "el estado del daemon es incierto";
   return `EvolutiveX Agents: ${reason}. Ejecuta ai-voice-interconnector daemon status --json para diagnosticarlo; el daemon no se arranc\xF3.`;
 }
+function checkVoice(cli, voice) {
+  if (voice === DEFAULT_VOICE) return "present";
+  const res = runCli(cli, ["voice", "list", "--json"], {
+    encoding: "utf8",
+    timeout: budget(VOICE_LIST_TIMEOUT_MS),
+    windowsHide: true
+  });
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return "uncertain";
+  const voices = parseVoiceList(res.stdout);
+  if (!voices) return "uncertain";
+  return voices.includes(voice) ? "present" : "absent";
+}
+function voiceCheckMessage(voice, check, daemonStopped) {
+  const base = check === "absent" ? `EvolutiveX Agents: la voz ${voice} no existe; elige otra en /config \u2192 evolutivex-agents.voice.` : `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.`;
+  return daemonStopped ? `${base} El daemon no se arranc\xF3.` : base;
+}
+function handleDaemon(cli, voice, status) {
+  if (status.kind === "running") {
+    if (status.warm !== "warm_failed") return void 0;
+    return "EvolutiveX Agents: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle.";
+  }
+  if (status.kind === "stopped") {
+    startDaemonDetached(cli, voice);
+    return void 0;
+  }
+  return daemonStatusMessage(status);
+}
+function checkDaemonAndVoice(cli, voice) {
+  const status = getDaemonStatus(cli, budget(DAEMON_STATUS_TIMEOUT_MS2));
+  if (status.kind === "running" || status.kind === "stopped") {
+    const check = checkVoice(cli, voice);
+    if (check !== "present")
+      return voiceCheckMessage(voice, check, status.kind === "stopped");
+  }
+  return handleDaemon(cli, voice, status);
+}
 async function main() {
   await readStdin();
   const cfg = loadConfig();
+  writeActiveVoice(cfg.voice);
   if (!cfg.voiceEnabled) exitSilently();
+  if (!isPlausibleVoiceName(cfg.voice)) {
+    exitWithSystemMessage(
+      `EvolutiveX Agents: el nombre de voz \xAB${cfg.voice}\xBB de /config no es v\xE1lido. Usa letras, n\xFAmeros, punto, guion o guion bajo en /config \u2192 evolutivex-agents.voice; la narraci\xF3n fallar\xE1 hasta corregirlo y el daemon no se arranc\xF3.`
+    );
+  }
   const cli = resolveCli();
   if (!cli) {
     exitWithSystemMessage(
@@ -303,7 +423,7 @@ async function main() {
   }
   const res = runCli(cli, ["doctor", "--json"], {
     encoding: "utf8",
-    timeout: 2e4,
+    timeout: budget(DOCTOR_TIMEOUT_MS),
     windowsHide: true
   });
   if (res.error || typeof res.stdout !== "string" || !res.stdout.trim()) {
@@ -314,25 +434,8 @@ async function main() {
   const decision = decideHealthAction({ exitCode, report });
   if (decision.kind === "notify") exitWithSystemMessage(decision.message);
   if (decision.kind === "uncertain") exitSilently();
-  const advisory = decision.advisory;
-  const finish = (daemonMessage) => {
-    const message = [advisory, daemonMessage].filter(Boolean).join("\n");
-    if (message) exitWithSystemMessage(message);
-    exitSilently();
-  };
-  const status = getDaemonStatus(cli);
-  if (status.kind === "running") {
-    if (status.warm === "warm_failed") {
-      finish(
-        "EvolutiveX Agents: el daemon est\xE1 corriendo pero el calentamiento del modelo fall\xF3 (warm_failed); la primera narraci\xF3n puede tardar o fallar. Ejecuta ai-voice-interconnector daemon status --json para el detalle."
-      );
-    }
-    finish();
-  }
-  if (status.kind === "stopped") {
-    startDaemonDetached(cli);
-    finish();
-  }
-  finish(daemonStatusMessage(status));
+  const message = [decision.advisory, checkDaemonAndVoice(cli, cfg.voice)].filter(Boolean).join("\n");
+  if (message) exitWithSystemMessage(message);
+  exitSilently();
 }
 main().catch(() => process.exit(0));

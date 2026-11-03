@@ -5,17 +5,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Hook de SessionStart: verifica una sola vez por sesión que la cadena de
-// narración está completa (CLI en PATH + recursos del motor provisionados) y,
-// solo en ese caso, deja el daemon en marcha para que `speech say --daemon`
-// esté caliente durante la sesión (elimina el arranque manual tras un
-// reinicio). El veredicto sale del exit de `doctor --json` más su reporte
-// (failed/checks del contrato vigente); ante un check de recursos fallido o un
-// estado degradado/incierto del daemon avisa al usuario con el campo
-// systemMessage del JSON de salida (único mecanismo de aviso portable). Los
-// checks de instalación fallidos (`install_receipt`, `path_*`,
-// `pending_artifacts`) se avisan sin impedir el arranque, y ese aviso se
-// combina con el del daemon en un único systemMessage. Nunca falla la sesión:
-// exit 0 siempre.
+// narración está completa (CLI en PATH + recursos del motor provisionados +
+// voz activa existente) y, solo en ese caso, deja el daemon en marcha
+// precalentando la voz activa (`daemon start --warm-voice <voz>`) para que
+// `speech say --daemon` esté caliente durante la sesión. También escribe la
+// caché de la voz activa para narrate-ctl. El veredicto sale del exit de
+// `doctor --json` más su reporte (failed/checks del contrato vigente); ante un
+// check de recursos fallido, un estado degradado/incierto del daemon, una voz
+// activa con nombre inválido o inexistente o un `voice list` incierto avisa al
+// usuario con el campo systemMessage del JSON de salida (único mecanismo de
+// aviso portable) y no arranca el daemon. Los checks de instalación fallidos
+// (`install_receipt`, `path_*`, `pending_artifacts`) se avisan sin impedir el
+// arranque, y ese aviso se combina con el del daemon o la voz en un único
+// systemMessage. Nunca falla la sesión: exit 0 siempre.
 import { loadConfig } from "../lib/config.js";
 import { resolveCli, runCli } from "./resolve-cli.js";
 import { readStdin } from "../lib/hook-payload.js";
@@ -28,6 +30,32 @@ import {
   parseSingleJsonObject,
   decideHealthAction,
 } from "./health-decision.js";
+import { writeActiveVoice } from "./active-voice.js";
+import {
+  DEFAULT_VOICE,
+  isPlausibleVoiceName,
+  parseVoiceList,
+} from "./voice.js";
+
+// Presupuesto de SessionStart (timeout 30 s en hooks/hooks.json): un deadline
+// global de 28 s acota cada consulta al motor (doctor ≤20 s, daemon status
+// ≤5 s, voice list ≤2 s), de modo que ninguna supera el tiempo restante y
+// queda margen para arrancar Node, drenar stdin y resolver el CLI.
+const DEADLINE_MS = 28_000;
+const DOCTOR_TIMEOUT_MS = 20_000;
+const DAEMON_STATUS_TIMEOUT_MS = 5_000;
+const VOICE_LIST_TIMEOUT_MS = 2_000;
+
+const deadline = Date.now() + DEADLINE_MS;
+
+/**
+ * Timeout de una consulta: el menor entre el propio y el tiempo restante del
+ * deadline. Nunca 0 (spawnSync lo interpreta como «sin timeout»): con el
+ * deadline agotado, 1 ms hace que la consulta falle y cuente como incierta.
+ */
+function budget(ms: number): number {
+  return Math.max(1, Math.min(ms, deadline - Date.now()));
+}
 
 /** Emite un aviso systemMessage por stdout al usuario y termina con exit 0. */
 function exitWithSystemMessage(message: string): never {
@@ -53,11 +81,102 @@ function daemonStatusMessage(status: DaemonStatusResult): string {
   );
 }
 
+/** Resultado de comprobar la voz activa con `voice list --json`. */
+type VoiceCheck = "present" | "absent" | "uncertain";
+
+/** ¿La voz existe en el motor? Un listado fallido o ilegible es incierto. */
+function checkVoice(cli: string, voice: string): VoiceCheck {
+  if (voice === DEFAULT_VOICE) return "present";
+  const res = runCli(cli, ["voice", "list", "--json"], {
+    encoding: "utf8",
+    timeout: budget(VOICE_LIST_TIMEOUT_MS),
+    windowsHide: true,
+  });
+  if (res.error || res.status !== 0 || typeof res.stdout !== "string")
+    return "uncertain";
+  const voices = parseVoiceList(res.stdout);
+  if (!voices) return "uncertain";
+  return voices.includes(voice) ? "present" : "absent";
+}
+
+/** Aviso ante una voz activa inexistente o no comprobable. */
+function voiceCheckMessage(
+  voice: string,
+  check: "absent" | "uncertain",
+  daemonStopped: boolean,
+): string {
+  const base =
+    check === "absent"
+      ? `EvolutiveX Agents: la voz ${voice} no existe; elige otra en ` +
+        "/config → evolutivex-agents.voice."
+      : `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. ` +
+        "Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.";
+  return daemonStopped ? `${base} El daemon no se arrancó.` : base;
+}
+
+/**
+ * Aviso del daemon según su estado, arrancándolo si está parado. undefined si
+ * no hay nada que avisar.
+ */
+function handleDaemon(
+  cli: string,
+  voice: string,
+  status: DaemonStatusResult,
+): string | undefined {
+  if (status.kind === "running") {
+    // warming, warm o sin warm: no molestar. El daemon no se reinicia aunque
+    // tenga caliente otra voz.
+    if (status.warm !== "warm_failed") return undefined;
+    return (
+      "EvolutiveX Agents: el daemon está corriendo pero el calentamiento " +
+      "del modelo falló (warm_failed); la primera narración puede tardar o " +
+      "fallar. Ejecuta ai-voice-interconnector daemon status --json para " +
+      "el detalle."
+    );
+  }
+  if (status.kind === "stopped") {
+    // Arranque único, desanclado y best-effort ante el único estado que lo
+    // permite, con la voz activa ya validada.
+    startDaemonDetached(cli, voice);
+    return undefined;
+  }
+  // degraded o uncertain: aviso acotado remitiendo al comando oficial, sin
+  // arrancar.
+  return daemonStatusMessage(status);
+}
+
+/**
+ * Con recursos sanos: consulta el daemon, valida la voz activa si el daemon
+ * está running o stopped limpio y, solo si la voz existe, gestiona el daemon.
+ * Devuelve el aviso, si lo hay.
+ */
+function checkDaemonAndVoice(cli: string, voice: string): string | undefined {
+  const status = getDaemonStatus(cli, budget(DAEMON_STATUS_TIMEOUT_MS));
+  if (status.kind === "running" || status.kind === "stopped") {
+    const check = checkVoice(cli, voice);
+    if (check !== "present")
+      return voiceCheckMessage(voice, check, status.kind === "stopped");
+  }
+  return handleDaemon(cli, voice, status);
+}
+
 async function main(): Promise<void> {
   await readStdin(); // drena stdin; el contenido no se usa aquí
 
+  // La caché de la voz activa se escribe siempre, también con la voz
+  // desactivada, para que narrate-ctl conozca la de /config.
   const cfg = loadConfig();
+  writeActiveVoice(cfg.voice);
   if (!cfg.voiceEnabled) exitSilently();
+
+  if (!isPlausibleVoiceName(cfg.voice)) {
+    exitWithSystemMessage(
+      `EvolutiveX Agents: el nombre de voz «${cfg.voice}» de /config no es ` +
+        "válido. Usa letras, números, punto, guion o guion bajo en " +
+        "/config → evolutivex-agents.voice; la narración fallará hasta " +
+        "corregirlo y el daemon no se arrancó.",
+    );
+  }
 
   const cli = resolveCli();
   if (!cli) {
@@ -69,13 +188,10 @@ async function main(): Promise<void> {
 
   // doctor --json imprime el reporte también en el veredicto negativo (exit 1)
   // y en el fallo del comando (doctor_failed); el veredicto sale del exit más
-  // el reporte parseado, nunca de un campo status. Presupuesto de SessionStart
-  // (timeout 30 s en hooks/hooks.json): doctor ≤20 s + daemon status ≤5 s = 25 s
-  // de subprocesses, dejando ≥5 s de margen para arrancar Node, drenar stdin y
-  // resolver el CLI.
+  // el reporte parseado, nunca de un campo status.
   const res = runCli(cli, ["doctor", "--json"], {
     encoding: "utf8",
-    timeout: 20000,
+    timeout: budget(DOCTOR_TIMEOUT_MS),
     windowsHide: true,
   });
 
@@ -95,40 +211,13 @@ async function main(): Promise<void> {
   if (decision.kind === "uncertain") exitSilently();
 
   // Recursos sanos: único camino que consulta y puede calentar el daemon. El
-  // aviso de checks de instalación fallidos (si lo hay) viaja con el mensaje
-  // del daemon en un único systemMessage.
-  const advisory = decision.advisory;
-  const finish = (daemonMessage?: string): never => {
-    const message = [advisory, daemonMessage].filter(Boolean).join("\n");
-    if (message) exitWithSystemMessage(message);
-    exitSilently();
-  };
-
-  const status = getDaemonStatus(cli);
-
-  if (status.kind === "running") {
-    if (status.warm === "warm_failed") {
-      finish(
-        "EvolutiveX Agents: el daemon está corriendo pero el calentamiento " +
-          "del modelo falló (warm_failed); la primera narración puede tardar o " +
-          "fallar. Ejecuta ai-voice-interconnector daemon status --json para " +
-          "el detalle.",
-      );
-    }
-    // warming, warm o sin warm: no molestar.
-    finish();
-  }
-
-  if (status.kind === "stopped") {
-    // Arranque único, desanclado y best-effort ante el único estado que lo
-    // permite.
-    startDaemonDetached(cli);
-    finish();
-  }
-
-  // degraded o uncertain: aviso acotado remitiendo al comando oficial, sin
-  // arrancar.
-  finish(daemonStatusMessage(status));
+  // aviso de checks de instalación fallidos (si lo hay) viaja con el del
+  // daemon o la voz en un único systemMessage.
+  const message = [decision.advisory, checkDaemonAndVoice(cli, cfg.voice)]
+    .filter(Boolean)
+    .join("\n");
+  if (message) exitWithSystemMessage(message);
+  exitSilently();
 }
 
 main().catch(() => process.exit(0));

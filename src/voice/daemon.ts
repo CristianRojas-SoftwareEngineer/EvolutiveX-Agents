@@ -7,7 +7,7 @@
 // Consulta y arranque del daemon de AI Voice-InterConnector vía su CLI pública. El daemon
 // mantiene el modelo en memoria: `speech say --daemon` lo requiere corriendo (no
 // lo arranca solo). El health-check lo levanta de forma desanclada al iniciar
-// sesión. El estado sale de `daemon status --json` (contrato vigente: clave
+// sesión, precalentando la voz activa con `--warm-voice`. El estado sale de `daemon status --json` (contrato vigente: clave
 // `daemon` como cadena, `degraded` y `warm` opcionales; exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`)).
 import { runCli, spawnCli } from "./resolve-cli.js";
 
@@ -33,24 +33,28 @@ function normalizeDegraded(value: unknown): DaemonStatusResult["degraded"] {
     : undefined;
 }
 
+/** Timeout por defecto de `daemon status --json`. */
+const DAEMON_STATUS_TIMEOUT_MS = 5000;
+
 /**
  * Estado del daemon según el contrato vigente. La única rama que significa
  * «en ejecución» es `daemon: "running"` con exit 0; el JSON malformado, la
  * salida vacía, un exit distinto de 0 (1 `daemon_error` o 5 `daemon_unreachable`)
  * o un estado desconocido devuelven `uncertain` —nunca running—.
  * Conserva exit y JSON crudo para que el health-check pueda diagnosticar sin
- * re-ejecutar el CLI.
+ * re-ejecutar el CLI. El health-check acota `timeoutMs` con su deadline global.
  */
-export function getDaemonStatus(cliPath: string): DaemonStatusResult {
+export function getDaemonStatus(
+  cliPath: string,
+  timeoutMs = DAEMON_STATUS_TIMEOUT_MS,
+): DaemonStatusResult {
   let stdout: string | Buffer | undefined;
   let spawnError: unknown;
   let status: number | null;
   try {
     const res = runCli(cliPath, ["daemon", "status", "--json"], {
       encoding: "utf8",
-      // Presupuesto de SessionStart: doctor ≤20 s + status ≤5 s = 25 s de
-      // subprocesses con ≥5 s de margen bajo el timeout de 30 s del hook.
-      timeout: 5000,
+      timeout: timeoutMs,
       windowsHide: true,
     });
     stdout = res.stdout;
@@ -94,13 +98,17 @@ export function getDaemonStatus(cliPath: string): DaemonStatusResult {
 }
 
 /**
- * Arranca el daemon de forma desanclada (fire-and-forget): la carga del modelo
- * (~15-20 s) ocurre en segundo plano y no bloquea el hook de SessionStart. No se
- * espera ni se comprueba el resultado; si falla, el health-check no molesta.
+ * Arranca el daemon de forma desanclada (fire-and-forget) precalentando
+ * `warmVoice` (`daemon start --warm-voice <voz>`, explícita también con
+ * `default`): la carga del modelo (~15-20 s) ocurre en segundo plano y no
+ * bloquea el hook de SessionStart. No se espera ni se comprueba el resultado;
+ * el health-check valida antes que la voz existe, porque el motor falla al
+ * instante con `voice_not_found` si no.
  */
-export function startDaemonDetached(cliPath: string): void {
+export function startDaemonDetached(cliPath: string, warmVoice: string): void {
   try {
-    const child = spawnCli(cliPath, ["daemon", "start"], {
+    const args = ["daemon", "start", "--warm-voice", warmVoice];
+    const child = spawnCli(cliPath, args, {
       detached: true,
       stdio: "ignore",
       windowsHide: true,

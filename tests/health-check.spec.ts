@@ -13,10 +13,14 @@
 // stopped limpio, aviso por systemMessage ante negativo/degraded/incierto, y
 // exit 0 en todos los caminos. Los checks informativos fallidos (instalación o
 // ciclo de vida) avisan sin impedir la consulta ni el arranque del daemon.
+// Con la voz activa de /config: arranque con `--warm-voice`, validación con
+// `voice list --json` (voz ausente, nombre inválido o listado incierto avisan
+// sin arrancar), sin reinicio del daemon corriendo y caché `active-voice`
+// escrita también con la voz desactivada.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { ENGINE_VERSION, makeTempDir, removeDir, waitFor } from "./helpers.js";
 
@@ -50,6 +54,8 @@ type ShimOptions = {
   doctorDelayMs?: number;
   daemonJson?: string;
   daemonExit?: number;
+  voicesJson?: string;
+  voicesExit?: number;
 };
 
 /**
@@ -57,8 +63,10 @@ type ShimOptions = {
  * sh en Unix, ambos delegando en un impl Node). Despacha por argv: `doctor
  * --json` duerme `doctorDelayMs` (default 0) y luego imprime `doctorJson` y sale
  * con `doctorExit` (default 0); `daemon status --json` imprime `daemonJson` y
- * sale con `daemonExit` (default 0); `daemon start` se registra y sale 0. Toda
- * invocación anota su argv en `argv.log`.
+ * sale con `daemonExit` (default 0); `voice list --json` imprime `voicesJson`
+ * (default: las tres voces de fábrica) y sale con `voicesExit` (default 0);
+ * `daemon start` se registra y sale 0. Toda invocación anota su argv en
+ * `argv.log`.
  */
 function makeFakeCli(dir: string, opts: ShimOptions): { argvLog: string } {
   const {
@@ -67,6 +75,8 @@ function makeFakeCli(dir: string, opts: ShimOptions): { argvLog: string } {
     doctorDelayMs = 0,
     daemonJson,
     daemonExit = 0,
+    voicesJson,
+    voicesExit = 0,
   } = opts;
   const argvLog = join(dir, "argv.log");
   writeFileSync(join(dir, "doctor.json"), doctorJson);
@@ -77,6 +87,15 @@ function makeFakeCli(dir: string, opts: ShimOptions): { argvLog: string } {
     daemonJson ?? JSON.stringify({ schema_version: "6", daemon: "running" }),
   );
   writeFileSync(join(dir, "daemon.exit"), String(daemonExit));
+  writeFileSync(
+    join(dir, "voices.json"),
+    voicesJson ??
+      JSON.stringify({
+        schema_version: "6",
+        voices: ["default", "ryan", "vivian"],
+      }),
+  );
+  writeFileSync(join(dir, "voices.exit"), String(voicesExit));
   writeFileSync(
     join(dir, "impl.cjs"),
     [
@@ -92,6 +111,10 @@ function makeFakeCli(dir: string, opts: ShimOptions): { argvLog: string } {
       "  }",
       '  process.stdout.write(fs.readFileSync(path.join(__dirname, "doctor.json"), "utf8"));',
       '  process.exit(Number(fs.readFileSync(path.join(__dirname, "doctor.exit"), "utf8")));',
+      "}",
+      'if (argv[0] === "voice" && argv[1] === "list") {',
+      '  process.stdout.write(fs.readFileSync(path.join(__dirname, "voices.json"), "utf8"));',
+      '  process.exit(Number(fs.readFileSync(path.join(__dirname, "voices.exit"), "utf8")));',
       "}",
       'if (argv[0] === "daemon" && argv[1] === "status") {',
       '  process.stdout.write(fs.readFileSync(path.join(__dirname, "daemon.json"), "utf8"));',
@@ -129,12 +152,18 @@ function nodeOnlyEnv(): Record<string, string> {
   return { PATH: p, Path: p };
 }
 
-function runHealth(cliDir: string | null): {
+function runHealth(
+  cliDir: string | null,
+  extraEnv: Record<string, string> = {},
+): {
   status: number | null;
   stdout: string;
   stderr: string;
 } {
-  const env = healthEnv(cliDir ? fakeCliEnv(cliDir) : nodeOnlyEnv());
+  const env = healthEnv({
+    ...(cliDir ? fakeCliEnv(cliDir) : nodeOnlyEnv()),
+    ...extraEnv,
+  });
   const res = spawnSync(process.execPath, [HEALTH], {
     env,
     input: "",
@@ -145,6 +174,7 @@ function runHealth(cliDir: string | null): {
 }
 
 function loggedArgvs(argvLog: string): string[][] {
+  if (!existsSync(argvLog)) return [];
   return readFileSync(argvLog, "utf8")
     .trim()
     .split("\n")
@@ -159,9 +189,20 @@ function invoked(argvLog: string, prefix: string[]): boolean {
 }
 
 function startCount(argvLog: string): number {
+  return startArgvs(argvLog).length;
+}
+
+function startArgvs(argvLog: string): string[][] {
   return loggedArgvs(argvLog).filter(
     (argv) => argv[0] === "daemon" && argv[1] === "start",
-  ).length;
+  );
+}
+
+/** State dir del plugin dentro del temporal, según el SO real del host. */
+function activeVoiceCache(): string {
+  const sub =
+    process.platform === "darwin" ? join("Library", "Application Support") : "";
+  return join(stateBase, sub, "evolutivex-agents", "active-voice");
 }
 
 /** Reporte sano del contrato vigente del motor: failed vacío y checks correctos. */
@@ -245,6 +286,15 @@ test("sano + daemon stopped limpio: arranca el daemon exactamente una vez", asyn
     // El arranque es desanclado: el hijo puede tardar en anotar su argv.
     assert.ok(await waitFor(() => startCount(argvLog) === 1));
     assert.equal(startCount(argvLog), 1);
+    // Sin voz en /config: precalienta default de forma explícita y no lista
+    // voces.
+    assert.deepEqual(startArgvs(argvLog)[0], [
+      "daemon",
+      "start",
+      "--warm-voice",
+      "default",
+    ]);
+    assert.ok(!invoked(argvLog, ["voice", "list"]));
   } finally {
     removeDir(dir);
   }
@@ -578,3 +628,148 @@ test(
     }
   },
 );
+
+// --- Voz activa de /config ---
+
+const VOICES_WITH_MI_VOZ = JSON.stringify({
+  schema_version: "6",
+  voices: ["default", "ryan", "vivian", "mi_voz"],
+});
+
+test("voz activa existente + daemon stopped: arranca con --warm-voice <voz>", async () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
+      voicesJson: VOICES_WITH_MI_VOZ,
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "Mi_Voz" });
+    assert.equal(res.status, 0);
+    assert.ok(!res.stdout.includes("systemMessage"));
+    assert.ok(invoked(argvLog, ["voice", "list", "--json"]));
+    assert.ok(await waitFor(() => startCount(argvLog) === 1));
+    assert.deepEqual(startArgvs(argvLog)[0], [
+      "daemon",
+      "start",
+      "--warm-voice",
+      "mi_voz",
+    ]);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("voz activa inexistente + daemon stopped: avisa y no arranca", async () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("la voz mi_voz no existe"));
+    assert.ok(message.includes("evolutivex-agents.voice"));
+    assert.ok(message.includes("no se arrancó"));
+    // Margen para un arranque desanclado que no debe ocurrir.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("nombre de voz inválido en /config: avisa sin consultar el motor ni arrancar", () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi voz/.." });
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("«mi voz/..»"));
+    assert.ok(message.includes("no es válido"));
+    assert.deepEqual(loggedArgvs(argvLog), []);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+for (const [label, opts] of [
+  ["voice list con exit 1", { voicesJson: "{}", voicesExit: 1 }],
+  ["voice list con JSON inválido", { voicesJson: "esto no es json" }],
+] as const) {
+  test(`${label}: diagnóstico incierto sin afirmar que la voz falta y sin arrancar`, async () => {
+    const dir = makeTempDir("avi-plugin-health-cli-");
+    try {
+      const { argvLog } = makeFakeCli(dir, {
+        doctorJson: healthyDoctorJson(),
+        daemonJson: JSON.stringify({ schema_version: "6", daemon: "stopped" }),
+        ...opts,
+      });
+      const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+      assert.equal(res.status, 0);
+      const message = systemMessageOf(res.stdout);
+      assert.ok(message.includes("no se pudo comprobar si la voz mi_voz"));
+      assert.ok(!message.includes("no existe"));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      assert.equal(startCount(argvLog), 0);
+    } finally {
+      removeDir(dir);
+    }
+  });
+}
+
+test("daemon corriendo con otra voz caliente: no se reinicia ni avisa", () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({
+        schema_version: "6",
+        daemon: "running",
+        warm: "warm",
+      }),
+      voicesJson: VOICES_WITH_MI_VOZ,
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    assert.equal(res.status, 0);
+    assert.ok(!res.stdout.includes("systemMessage"));
+    assert.ok(invoked(argvLog, ["voice", "list", "--json"]));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("daemon corriendo y voz inexistente: avisa sin decir que no se arrancó", () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "running" }),
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz" });
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("la voz mi_voz no existe"));
+    assert.ok(!message.includes("no se arrancó"));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("escribe la caché de la voz activa, también con la voz desactivada", () => {
+  const res = runHealth(null, {
+    CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
+    CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz",
+  });
+  assert.equal(res.status, 0);
+  assert.equal(res.stdout, "");
+  assert.equal(readFileSync(activeVoiceCache(), "utf8").trim(), "mi_voz");
+});

@@ -9,14 +9,15 @@
 // (unresponsive|unregistered|orphan_resident) y `warm` opcional
 // (warming|warm|warm_failed); exit 0, 1 (`daemon_error`) o 5 (`daemon_unreachable`). getDaemonStatus devuelve un
 // resultado discriminado (running|stopped|degraded|uncertain) que conserva exit
-// y JSON. Usa un shim `ai-voice-interconnector` falso en disco, invocado por su
-// ruta directa.
+// y JSON. startDaemonDetached pasa siempre `--warm-voice <voz>`, también con
+// `default`. Usa un shim `ai-voice-interconnector` falso en disco, invocado
+// por su ruta directa, que anota su argv en `argv.log`.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chmodSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as daemon from "../src/voice/daemon.js";
-import { makeTempDir, removeDir } from "./helpers.js";
+import { makeTempDir, removeDir, waitFor } from "./helpers.js";
 
 /**
  * Crea un `ai-voice-interconnector` falso en un temporal que imprime
@@ -27,7 +28,7 @@ import { makeTempDir, removeDir } from "./helpers.js";
 function makeFakeCli(
   statusJson: string,
   exitCode = 0,
-): { cliPath: string; cleanup: () => void } {
+): { cliPath: string; argvLog: string; cleanup: () => void } {
   const dir = makeTempDir("avi-plugin-daemon-cli-");
   writeFileSync(join(dir, "status.json"), statusJson);
   writeFileSync(join(dir, "status.exit"), String(exitCode));
@@ -37,6 +38,7 @@ function makeFakeCli(
       'const fs = require("node:fs");',
       'const path = require("node:path");',
       "const argv = process.argv.slice(2);",
+      'fs.appendFileSync(path.join(__dirname, "argv.log"), JSON.stringify(argv) + "\\n");',
       'if (argv[0] === "daemon" && argv[1] === "status") {',
       '  process.stdout.write(fs.readFileSync(path.join(__dirname, "status.json"), "utf8"));',
       '  process.exit(Number(fs.readFileSync(path.join(__dirname, "status.exit"), "utf8")));',
@@ -60,7 +62,11 @@ function makeFakeCli(
     writeFileSync(cliPath, '#!/bin/sh\nexec node "${0%/*}/impl.cjs" "$@"\n');
     chmodSync(cliPath, 0o755);
   }
-  return { cliPath, cleanup: () => removeDir(dir) };
+  return {
+    cliPath,
+    argvLog: join(dir, "argv.log"),
+    cleanup: () => removeDir(dir),
+  };
 }
 
 test("running con warm warming ⇒ running, conserva warm, pid y exit 0", () => {
@@ -260,3 +266,17 @@ test("exit no cero con JSON running ⇒ uncertain (combinación incoherente), ex
     cleanup();
   }
 });
+
+for (const voice of ["mi_voz", "default"]) {
+  test(`startDaemonDetached pasa --warm-voice ${voice} de forma explícita`, async () => {
+    const { cliPath, argvLog, cleanup } = makeFakeCli("{}");
+    try {
+      daemon.startDaemonDetached(cliPath, voice);
+      assert.ok(await waitFor(() => existsSync(argvLog)));
+      const argv = JSON.parse(readFileSync(argvLog, "utf8").trim());
+      assert.deepEqual(argv, ["daemon", "start", "--warm-voice", voice]);
+    } finally {
+      cleanup();
+    }
+  });
+}
