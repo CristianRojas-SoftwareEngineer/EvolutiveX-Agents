@@ -83,12 +83,29 @@ const baseOptions = {
   },
 };
 
+// Transcript enriquecido: se ejecuta en el sandbox de function hooks de Claude
+// Code (sin Node ni sistema de archivos), así que se empaqueta neutral y sin
+// el banner de Node.
+/** @type {import("esbuild").BuildOptions} */
+const transcriptOptions = {
+  entryPoints: { transcript: join(root, "src/transcript/index.js") },
+  outdir: distDir,
+  bundle: true,
+  platform: "neutral",
+  format: "esm",
+  minify: false,
+  sourcemap: false,
+};
+
 const isCheck = process.argv.includes("--check");
 
 if (isCheck) {
-  const result = await build({ ...baseOptions, write: false });
+  const results = await Promise.all([
+    build({ ...baseOptions, write: false }),
+    build({ ...transcriptOptions, write: false }),
+  ]);
   let drift = false;
-  for (const out of result.outputFiles) {
+  for (const out of results.flatMap((result) => result.outputFiles)) {
     const rel = relative(distDir, out.path);
     let current = "";
     try {
@@ -116,13 +133,13 @@ if (isCheck) {
   }
   console.log("dist/ está sincronizado con src/.");
 } else {
-  await build(baseOptions);
+  await Promise.all([build(baseOptions), build(transcriptOptions)]);
   if (existsSync(vendorSrcDir)) {
     await rm(vendorOutDir, { recursive: true, force: true });
     await cp(vendorSrcDir, vendorOutDir, { recursive: true });
     await rm(excludedAppleIcon, { force: true });
   }
   console.log(
-    `Compilados ${Object.keys(ENTRY_POINTS).length} bundles en dist/.`,
+    `Compilados ${Object.keys(ENTRY_POINTS).length + 1} bundles en dist/.`,
   );
 }

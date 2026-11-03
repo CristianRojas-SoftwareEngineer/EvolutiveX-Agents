@@ -7,8 +7,35 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
-  { ignores: ["dist/", "node_modules/", "tests/.build/", "*.mjs"] },
+  {
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "tests/.build/",
+      "*.mjs",
+      ".claude-plugin/types/",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // El transcript enriquecido corre en el sandbox de function hooks: no puede
+  // importar módulos de Node ni código de fuera de su carpeta.
+  {
+    files: ["src/transcript/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["node:*", "../*"],
+              message:
+                "src/transcript/ corre en el sandbox de Claude Code: solo puede importar módulos de su propia carpeta.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettier,
 );

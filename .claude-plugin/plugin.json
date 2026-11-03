@@ -4,5 +4,14 @@
   "version": "0.1.0",
   "author": {
     "name": "Cristián Rojas Arredondo"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "enhancedTranscript": {
+      "type": "boolean",
+      "title": "Transcript enriquecido",
+      "description": "Opt-in: altera el transcript de Claude Code con recuadros que muestran la hora de inicio y la duración de cada bloque, y contadores en vivo mientras corre una herramienta. Desactivado por defecto.",
+      "default": false
+    }
   }
 }
