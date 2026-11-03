@@ -158,9 +158,12 @@ npm install        # dependencias de dev (typescript, esbuild)
 npm run typecheck  # verificación de tipos
 npm run build      # compila src/ → dist/ (commitear dist/)
 npm run check-dist # verifica dist/ sincronizado con src/
-npm test           # suite (node --test, sin framework externo)
+npm test           # suite de Node (tests/*.spec.ts con node --test, sin framework externo)
+npm run test:transcript  # tests del transcript enriquecido (src/transcript/*.test.ts, kit oficial)
 npx tsc -p src/transcript  # tipos del transcript enriquecido (sandbox de function hooks)
 ```
+
+`npm run test:transcript` compila `dist/` y ejecuta `claude plugin test .`, que prueba el módulo `dist/transcript.js` con el kit oficial `claude-code/testing` en un entorno como el de los hooks reales; requiere el CLI de Claude Code instalado. Recorre todos los `*.test.ts` del plugin, por eso los tests de Node usan el sufijo `.spec.ts`.
 
 `npx tsc -p src/transcript` usa los tipos de la API de _function hooks_ que Claude Code genera en `.claude-plugin/types/` (no versionados) al cargar el plugin con `claude --plugin-dir .`; sin ellos no puede ejecutarse, por eso no forma parte de CI.
 

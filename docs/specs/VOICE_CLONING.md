@@ -596,30 +596,30 @@ su informe y exit 1, no necesariamente un objeto de error.
 
 ### 10.1 Unitarias
 
-- `tests/voice.test.ts`
+- `tests/voice.spec.ts`
   - normalización de nombres;
   - voces de fábrica;
   - parseo válido e inválido de `voice list --json`;
   - validación conservadora de nombres.
-- `tests/config.test.ts`
+- `tests/config.spec.ts`
   - `voice` por defecto;
   - lectura de configs antiguas sin `voice`;
   - persistencia de `voice` sin secretos;
   - valores inválidos → `default`.
-- `tests/narrate-ctl.test.ts`
+- `tests/narrate-ctl.spec.ts`
   - argumentos de `voice clone` (archivo y `--mic`), `voice list`, `voice use`, `voice remove`;
   - `voice use` usa `presynth --force` y no escribe config si falla;
   - `voice remove` exige `--yes`, bloquea fábrica y voz activa;
   - `voice clone --force` sobre la voz activa dispara `presynth --force`;
   - `presynth`, `say` y `status` usan la voz activa;
   - mapeo de exit codes.
-- `tests/narrate-worker.test.ts`
+- `tests/narrate-worker.spec.ts`
   - `play` incluye `--voice`;
   - `say` incluye `--voice`;
   - la cola y el lock no cambian.
-- `tests/daemon.test.ts`
+- `tests/daemon.spec.ts`
   - `startDaemonDetached` añade `--warm-voice` cuando se pasa voz.
-- `tests/health-check.test.ts`
+- `tests/health-check.spec.ts`
   - arranca con la voz activa si el daemon está parado;
   - no arranca si la voz activa no existe;
   - emite `systemMessage` de voz ausente;

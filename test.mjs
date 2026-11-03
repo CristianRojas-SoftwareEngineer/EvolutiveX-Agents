@@ -7,7 +7,9 @@
 // Compila los tests de tests/ a bundles en tests/.build/ con esbuild (misma
 // dependencia que el build) y los ejecuta con el corredor nativo de Node
 // (node --test). Sin framework de testing externo, alineado con el principio
-// de no exigir runtime extra.
+// de no exigir runtime extra. Usan el sufijo .spec.ts para que `claude plugin
+// test` (que recorre todos los *.test.ts del plugin) no los tome como tests
+// del sandbox.
 import { build } from "esbuild";
 import { readdir, rm } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
@@ -18,9 +20,9 @@ const root = dirname(fileURLToPath(import.meta.url));
 const testsDir = join(root, "tests");
 const outDir = join(testsDir, ".build");
 
-const entries = (await readdir(testsDir)).filter((f) => f.endsWith(".test.ts"));
+const entries = (await readdir(testsDir)).filter((f) => f.endsWith(".spec.ts"));
 if (entries.length === 0) {
-  console.error("No hay archivos *.test.ts en tests/.");
+  console.error("No hay archivos *.spec.ts en tests/.");
   process.exit(1);
 }
 
