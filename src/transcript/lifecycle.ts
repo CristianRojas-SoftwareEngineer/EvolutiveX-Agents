@@ -1,3 +1,13 @@
+import type {
+  EngineInterface,
+  Hook,
+  ToolResultOf,
+  TurnStepChunk,
+  TurnStepInputChunk,
+  TurnStepTextChunk,
+  TurnStepThinkingChunk,
+  TurnStepToolChunk,
+} from "claude-code";
 import {
   MAIN,
   agentOf,
@@ -36,14 +46,30 @@ const DRAWN_DOORS = new Set([
 
 // Prompt principal en curso: `{ submittedAt, rowKey?, turnStart? }` desde prompt.submit
 // hasta que su fila (rowKey) y turn.start (turnStart) hayan llegado.
-let currentPrompt;
+let currentPrompt:
+  { submittedAt: number; rowKey?: string; turnStart?: number } | undefined;
 // Content blocks `text` y `tool` del modelo aún sin consumir, por agente.
-const modelBlocks = new Map();
+const modelBlocks = new Map<string, ModelBlock[]>();
+
+// Content block de la respuesta: tipo, texto acumulado, primer y último chunk
+// (epoch ms), inicio atribuido, si ya se dibuja y, en `tool`, su tool_use_id.
+type ModelBlock = {
+  kind: string;
+  text: string;
+  first: number;
+  last: number;
+  attributedStart: number;
+  visible: boolean;
+  toolId?: string;
+};
+
+// Slash command terminado: nombre e intervalo de command.run (epoch ms).
+type CommandRun = { command: string; start: number; end: number };
 
 // Slash commands terminados sin fila de salida: `{ command, start, end }`.
-let commands = [];
+let commands: CommandRun[] = [];
 // Comando cuya fila eco ya llegó, a la espera de su fila de salida.
-let commandAwaitingOutput;
+let commandAwaitingOutput: CommandRun | undefined;
 
 // Descarta los bloques del modelo y comandos no consumidos de más de PRUNE_MS.
 function prune() {
@@ -56,7 +82,11 @@ function prune() {
   commands = commands.filter((c) => c.end >= cutoff);
 }
 
-export async function onSubmit($, e, next) {
+export async function onSubmit(
+  $: EngineInterface,
+  e: Parameters<Hook<"prompt.submit">>[1],
+  next: Parameters<Hook<"prompt.submit">>[2],
+) {
   if (isUserOrigin(e.origin)) {
     session.pendingSubmit = Date.now();
     currentPrompt = { submittedAt: session.pendingSubmit };
@@ -66,8 +96,8 @@ export async function onSubmit($, e, next) {
 
 // 🔌 de un UserMessage: prompt.submit → turn.start. Lo fija el último en
 // llegar de su fila y turn.start; la hora (envío) se fija ya con la fila.
-function completePrompt($) {
-  const { submittedAt, rowKey, turnStart } = currentPrompt;
+function completePrompt($: EngineInterface): void {
+  const { submittedAt, rowKey, turnStart } = currentPrompt!;
   if (rowKey === undefined) return;
   pinTiming($, rowKey, {
     time: submittedAt,
@@ -77,7 +107,11 @@ function completePrompt($) {
   if (turnStart !== undefined) currentPrompt = undefined;
 }
 
-export async function onTurnStart($, e, next) {
+export async function onTurnStart(
+  $: EngineInterface,
+  e: Parameters<Hook<"turn.start">>[1],
+  next: Parameters<Hook<"turn.start">>[2],
+) {
   const now = Date.now();
   turns.set(MAIN, { turnId: e.turnId, start: now });
   session.pendingSubmit = undefined;
@@ -92,7 +126,11 @@ export async function onTurnStart($, e, next) {
   return next(e);
 }
 
-export async function onTurnComplete($, e, next) {
+export async function onTurnComplete(
+  $: EngineInterface,
+  e: Parameters<Hook<"turn.complete">>[1],
+  next: Parameters<Hook<"turn.complete">>[2],
+) {
   turns.delete(agentOf(e));
   lastCall.delete(agentOf(e));
   // Cierra el ToolGroup que seguía abierto esperando otra llamada.
@@ -102,18 +140,31 @@ export async function onTurnComplete($, e, next) {
 
 const BLOCK_KINDS = new Set(["text", "thinking", "tool", "input"]);
 
+// Chunks de content block (los que trae BLOCK_KINDS), con su `index`.
+type BlockChunk =
+  | TurnStepTextChunk
+  | TurnStepThinkingChunk
+  | TurnStepToolChunk
+  | TurnStepInputChunk;
+const isBlockChunk = (chunk: TurnStepChunk): chunk is BlockChunk =>
+  BLOCK_KINDS.has(chunk.kind);
+
 // Registra cada content block de la respuesta con su primer y último chunk,
 // en el registro de su agente. `attributedStart` es el fin del bloque visible
 // anterior del mismo paso (o el inicio del paso): así el thinking previo
 // cuenta en el bloque que sigue. Un subagente no emite turn.start: su turno
 // empieza con el primer paso de un turnId nuevo.
-export async function* onStep($, e, next) {
+export async function* onStep(
+  $: EngineInterface,
+  e: Parameters<Hook<"turn.step">>[1],
+  next: Parameters<Hook<"turn.step">>[2],
+) {
   const agent = agentOf(e);
   const stepStart = Date.now();
   if (turns.get(agent)?.turnId !== e.turnId)
     turns.set(agent, { turnId: e.turnId, start: stepStart });
-  const byIndex = new Map();
-  let previous;
+  const byIndex = new Map<number, ModelBlock>();
+  let previous: ModelBlock | undefined;
   const stream = next(e)[Symbol.asyncIterator]();
   for (;;) {
     const { value: chunk, done } = await stream.next();
@@ -121,7 +172,7 @@ export async function* onStep($, e, next) {
       prune();
       return chunk;
     }
-    if (BLOCK_KINDS.has(chunk.kind)) {
+    if (isBlockChunk(chunk)) {
       const now = Date.now();
       let b = byIndex.get(chunk.index);
       if (!b) {
@@ -140,7 +191,7 @@ export async function* onStep($, e, next) {
           // La lista se crea aquí y no al empezar el paso: prune() borra
           // las listas vacías, también las de pasos de otros agentes en curso.
           if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-          modelBlocks.get(agent).push(b);
+          modelBlocks.get(agent)!.push(b);
         }
       }
       if (b.kind === "text" && !b.visible) {
@@ -148,7 +199,7 @@ export async function* onStep($, e, next) {
           b.attributedStart = previous.attributedStart;
           const list = modelBlocks.get(agent);
           const idx = list ? list.indexOf(previous) : -1;
-          if (idx >= 0) list.splice(idx, 1);
+          if (idx >= 0) list!.splice(idx, 1);
         }
         b.visible = true;
         previous = b;
@@ -156,8 +207,12 @@ export async function* onStep($, e, next) {
         lastCall.delete(agent);
         void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
         if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent).push(b);
-      } else if (b.kind === "thinking" && !b.visible && chunk.text.trim()) {
+        modelBlocks.get(agent)!.push(b);
+      } else if (
+        b.kind === "thinking" &&
+        !b.visible &&
+        (chunk as TurnStepThinkingChunk).text.trim()
+      ) {
         b.visible = true;
         b.attributedStart = previous?.last ?? stepStart;
         previous = b;
@@ -166,7 +221,7 @@ export async function* onStep($, e, next) {
         lastCall.delete(agent);
         void $.state.set({ plugin: "evolutivex-agents", key: "second" }, now);
         if (!modelBlocks.has(agent)) modelBlocks.set(agent, []);
-        modelBlocks.get(agent).push(b);
+        modelBlocks.get(agent)!.push(b);
       }
       b.last = now;
       if (chunk.kind === "tool") b.toolId = chunk.id;
@@ -178,10 +233,13 @@ export async function* onStep($, e, next) {
 }
 
 // Saca del registro de `agent` el primer bloque que cumpla `predicate`.
-function consumeBlock(agent, predicate) {
+function consumeBlock(
+  agent: string,
+  predicate: (b: ModelBlock) => boolean,
+): ModelBlock | undefined {
   const list = modelBlocks.get(agent);
   const i = list?.findIndex(predicate) ?? -1;
-  return i < 0 ? undefined : list.splice(i, 1)[0];
+  return i < 0 ? undefined : list!.splice(i, 1)[0];
 }
 
 // Fija el ToolUse al arrancar (🧠 escritura de la llamada: el bloque del
@@ -189,7 +247,11 @@ function consumeBlock(agent, predicate) {
 // incluido), en cualquier agente. Al arrancar y al terminar escribe `second`
 // una vez para que el contador 🔧 del ToolUse aparezca y se retire en el
 // momento, sin esperar al tic siguiente.
-export async function onToolCall($, e, next) {
+export async function onToolCall(
+  $: EngineInterface,
+  e: Parameters<Hook<"tool.call">>[1],
+  next: Parameters<Hook<"tool.call">>[2],
+) {
   const start = Date.now();
   runningCalls.set(e.tool_use_id, start);
   lastCall.set(agentOf(e), e.tool_use_id);
@@ -201,16 +263,16 @@ export async function onToolCall($, e, next) {
       duration: b.last - b.attributedStart,
       persist: true,
     });
-  if (e.tool === "TodoWrite" && Array.isArray(e.input?.todos)) {
-    const active = e.input.todos.find((t) => t?.status === "in_progress");
+  if (e.tool === "TodoWrite" && Array.isArray(e.todos)) {
+    const active = e.todos.find((t) => t.status === "in_progress");
     session.todoActiveLabel = active
       ? (active.activeForm ?? active.content)
       : undefined;
-  } else if (e.tool === "TaskUpdate" && e.input?.taskId !== undefined) {
-    const id = String(e.input.taskId);
+  } else if (e.tool === "TaskUpdate" && e.taskId !== undefined) {
+    const id = String(e.taskId);
     const prev = taskRegistry.get(id) ?? {};
-    const label = e.input.activeForm ?? e.input.subject ?? prev.label;
-    const status = e.input.status ?? prev.status;
+    const label = e.activeForm ?? e.subject ?? prev.label;
+    const status = e.status ?? prev.status;
     if (status === "deleted") taskRegistry.delete(id);
     else taskRegistry.set(id, { label, status });
   }
@@ -219,11 +281,12 @@ export async function onToolCall($, e, next) {
     const out = await next(e);
     if (e.tool === "TaskCreate") {
       const id =
-        out?.result?.task?.id ?? /^Task #(\S+)/.exec(out?.text ?? "")?.[1];
+        (out?.result as ToolResultOf<"TaskCreate"> | undefined)?.task?.id ??
+        /^Task #(\S+)/.exec(out?.text ?? "")?.[1];
       if (id !== undefined) {
         taskRegistry.set(String(id), {
-          label: e.input?.activeForm ?? e.input?.subject,
-          status: e.input?.status ?? "pending",
+          label: e.activeForm ?? e.subject,
+          status: "pending",
         });
       }
     }
@@ -242,7 +305,11 @@ export async function onToolCall($, e, next) {
   }
 }
 
-export async function onCommandRun($, e, next) {
+export async function onCommandRun(
+  $: EngineInterface,
+  e: Parameters<Hook<"command.run">>[1],
+  next: Parameters<Hook<"command.run">>[2],
+) {
   const start = Date.now();
   try {
     return await next(e);
@@ -252,7 +319,7 @@ export async function onCommandRun($, e, next) {
   }
 }
 
-const textOf = (message) =>
+const textOf = (message: Parameters<Hook<"session.append">>[1]["message"]) =>
   message.content
     .map((b) =>
       b.type === "text"
@@ -271,7 +338,11 @@ const textOf = (message) =>
 //   command stdout  hora y 🔧 del comando nombrado en la fila eco anterior
 //   resto (prompt de subagente o notificación, delivery, turn_duration)
 //     hora = la de la fila, sin duración
-export async function onAppend($, e, next) {
+export async function onAppend(
+  $: EngineInterface,
+  e: Parameters<Hook<"session.append">>[1],
+  next: Parameters<Hook<"session.append">>[2],
+) {
   if (!DRAWN_DOORS.has(e.door)) return next(e);
   const now = Date.now();
   const text = textOf(e.message);

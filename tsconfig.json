@@ -16,5 +16,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "build.mjs", "test.mjs"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "build.mjs", "test.mjs"],
+  "exclude": ["src/transcript/**"]
 }

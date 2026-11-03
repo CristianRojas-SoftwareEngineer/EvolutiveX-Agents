@@ -1,3 +1,4 @@
+import type { Frozen, RenderInput } from "claude-code";
 import {
   counters,
   isUserOrigin,
@@ -9,12 +10,42 @@ import { blocks, entryFor } from "./timing-store.js";
 
 // ── Footers por componente ──────────────────────────────────────────────────
 
+// Componentes del transcript que envuelve withTimestamp.
+export type TranscriptComponent =
+  | "UserMessage"
+  | "AssistantMessage"
+  | "ToolUse"
+  | "ToolResult"
+  | "ToolGroup"
+  | "CommandOutput"
+  | "AskUserQuestion";
+
+// Lo que RESOLVER da para dibujar un bloque: `unwrapped` lo deja sin
+// envolver; si no, su hora y, según el componente, duración, icono, contador
+// en vivo, suscripción al reloj, márgenes, diálogo o clave por persistir.
+type Resolved =
+  | { unwrapped: true }
+  | {
+      unwrapped?: undefined;
+      time: number;
+      duration?: number;
+      fromEvent?: boolean;
+      icon?: string;
+      counter?: number;
+      subscribed?: boolean;
+      noMargin?: boolean;
+      dialog?: boolean;
+      toSave?: string;
+    };
+
+type ToolGroupCall = Frozen<RenderInput<"ToolGroup">>["props"]["calls"][number];
+
 // Un grupo cuya llamada es la última de su agente sigue abierto aunque todas
 // hayan terminado: el modelo puede estar generando la siguiente. Es
 // provisional: si llega texto o termina el turno, el grupo se cierra en el fin
 // de su última llamada; si llega una llamada que el engine no agrupa con él,
 // deja de ser la última del agente y también se cierra.
-function awaitsAnotherCall(calls) {
+function awaitsAnotherCall(calls: readonly ToolGroupCall[]): boolean {
   const ids = new Set(calls.map((c) => c.tool_use_id));
   return [...lastCall.values()].some((id) => ids.has(id));
 }
@@ -30,18 +61,21 @@ function awaitsAnotherCall(calls) {
 // se vuelve a guardar si cambia). Sin entradas `r:` (fuera de la retención
 // del store), lo guardado bajo `g:`. `toSave` pide a withTimestamp
 // persistir la clave recalculada.
-function group(calls, isActive) {
-  const blockKey = `g:${calls[0].tool_use_id}`;
+function group(
+  calls: readonly ToolGroupCall[],
+  isActive: boolean | undefined,
+): Resolved {
+  const blockKey = `g:${calls[0]!.tool_use_id}`;
   const now = Date.now();
   const rs = calls.map((c) => blocks.get(`r:${c.tool_use_id}`));
   if (
-    calls.some((c) => c.isRunning || runningCalls.has(c.tool_use_id)) ||
+    calls.some((c) => c.isRunning || runningCalls.has(c.tool_use_id!)) ||
     (isActive !== false && awaitsAnotherCall(calls))
   ) {
     const starts = calls
       .map(
         (c, i) =>
-          runningCalls.get(c.tool_use_id) ??
+          runningCalls.get(c.tool_use_id!) ??
           (rs[i]?.duration !== undefined ? rs[i].time : undefined),
       )
       .filter((h) => h !== undefined);
@@ -51,8 +85,8 @@ function group(calls, isActive) {
   }
   counters.delete(blockKey);
   if (!rs.every((r) => r?.duration !== undefined)) return entryFor(blockKey);
-  const time = Math.min(...rs.map((r) => r.time));
-  const duration = Math.max(...rs.map((r) => r.time + r.duration)) - time;
+  const time = Math.min(...rs.map((r) => r!.time));
+  const duration = Math.max(...rs.map((r) => r!.time + r!.duration!)) - time;
   const g = blocks.get(blockKey);
   if (g?.time === time && g.duration === duration) return g;
   blocks.set(blockKey, { time, duration, fromEvent: true });
@@ -68,7 +102,9 @@ function group(calls, isActive) {
 // y `noMargin` (componentes sin margen superior propio).
 const NO_CONTENT = new Set(["SubagentHandback"]);
 
-export const RESOLVER = {
+export const RESOLVER: {
+  [C in TranscriptComponent]: (e: Frozen<RenderInput<C>>) => Resolved;
+} = {
   // 🔌 prompt.submit → turn.start (hooks UserPromptSubmit); hora = envío.
   // Sin turno aún (placeholder), la hora de envío pendiente. Notificaciones
   // de tareas u otros orígenes no humanos solo muestran su hora de creación.
@@ -99,7 +135,7 @@ export const RESOLVER = {
           ...entryFor(`u:${e.props.tool_use_id}`),
           icon: "🧠",
           counter: runningCalls.has(e.props.tool_use_id)
-            ? Date.now() - runningCalls.get(e.props.tool_use_id)
+            ? Date.now() - runningCalls.get(e.props.tool_use_id)!
             : undefined,
           subscribed:
             blocks.get(`r:${e.props.tool_use_id}`)?.duration === undefined,

@@ -1,6 +1,6 @@
 // Formatea un instante (epoch ms) en formato 12h con a.m. / p.m.
 // 0h → 12 a.m., 13h → 1 p.m., 12h → 12 p.m.
-export function formatClockTime(ms) {
+export function formatClockTime(ms: number): string {
   const date = new Date(ms);
   let h = date.getHours();
   const m = String(date.getMinutes()).padStart(2, "0");
@@ -10,11 +10,11 @@ export function formatClockTime(ms) {
   return `${h}:${m}:${s} ${suffix}`;
 }
 
-export const pad2 = (n) => String(n).padStart(2, "0");
+export const pad2 = (n: number): string => String(n).padStart(2, "0");
 
 // Formatea ms como `<0.1s`, `2.1s` (un decimal bajo 10 s), `45s`, `1m 05s`
 // o `1h 02m 05s`.
-export function formatDuration(ms) {
+export function formatDuration(ms: number): string {
   if (ms < 100) return "<0.1s";
   if (ms < 9950) return `${(ms / 1000).toFixed(1)}s`;
   const total = Math.round(ms / 1000);
@@ -27,7 +27,7 @@ export function formatDuration(ms) {
 }
 
 // Contador de un bloque en curso: segundos enteros y `…` (`7s…`, `1m 05s…`).
-export function formatRunning(ms) {
+export function formatRunning(ms: number): string {
   const s = Math.floor(ms / 1000);
   return (s < 10 ? `${s}s` : formatDuration(s * 1000)) + "…";
 }

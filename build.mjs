@@ -88,7 +88,7 @@ const baseOptions = {
 // el banner de Node.
 /** @type {import("esbuild").BuildOptions} */
 const transcriptOptions = {
-  entryPoints: { transcript: join(root, "src/transcript/index.js") },
+  entryPoints: { transcript: join(root, "src/transcript/index.ts") },
   outdir: distDir,
   bundle: true,
   platform: "neutral",

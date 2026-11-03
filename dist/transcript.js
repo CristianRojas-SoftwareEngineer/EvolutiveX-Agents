@@ -1,4 +1,4 @@
-// src/transcript/session.js
+// src/transcript/session.ts
 var MAIN = "main";
 var agentOf = (e) => e.agentId ?? MAIN;
 var isUserOrigin = (origin) => origin?.kind === "composer" || origin?.kind === "bridge";
@@ -19,7 +19,7 @@ var session = {
 };
 var getActiveTaskLabel = () => session.todoActiveLabel ?? [...taskRegistry.values()].find((t) => t.status === "in_progress" && t.label)?.label ?? null;
 
-// src/transcript/format.js
+// src/transcript/format.ts
 function formatClockTime(ms) {
   const date = new Date(ms);
   let h = date.getHours();
@@ -46,7 +46,7 @@ function formatRunning(ms) {
   return (s < 10 ? `${s}s` : formatDuration(s * 1e3)) + "\u2026";
 }
 
-// src/transcript/timing-store.js
+// src/transcript/timing-store.ts
 var RETENTION_DAYS = 30;
 var MAX_STORE_BYTES = 3670016;
 var DAY_PREFIX = "days/";
@@ -102,7 +102,11 @@ function entryFor(blockKey) {
   }
   return b;
 }
-function pinTiming($, blockKey, { time, duration, persist }) {
+function pinTiming($, blockKey, {
+  time,
+  duration,
+  persist
+}) {
   const b = blocks.get(blockKey);
   if (b?.fromEvent) {
     if (b.duration !== void 0 || duration === void 0) return;
@@ -149,7 +153,7 @@ async function flush($) {
   }
 }
 
-// src/transcript/live-clock.js
+// src/transcript/live-clock.ts
 var clock;
 var TICK_MARGIN_MS = 20;
 var COUNTER_EXPIRY_MS = 3e3;
@@ -185,7 +189,7 @@ function scheduleClock($) {
   };
 }
 
-// src/transcript/lifecycle.js
+// src/transcript/lifecycle.ts
 var PRUNE_MS = 36e5;
 var DRAWN_DOORS = /* @__PURE__ */ new Set([
   "prompt",
@@ -243,6 +247,7 @@ async function onTurnComplete($, e, next) {
   return next(e);
 }
 var BLOCK_KINDS = /* @__PURE__ */ new Set(["text", "thinking", "tool", "input"]);
+var isBlockChunk = (chunk) => BLOCK_KINDS.has(chunk.kind);
 async function* onStep($, e, next) {
   const agent = agentOf(e);
   const stepStart = Date.now();
@@ -257,7 +262,7 @@ async function* onStep($, e, next) {
       prune();
       return chunk;
     }
-    if (BLOCK_KINDS.has(chunk.kind)) {
+    if (isBlockChunk(chunk)) {
       const now = Date.now();
       let b = byIndex.get(chunk.index);
       if (!b) {
@@ -324,14 +329,14 @@ async function onToolCall($, e, next) {
       duration: b.last - b.attributedStart,
       persist: true
     });
-  if (e.tool === "TodoWrite" && Array.isArray(e.input?.todos)) {
-    const active = e.input.todos.find((t) => t?.status === "in_progress");
+  if (e.tool === "TodoWrite" && Array.isArray(e.todos)) {
+    const active = e.todos.find((t) => t.status === "in_progress");
     session.todoActiveLabel = active ? active.activeForm ?? active.content : void 0;
-  } else if (e.tool === "TaskUpdate" && e.input?.taskId !== void 0) {
-    const id = String(e.input.taskId);
+  } else if (e.tool === "TaskUpdate" && e.taskId !== void 0) {
+    const id = String(e.taskId);
     const prev = taskRegistry.get(id) ?? {};
-    const label = e.input.activeForm ?? e.input.subject ?? prev.label;
-    const status = e.input.status ?? prev.status;
+    const label = e.activeForm ?? e.subject ?? prev.label;
+    const status = e.status ?? prev.status;
     if (status === "deleted") taskRegistry.delete(id);
     else taskRegistry.set(id, { label, status });
   }
@@ -342,8 +347,8 @@ async function onToolCall($, e, next) {
       const id = out?.result?.task?.id ?? /^Task #(\S+)/.exec(out?.text ?? "")?.[1];
       if (id !== void 0) {
         taskRegistry.set(String(id), {
-          label: e.input?.activeForm ?? e.input?.subject,
-          status: e.input?.status ?? "pending"
+          label: e.activeForm ?? e.subject,
+          status: "pending"
         });
       }
     }
@@ -432,7 +437,7 @@ async function onAppend($, e, next) {
   return next(e);
 }
 
-// src/transcript/resolver.js
+// src/transcript/resolver.ts
 function awaitsAnotherCall(calls) {
   const ids = new Set(calls.map((c) => c.tool_use_id));
   return [...lastCall.values()].some((id) => ids.has(id));
@@ -512,7 +517,7 @@ var RESOLVER = {
   })
 };
 
-// src/transcript/render.js
+// src/transcript/render.ts
 async function withTimestamp($, e, next) {
   if (e.component === "UserMessage" && isUserOrigin(e.props.origin) && !e.props.from && !e.props.task) {
     session.expandedView = Boolean(e.props.isExpanded);
@@ -647,7 +652,7 @@ async function withTurnDuration($, e, next) {
   });
 }
 
-// src/transcript/index.js
+// src/transcript/index.ts
 function register(on, options) {
   if (options.enhancedTranscript !== true) return;
   for (const component of [
@@ -666,7 +671,7 @@ function register(on, options) {
     "AskUserQuestion"
     // Diálogo de pregunta de Claude
   ]) {
-    on("ui.render", { component }, withTimestamp);
+    on("ui.render", { component: [component] }, withTimestamp);
   }
   on("ui.render", { component: "Spinner" }, withSpinner);
   on("ui.render", { component: "TurnDuration" }, withTurnDuration);

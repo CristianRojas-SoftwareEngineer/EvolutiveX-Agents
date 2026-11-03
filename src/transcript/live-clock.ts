@@ -1,7 +1,8 @@
+import type { EngineInterface, Timer } from "claude-code";
 import { runningCalls, counters } from "./session.js";
 
 // Próximo tic del reloj de los contadores: `{ timer, at }` (epoch ms).
-let clock;
+let clock: { timer: Timer; at: number } | undefined;
 // Retraso tras el cruce de segundo, para que el redibujo ya lo vea cruzado.
 const TICK_MARGIN_MS = 20;
 
@@ -16,7 +17,7 @@ const COUNTER_EXPIRY_MS = 3000;
 // aparece justo al cumplirse, sin redibujar más de una vez por segundo y
 // contador. Se reprograma si llega un cruce anterior (withTimestamp la invoca
 // al dibujar un bloque suscrito) y se apaga sin llamadas ni grupos abiertos.
-export function scheduleClock($) {
+export function scheduleClock($: EngineInterface): void {
   const now = Date.now();
   for (const [blockKey, c] of counters) {
     if (c.seen < now - COUNTER_EXPIRY_MS) counters.delete(blockKey);

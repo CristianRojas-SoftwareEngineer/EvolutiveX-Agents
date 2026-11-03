@@ -97,7 +97,8 @@
 //   turno en curso de su agente (sin persistir, conservándolo incluso cuando
 //   hay tareas in_progress) y TurnDuration el fin del turno (persistido).
 
-import { RESOLVER } from "./resolver.js";
+import type { EngineInterface, MatchedHook, RenderElement } from "claude-code";
+import { RESOLVER, type TranscriptComponent } from "./resolver.js";
 import { entryFor, loadStore, markForSave } from "./timing-store.js";
 import { scheduleClock } from "./live-clock.js";
 import { formatClockTime, formatDuration, formatRunning } from "./format.js";
@@ -108,6 +109,14 @@ import {
   session,
   turns,
 } from "./session.js";
+
+// Firmas de los hooks de ui.render que registra index.ts.
+type TimestampHook = MatchedHook<
+  "ui.render",
+  { component: readonly TranscriptComponent[] }
+>;
+type SpinnerHook = MatchedHook<"ui.render", { component: "Spinner" }>;
+type TurnDurationHook = MatchedHook<"ui.render", { component: "TurnDuration" }>;
 
 // Handler unificado para todos los render sites del transcript.
 //
@@ -154,7 +163,11 @@ import {
 //   ╭─ 🕐 2:23:05 p.m. | ToolGroup ─────╮
 //   │  Read 1 file, ran 1 shell command │
 //   ╰─────────────────────────── 🔧 7s ─╯
-export async function withTimestamp($, e, next) {
+export async function withTimestamp(
+  $: EngineInterface,
+  e: Parameters<TimestampHook>[1],
+  next: Parameters<TimestampHook>[2],
+): Promise<RenderElement> {
   if (
     e.component === "UserMessage" &&
     isUserOrigin(e.props.origin) &&
@@ -169,7 +182,7 @@ export async function withTimestamp($, e, next) {
     session.expandedView = e.props.isExpanded;
   }
   await loadStore($);
-  const b = RESOLVER[e.component](e);
+  const b = RESOLVER[e.component](e as never);
   if (b.unwrapped) return next(e);
   if (b.toSave) markForSave($, b.toSave);
   // Leer el segundo del reloj suscribe esta instancia: solo los bloques en
@@ -274,7 +287,7 @@ export async function withTimestamp($, e, next) {
         ],
       },
       ...(footerText
-        ? [
+        ? ([
             {
               type: "Box",
               props: {
@@ -291,7 +304,7 @@ export async function withTimestamp($, e, next) {
                 },
               ],
             },
-          ]
+          ] satisfies RenderElement[])
         : []),
     ],
   };
@@ -303,7 +316,11 @@ export async function withTimestamp($, e, next) {
 // el id de sesión en el principal); sin turno registrado, lo deja intacto.
 // No se persiste.
 // Ejemplo: "🕐 2:23:05 p.m. · Thinking…"
-export async function withSpinner($, e, next) {
+export async function withSpinner(
+  $: EngineInterface,
+  e: Parameters<SpinnerHook>[1],
+  next: Parameters<SpinnerHook>[2],
+) {
   const turn = turns.get(e.requestId) ?? turns.get(MAIN);
   if (!turn) return next(e);
   const prefix = `🕐 ${formatClockTime(turn.start)} · `;
@@ -322,7 +339,11 @@ export async function withSpinner($, e, next) {
 // Añade al word el fin del turno: la hora de su fila (requestId), fijada y
 // persistida por onAppend.
 // Ejemplo: "🕐 2:23:20 p.m. · Completed in"
-export async function withTurnDuration($, e, next) {
+export async function withTurnDuration(
+  $: EngineInterface,
+  e: Parameters<TurnDurationHook>[1],
+  next: Parameters<TurnDurationHook>[2],
+) {
   if (typeof e.props.isExpanded === "boolean")
     session.expandedView = e.props.isExpanded;
   await loadStore($);

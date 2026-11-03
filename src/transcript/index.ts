@@ -16,6 +16,7 @@
 // Requiere Claude Code v2.1.287 o posterior (function hooks habilitados).
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { On, PluginOptions } from "claude-code";
 import {
   onAppend,
   onCommandRun,
@@ -29,7 +30,7 @@ import { withSpinner, withTimestamp, withTurnDuration } from "./render.js";
 
 // Claude Code llama a `register` una vez al cargar el plugin, con su
 // userConfig en `options`. Sin `enhancedTranscript` activado no registra nada.
-export function register(on, options) {
+export function register(on: On, options: PluginOptions): void {
   if (options.enhancedTranscript !== true) return;
 
   // Todos los tipos de mensaje en el transcript — tree-wrapping unificado
@@ -41,8 +42,8 @@ export function register(on, options) {
     "ToolGroup", // Grupo colapsado de tool calls
     "CommandOutput", // Salida de comando shell
     "AskUserQuestion", // Diálogo de pregunta de Claude
-  ]) {
-    on("ui.render", { component }, withTimestamp);
+  ] as const) {
+    on("ui.render", { component: [component] }, withTimestamp);
   }
 
   // Status lines del terminal
