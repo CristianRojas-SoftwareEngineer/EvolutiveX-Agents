@@ -8,11 +8,19 @@
 // disco: reclama un evento, lo narra y lo borra antes de pasar al siguiente, así
 // no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI.
 // Degrada en silencio; los errores van a worker.log.
-import { appendFileSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { loadConfig } from "../lib/config.js";
 import { parseSingleJsonObject } from "./health-decision.js";
 import {
   ensureStateDir,
+  rotatedWorkerLogPath,
   workerLogPath,
   workerPidPath,
 } from "../lib/state-dir.js";
@@ -22,7 +30,38 @@ import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
 import { sayTimeoutMs } from "./say-timeout.js";
 
+// Cota de worker.log: al superar WORKER_LOG_MAX_BYTES se renombra a
+// worker.log.1 (que reemplaza al anterior), y worker.log.1 se borra tras
+// WORKER_LOG_ROTATED_MAX_AGE_MS sin modificarse. Como máximo, 2 archivos y
+// 1 MiB en disco.
+const WORKER_LOG_MAX_BYTES = 512 * 1024;
+const WORKER_LOG_ROTATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Rota worker.log antes de escribir. log() es su único escritor y corre bajo
+ * el lock del worker, así que no hay carreras entre procesos.
+ */
+function rotateWorkerLog(): void {
+  try {
+    const rotated = rotatedWorkerLogPath();
+    try {
+      if (
+        Date.now() - statSync(rotated).mtimeMs >
+        WORKER_LOG_ROTATED_MAX_AGE_MS
+      )
+        rmSync(rotated, { force: true });
+    } catch {
+      // Sin worker.log.1: nada que caducar.
+    }
+    if (statSync(workerLogPath()).size > WORKER_LOG_MAX_BYTES)
+      renameSync(workerLogPath(), rotated);
+  } catch {
+    // Sin worker.log o fallo al rotar: se escribe igual sobre el actual.
+  }
+}
+
 function log(msg: string): void {
+  rotateWorkerLog();
   try {
     appendFileSync(workerLogPath(), `${new Date().toISOString()} ${msg}\n`);
   } catch {

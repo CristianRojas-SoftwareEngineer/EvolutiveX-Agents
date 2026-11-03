@@ -6,7 +6,8 @@
 
 // State dir por convención de cada SO. Equivalente en miniatura al data_root()
 // de AI Voice-InterConnector, sin depender de él. Contiene worker.pid (el lock
-// del worker), queue/ (cola de payloads de narración) y worker.log. Las
+// del worker), queue/ (cola de payloads de narración), worker.log y su
+// rotación worker.log.1. Las
 // preferencias viven en el userConfig del plugin y la API key en el entorno:
 // ninguna se guarda aquí.
 import { homedir, platform } from "node:os";
@@ -49,4 +50,9 @@ export function queueDir(): string {
 
 export function workerLogPath(): string {
   return join(stateDir(), "worker.log");
+}
+
+/** Generación anterior de worker.log, tras su rotación por tamaño. */
+export function rotatedWorkerLogPath(): string {
+  return join(stateDir(), "worker.log.1");
 }

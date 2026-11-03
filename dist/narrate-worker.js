@@ -7,7 +7,14 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/voice/narrate-worker.ts
-import { appendFileSync, readFileSync as readFileSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import {
+  appendFileSync,
+  readFileSync as readFileSync2,
+  renameSync as renameSync2,
+  rmSync as rmSync2,
+  statSync as statSync3,
+  writeFileSync as writeFileSync2
+} from "node:fs";
 
 // src/lib/config.ts
 var DEFAULTS = {
@@ -105,6 +112,9 @@ function queueDir() {
 }
 function workerLogPath() {
   return join(stateDir(), "worker.log");
+}
+function rotatedWorkerLogPath() {
+  return join(stateDir(), "worker.log.1");
 }
 
 // src/voice/queue.ts
@@ -526,7 +536,23 @@ function sayTimeoutMs(text) {
 }
 
 // src/voice/narrate-worker.ts
+var WORKER_LOG_MAX_BYTES = 512 * 1024;
+var WORKER_LOG_ROTATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1e3;
+function rotateWorkerLog() {
+  try {
+    const rotated = rotatedWorkerLogPath();
+    try {
+      if (Date.now() - statSync3(rotated).mtimeMs > WORKER_LOG_ROTATED_MAX_AGE_MS)
+        rmSync2(rotated, { force: true });
+    } catch {
+    }
+    if (statSync3(workerLogPath()).size > WORKER_LOG_MAX_BYTES)
+      renameSync2(workerLogPath(), rotated);
+  } catch {
+  }
+}
 function log(msg) {
+  rotateWorkerLog();
   try {
     appendFileSync(workerLogPath(), `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `);

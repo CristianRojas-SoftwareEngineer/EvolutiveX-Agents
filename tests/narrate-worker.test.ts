@@ -5,16 +5,25 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Worker drenador: verifica que narra los payloads encolados en orden, sin
-// duplicados, y que sale tras la ventana de inactividad. Usa dist/narrate-worker.js
+// duplicados, que sale tras la ventana de inactividad y que rota worker.log por
+// tamaño y antigüedad. Usa dist/narrate-worker.js
 // como subprocesso real con un CLI falso y state dir aislado.
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { writeFileSync, chmodSync, readFileSync, existsSync } from "node:fs";
+import {
+  writeFileSync,
+  chmodSync,
+  readFileSync,
+  existsSync,
+  statSync,
+  utimesSync,
+} from "node:fs";
 import { delimiter, join } from "node:path";
 import { enqueuePayload, listPending } from "../src/voice/queue.js";
 import {
   ensureStateDir,
+  rotatedWorkerLogPath,
   workerLogPath,
   workerPidPath,
 } from "../src/lib/state-dir.js";
@@ -350,4 +359,83 @@ test("worker registra la pista de cada reason de speech say", () => {
   assert.match(lines[0]!, /código 5 \(daemon_unreachable: .*daemon start\)$/);
   assert.match(lines[1]!, /código 3 \(no_output_device: .*\)$/);
   assert.match(lines[2]!, /código 4 \(model_missing: .*setup\)$/);
+});
+
+// --- Rotación de worker.log ---
+
+const LOG_MAX_BYTES = 512 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Prepara worker.log y worker.log.1 en un state dir aislado y ejecuta el
+ * worker con un `speech say` que falla, para provocar exactamente una
+ * escritura en worker.log.
+ */
+function runWorkerWithOneLogLine(setup: () => void, label: string): void {
+  const dir = makeTempDir(`avi-plugin-worker-rotate-${label}-`);
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir(`avi-plugin-cli-rotate-${label}-`);
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir, [
+    { stdout: '{"error":"e","reason":"daemon_unreachable"}', exit: 5 },
+  ]);
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+  ensureStateDir();
+  setup();
+  enqueuePayload({
+    session_id: "r1",
+    hook_event_name: "Stop",
+    last_assistant_message: "rotar",
+  });
+  const res = runWorker({
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  });
+  assert.equal(res.status, 0);
+}
+
+test("worker.log por encima de 512 KiB se rota a worker.log.1, que reemplaza al anterior", () => {
+  const big = "x".repeat(LOG_MAX_BYTES + 1);
+  runWorkerWithOneLogLine(() => {
+    writeFileSync(workerLogPath(), big);
+    writeFileSync(rotatedWorkerLogPath(), "generación anterior\n");
+  }, "size");
+  assert.equal(readFileSync(rotatedWorkerLogPath(), "utf8"), big);
+  assert.equal(logLines("speech say salió con código").length, 1);
+  assert.ok(statSync(workerLogPath()).size < 1024);
+});
+
+test("worker.log por debajo del umbral no se rota", () => {
+  const small = "línea previa\n";
+  runWorkerWithOneLogLine(() => {
+    writeFileSync(workerLogPath(), small);
+  }, "below");
+  assert.equal(existsSync(rotatedWorkerLogPath()), false);
+  const content = readFileSync(workerLogPath(), "utf8");
+  assert.ok(content.startsWith(small));
+  assert.equal(logLines("speech say salió con código").length, 1);
+});
+
+test("worker.log.1 sin modificar hace más de 14 días se borra", () => {
+  runWorkerWithOneLogLine(() => {
+    writeFileSync(rotatedWorkerLogPath(), "vieja\n");
+    const old = new Date(Date.now() - 15 * DAY_MS);
+    utimesSync(rotatedWorkerLogPath(), old, old);
+  }, "expired");
+  assert.equal(existsSync(rotatedWorkerLogPath()), false);
+  assert.equal(logLines("speech say salió con código").length, 1);
+});
+
+test("worker.log.1 reciente se conserva", () => {
+  runWorkerWithOneLogLine(() => {
+    writeFileSync(rotatedWorkerLogPath(), "reciente\n");
+    const recent = new Date(Date.now() - 13 * DAY_MS);
+    utimesSync(rotatedWorkerLogPath(), recent, recent);
+  }, "recent");
+  assert.equal(readFileSync(rotatedWorkerLogPath(), "utf8"), "reciente\n");
 });
