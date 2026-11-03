@@ -240,7 +240,7 @@ narrate-ctl voice clone
      algún fallo → informa la etiqueta, que la huella ya cambió y que hay que reintentar presynth --voice <nombre> --force
 ```
 
-- El plugin no valida la existencia del WAV ni el nombre: el motor responde `audio_not_found`, `invalid_audio` o `invalid_voice_name`.
+- El plugin no valida la existencia del WAV ni el nombre: el motor responde `audio_not_found`, `invalid_audio` o `invalid_voice_name`. Su parseo solo exige el nombre, exactamente una fuente y `--duration` únicamente con `--mic`; si no, sale con exit 2 y el uso, sin invocar al motor.
 - `precomputed: true` significa «precalentamiento iniciado», no «listo».
 - El plugin no activa la voz: la activa el usuario en `/config`.
 

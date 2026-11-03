@@ -54,11 +54,11 @@ El único punto de acoplamiento es el ejecutable `ai-voice-interconnector` en el
 La voz activa es el campo `voice` de `/config` (`default` si no está fijado). El launcher la anota en cada ítem que encola y el worker narra con la voz del ítem, así que un cambio en `/config` se oye desde el siguiente evento. El launcher y `SessionStart` escriben además la caché `active-voice` del _state dir_, que `narrate-ctl` usa cuando no recibe `--voice` (la herramienta de shell no recibe `/config`). No hay fallback a `default`: una voz inexistente deja el turno sin audio y queda registrada en `worker.log`.
 
 - **`UserPromptSubmit`** → `narrate-worker` reproduce el acuse fijo pre-sintetizado
-  («Procesando con Claude») con `speech play --label … --json`: sin LLM, sin resumen y
+  («Procesando con Claude») con `speech play --label … --voice <voz> --json`: sin LLM, sin resumen y
   sin daemon en la ruta caliente.
 - **`Stop`** → única ruta de locución dinámica. `narrate-worker` resume el
   `last_assistant_message` del payload (y **solo** ese campo: ni transcript ni
-  historial) vía LLM y llama a `speech say --text … --daemon --json`. Si el mensaje
+  historial) vía LLM y llama a `speech say --text … --voice <voz> --daemon --json`. Si el mensaje
   final no tiene material narrable —porque era solo un bloque de código, que el
   saneo descarta—, o el LLM cae, degrada al resumen local acotado (las dos
   primeras oraciones del texto saneado, con 500 caracteres como freno de
@@ -69,7 +69,7 @@ La voz activa es el campo `voice` de `/config` (`default` si no está fijado). E
   vencer, el daemon cancela la síntesis en curso. El worker corre desanclado;
   nunca bloquea el turno.
 - **`SubagentStop` / `StopFailure` / `Notification`** → reproducen su anuncio
-  pre-sintetizado con `speech play --label … --json`: sin LLM ni síntesis por evento. Para
+  pre-sintetizado con `speech play --label … --voice <voz> --json`: sin LLM ni síntesis por evento. Para
   `Notification` el mensaje específico sigue visible en pantalla.
 - **`SessionStart`** → `health-check` escribe la caché de la voz activa y, si su
   nombre no es plausible, avisa vía `systemMessage` sin consultar al motor.

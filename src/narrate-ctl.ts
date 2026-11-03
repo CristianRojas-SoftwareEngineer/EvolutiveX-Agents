@@ -14,6 +14,7 @@
 // Uso: node dist/narrate-ctl.js <comando> [args]
 //   status                                  muestra el estado y la voz activa (sin revelar las claves)
 //   say [--voice <nombre>] "<texto>"        narra un texto a demanda vía ai-voice-interconnector
+//                                           (el texto puede empezar por guion; tras `--`, todo es texto)
 //   presynth [--voice <nombre>] [--force]   pre-sintetiza los anuncios estáticos con la voz
 //                                           (idempotente; --force reescribe)
 //   voice list                              lista las voces y marca las de fábrica y la activa

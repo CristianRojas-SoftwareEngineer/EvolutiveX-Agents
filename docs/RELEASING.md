@@ -104,7 +104,8 @@ En orden; cada paso asume el anterior.
      herramienta, subagente, vista expandida (ctrl+o) y `--resume`;
    - la **rotación de `worker.log`**: con más de 512 KiB, el siguiente error de
      narración lo renombra a `worker.log.1`;
-   - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
+   - `narrate-ctl status` reporta el estado y la voz activa (sin preferencias;
+     remite a `/config`);
    - el aviso de `SessionStart` cuando el motor no está en el `PATH`;
    - el aviso no bloqueante de `SessionStart` con un check de instalación
      fallido, con el daemon arrancado igual (Fase 2, ítem E);
@@ -185,8 +186,12 @@ Notas de contrato que el runbook asume (verificado en código fuente):
   con `ai-voice-interconnector daemon status --json`.
 - `narrate-ctl status` **nunca** imprime el valor de ninguna clave: solo muestra
   `gemini key:   configurada|ausente`.
-- `narrate-ctl say` pasa el texto directo a `ai-voice-interconnector speech say --text ... --daemon`
-  (pipeline TTS + daemon); **no** ejercita la generación de mensaje (`local`/`llm`).
+- `narrate-ctl say` pasa el texto directo a `ai-voice-interconnector speech say --text ... --voice <voz> --daemon`
+  (pipeline TTS + daemon), con la voz de `--voice` o la activa del último
+  evento; **no** ejercita la generación de mensaje (`local`/`llm`).
+- `narrate-ctl status` muestra la voz activa según el último evento narrado
+  (la caché `active-voice`), no la de `/config`: tras cambiarla, se actualiza
+  en el siguiente evento.
 - `worker.log` (en `$STATE_DIR`) registra **solo errores** de narración, no qué
   proveedor se usó; la distinción `local` vs `llm` se verifica **por audible**.
   El CI verifica en cada push que `dist/` es la compilación de `src/`
@@ -424,10 +429,10 @@ $PLUGIN_E2E --resume` muestra las mismas horas y duraciones. Al terminar,
 - **(H) Rotación de `worker.log`:**
 
   ```powershell
-  fsutil file createnew "$STATE_DIRworker.log" 600000
+  fsutil file createnew "$STATE_DIR\worker.log" 600000
   ai-voice-interconnector speech remove --label voice-user-prompt-submit
   # En una sesión de Claude, envía un prompt (el acuse falla y escribe en worker.log).
-  Get-ChildItem "$STATE_DIRworker.log*" | Select-Object Name, Length
+  Get-ChildItem "$STATE_DIR\worker.log*" | Select-Object Name, Length
   # Debe haber worker.log.1 (~600000 bytes) y un worker.log nuevo con la línea del fallo.
   narrate-ctl presynth   # restaura el anuncio
   ```

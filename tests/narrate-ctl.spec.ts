@@ -12,7 +12,8 @@
 // presynth idempotente (solo exit 6 con `label_exists`), presynth --force (que
 // pasa --force al motor para reescribir los WAV existentes), la resolución de
 // la voz (`--voice`, la caché `active-voice` o `default`) en say, presynth y
-// status, y el bloqueo de operaciones manuales ocupado.
+// status, el bloqueo de operaciones manuales y la familia `voice` (list, clone
+// y remove) contra un CLI falso programable por comando.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
