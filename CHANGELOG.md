@@ -6,6 +6,10 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+### Corregido
+
+- Transcript enriquecido: si el plugin fallaba al registrar una herramienta antes de ejecutarla, su bloque mostraba un contador «en curso» que no se detenía y el reloj seguía haciendo un tic por segundo.
+
 ## [0.1.0] — 2026-11-03
 
 Primera beta pública, solo en español. Verificado contra **AI Voice-InterConnector v0.42.0** en **Windows 11**; Linux y macOS son experimentales.

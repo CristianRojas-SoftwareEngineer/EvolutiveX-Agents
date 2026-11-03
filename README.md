@@ -144,12 +144,12 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 
 ## Solución de problemas
 
-- **No se oye nada:** `ai-voice-interconnector doctor --json` diagnostica la instalación del motor (binario en el PATH, modelos y runtime ONNX); la skill `/evolutivex-agents:narrate` con `status` muestra el motor, el daemon, la cola y si la clave de Gemini está configurada.
+- **No se oye nada:** `ai-voice-interconnector doctor --json` diagnostica la instalación del motor (binario en el PATH, modelos y runtime ONNX); `ai-voice-interconnector daemon status --json` indica si el daemon corre; la skill `/evolutivex-agents:narrate` con `status` muestra si la clave de Gemini está configurada y la ruta del _state dir_.
 - **Errores de la narración:** el worker los escribe en `worker.log`, en el _state dir_:
 
   | SO      | Ruta                                                             |
   | ------- | ---------------------------------------------------------------- |
-  | Windows | `%LOCALAPPDATA%evolutivex-agentsworker.log`                      |
+  | Windows | `%LOCALAPPDATA%\evolutivex-agents\worker.log`                    |
   | Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` |
   | macOS   | `~/Library/Application Support/evolutivex-agents/worker.log`     |
 
