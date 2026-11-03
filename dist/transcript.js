@@ -1,4 +1,25 @@
-// src/transcript/index.js
+// src/transcript/session.js
+var MAIN = "main";
+var agentOf = (e) => e.agentId ?? MAIN;
+var isUserOrigin = (origin) => origin?.kind === "composer" || origin?.kind === "bridge";
+var runningCalls = /* @__PURE__ */ new Map();
+var counters = /* @__PURE__ */ new Map();
+var turns = /* @__PURE__ */ new Map();
+var lastCall = /* @__PURE__ */ new Map();
+var taskRegistry = /* @__PURE__ */ new Map();
+var session = {
+  // Hora de envío del prompt aún sin turno (UserMessage con requestId placeholder).
+  pendingSubmit: void 0,
+  // Vista ctrl+o activa: al conmutarla, el engine redibuja todos los
+  // UserMessage (que traen `isExpanded`) antes que los AssistantMessage.
+  expandedView: false,
+  // Tarea en curso de TodoWrite (activeForm o content), que el Spinner antepone
+  // cuando props.message === null.
+  todoActiveLabel: void 0
+};
+var getActiveTaskLabel = () => session.todoActiveLabel ?? [...taskRegistry.values()].find((t) => t.status === "in_progress" && t.label)?.label ?? null;
+
+// src/transcript/format.js
 function formatClockTime(ms) {
   const date = new Date(ms);
   let h = date.getHours();
@@ -9,6 +30,23 @@ function formatClockTime(ms) {
   return `${h}:${m}:${s} ${suffix}`;
 }
 var pad2 = (n) => String(n).padStart(2, "0");
+function formatDuration(ms) {
+  if (ms < 100) return "<0.1s";
+  if (ms < 9950) return `${(ms / 1e3).toFixed(1)}s`;
+  const total = Math.round(ms / 1e3);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total % 3600 / 60);
+  const s = total % 60;
+  if (h) return `${h}h ${pad2(m)}m ${pad2(s)}s`;
+  if (m) return `${m}m ${pad2(s)}s`;
+  return `${s}s`;
+}
+function formatRunning(ms) {
+  const s = Math.floor(ms / 1e3);
+  return (s < 10 ? `${s}s` : formatDuration(s * 1e3)) + "\u2026";
+}
+
+// src/transcript/timing-store.js
 var RETENTION_DAYS = 30;
 var MAX_STORE_BYTES = 3670016;
 var DAY_PREFIX = "days/";
@@ -110,37 +148,8 @@ async function flush($) {
     }
   }
 }
-function formatDuration(ms) {
-  if (ms < 100) return "<0.1s";
-  if (ms < 9950) return `${(ms / 1e3).toFixed(1)}s`;
-  const total = Math.round(ms / 1e3);
-  const h = Math.floor(total / 3600);
-  const m = Math.floor(total % 3600 / 60);
-  const s = total % 60;
-  if (h) return `${h}h ${pad2(m)}m ${pad2(s)}s`;
-  if (m) return `${m}m ${pad2(s)}s`;
-  return `${s}s`;
-}
-function formatRunning(ms) {
-  const s = Math.floor(ms / 1e3);
-  return (s < 10 ? `${s}s` : formatDuration(s * 1e3)) + "\u2026";
-}
-var MAIN = "main";
-var agentOf = (e) => e.agentId ?? MAIN;
-var isUserOrigin = (origin) => origin?.kind === "composer" || origin?.kind === "bridge";
-var PRUNE_MS = 36e5;
-var DRAWN_DOORS = /* @__PURE__ */ new Set([
-  "prompt",
-  "delivery",
-  "response",
-  "command",
-  "notice"
-]);
-var pendingSubmit;
-var currentPrompt;
-var modelBlocks = /* @__PURE__ */ new Map();
-var runningCalls = /* @__PURE__ */ new Map();
-var counters = /* @__PURE__ */ new Map();
+
+// src/transcript/live-clock.js
 var clock;
 var TICK_MARGIN_MS = 20;
 var COUNTER_EXPIRY_MS = 3e3;
@@ -175,13 +184,20 @@ function scheduleClock($) {
     })
   };
 }
+
+// src/transcript/lifecycle.js
+var PRUNE_MS = 36e5;
+var DRAWN_DOORS = /* @__PURE__ */ new Set([
+  "prompt",
+  "delivery",
+  "response",
+  "command",
+  "notice"
+]);
+var currentPrompt;
+var modelBlocks = /* @__PURE__ */ new Map();
 var commands = [];
 var commandAwaitingOutput;
-var turns = /* @__PURE__ */ new Map();
-var lastCall = /* @__PURE__ */ new Map();
-var taskRegistry = /* @__PURE__ */ new Map();
-var todoActiveLabel;
-var getActiveTaskLabel = () => todoActiveLabel ?? [...taskRegistry.values()].find((t) => t.status === "in_progress" && t.label)?.label ?? null;
 function prune() {
   const cutoff = Date.now() - PRUNE_MS;
   for (const [agent, list] of modelBlocks) {
@@ -193,8 +209,8 @@ function prune() {
 }
 async function onSubmit($, e, next) {
   if (isUserOrigin(e.origin)) {
-    pendingSubmit = Date.now();
-    currentPrompt = { submittedAt: pendingSubmit };
+    session.pendingSubmit = Date.now();
+    currentPrompt = { submittedAt: session.pendingSubmit };
   }
   return next(e);
 }
@@ -211,7 +227,7 @@ function completePrompt($) {
 async function onTurnStart($, e, next) {
   const now = Date.now();
   turns.set(MAIN, { turnId: e.turnId, start: now });
-  pendingSubmit = void 0;
+  session.pendingSubmit = void 0;
   if (currentPrompt) {
     currentPrompt.turnStart = now;
     const drawn = currentPrompt.rowKey !== void 0;
@@ -310,7 +326,7 @@ async function onToolCall($, e, next) {
     });
   if (e.tool === "TodoWrite" && Array.isArray(e.input?.todos)) {
     const active = e.input.todos.find((t) => t?.status === "in_progress");
-    todoActiveLabel = active ? active.activeForm ?? active.content : void 0;
+    session.todoActiveLabel = active ? active.activeForm ?? active.content : void 0;
   } else if (e.tool === "TaskUpdate" && e.input?.taskId !== void 0) {
     const id = String(e.input.taskId);
     const prev = taskRegistry.get(id) ?? {};
@@ -415,7 +431,8 @@ async function onAppend($, e, next) {
   }
   return next(e);
 }
-var expandedView = false;
+
+// src/transcript/resolver.js
 function awaitsAnotherCall(calls) {
   const ids = new Set(calls.map((c) => c.tool_use_id));
   return [...lastCall.values()].some((id) => ids.has(id));
@@ -448,7 +465,7 @@ var RESOLVER = {
   // de tareas u otros orígenes no humanos solo muestran su hora de creación.
   UserMessage: (e) => {
     if (e.requestId === "placeholder")
-      return { time: pendingSubmit ?? Date.now() };
+      return { time: session.pendingSubmit ?? Date.now() };
     if (!isUserOrigin(e.props.origin))
       return { time: entryFor(e.requestId).time };
     return { ...entryFor(e.requestId), icon: "\u{1F50C}" };
@@ -458,7 +475,7 @@ var RESOLVER = {
   AssistantMessage: (e) => ({
     ...entryFor(e.requestId),
     icon: "\u{1F9E0}",
-    noMargin: expandedView,
+    noMargin: session.expandedView,
     subscribed: blocks.get(e.requestId)?.duration === void 0
   }),
   // 🧠 escritura de la llamada; la fija onToolCall al arrancar tool.call.
@@ -494,11 +511,13 @@ var RESOLVER = {
     dialog: true
   })
 };
+
+// src/transcript/render.js
 async function withTimestamp($, e, next) {
   if (e.component === "UserMessage" && isUserOrigin(e.props.origin) && !e.props.from && !e.props.task) {
-    expandedView = Boolean(e.props.isExpanded);
+    session.expandedView = Boolean(e.props.isExpanded);
   } else if (e.component === "ToolResult" && typeof e.props.isExpanded === "boolean") {
-    expandedView = e.props.isExpanded;
+    session.expandedView = e.props.isExpanded;
   }
   await loadStore($);
   const b = RESOLVER[e.component](e);
@@ -616,7 +635,7 @@ async function withSpinner($, e, next) {
 }
 async function withTurnDuration($, e, next) {
   if (typeof e.props.isExpanded === "boolean")
-    expandedView = e.props.isExpanded;
+    session.expandedView = e.props.isExpanded;
   await loadStore($);
   const { time } = entryFor(e.requestId);
   return next({
@@ -627,6 +646,8 @@ async function withTurnDuration($, e, next) {
     }
   });
 }
+
+// src/transcript/index.js
 function register(on, options) {
   if (options.enhancedTranscript !== true) return;
   for (const component of [
