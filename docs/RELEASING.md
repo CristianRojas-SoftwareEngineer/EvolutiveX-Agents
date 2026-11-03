@@ -95,10 +95,9 @@ En orden; cada paso asume el anterior.
    - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
 
    - emisión de toasts silenciosos del canal de notificaciones de escritorio
-     (`dist/notification-hook.js`), funcionamiento de los toggles `notifications-on` /
-     `notifications-off` y registro idempotente del AUMID en Windows
+     (`dist/notification-hook.js`), funcionamiento del canal de notificaciones en `/config` y registro idempotente del AUMID en Windows
      (`dist/notification-register.js --install` y `--status`);
-   - `narrate-ctl status` reporta el estado (`voice` y `notifications`) sin exponer claves;
+   - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
    - el aviso de `SessionStart` cuando el motor no está en el `PATH`;
    - el aviso no bloqueante de `SessionStart` con un check de instalación
      fallido, con el daemon arrancado igual (Fase 2, ítem E);
@@ -284,9 +283,6 @@ Test-Path "$PLUGIN_E2E\dist\notification-hook.js"
 Valida el pipeline TTS + daemon y el canal de notificaciones de escritorio de forma aislada. No requiere claves.
 
 ```powershell
-narrate-ctl voice-on                  # activa la narración por voz
-narrate-ctl notifications-on          # activa las notificaciones de escritorio
-narrate-ctl mode local                # modo local (determinista, offline)
 narrate-ctl status                    # voice: true, notifications: true, messageMode: local
 node "$PLUGIN_E2E\dist\notification-register.js" --install
 node "$PLUGIN_E2E\dist\notification-register.js" --status
@@ -309,7 +305,6 @@ claude --plugin-dir $PLUGIN_E2E
 - **(A) Las cinco superficies en modo `local` (sin claves):**
   1. Antes de `claude`, sin claves definidas:
      ```powershell
-     narrate-ctl mode local
      narrate-ctl status
      ```
   2. En la sesión de Claude, dispara **cada una** de las cinco superficies y
@@ -334,7 +329,6 @@ claude --plugin-dir $PLUGIN_E2E
      ```
   2. Fija el modo:
      ```powershell
-     narrate-ctl mode llm
      narrate-ctl status        # gemini key: configurada
      ```
   3. Lanza Claude desde esa misma sesión y dispara **`Stop`** — es la única

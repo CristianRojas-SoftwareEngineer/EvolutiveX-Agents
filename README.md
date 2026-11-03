@@ -66,7 +66,7 @@ La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en
 
 Se activa con `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior.### Transcript enriquecido (`/config`)
 
-Se activa desde `/config` con la opción `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior. No se controla con `narrate-ctl` ni con `config.json`: el sandbox de _function hooks_ no puede leer ese archivo, así que la opción vive en el `userConfig` del plugin.
+Se activa desde `/config` con la opción `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior. No se controla con `narrate-ctl`: el sandbox de _function hooks_ no puede leer archivos de configuración locales, así que la opción vive en el `userConfig` del plugin (`/config`).
 
 ### Qué está activo por defecto
 

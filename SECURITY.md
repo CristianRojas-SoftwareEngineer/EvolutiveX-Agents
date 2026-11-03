@@ -30,7 +30,7 @@ El plugin es un cliente delgado que corre dentro de la sesión de Claude Code de
 
 ### Qué se persiste, dónde y con qué permisos
 
-- El _state dir_ por SO (`%LOCALAPPDATA%\evolutivex-agents` en Windows, `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents` en Linux, `~/Library/Application Support/evolutivex-agents` en macOS) contiene `config.json` —solo `voiceEnabled`, `notificationsEnabled` y `messageMode`—, `worker.pid`, `queue/` (archivos `.json` transitorios de la cola FIFO) y `worker.log`. **Ninguno contiene la API key**: el plugin no persiste secretos en disco.
+- El _state dir_ por SO (`%LOCALAPPDATA%\evolutivex-agents` en Windows, `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents` en Linux, `~/Library/Application Support/evolutivex-agents` en macOS) contiene `worker.pid` (el lock del worker), `queue/` (cola de payloads de narración), `worker.log` y su rotación `worker.log.1`. Las preferencias viven en el `userConfig` del plugin y la API key en el entorno: **ninguna se guarda aquí**.
 - El canal de notificaciones de escritorio muestra extractos locales del evento (preview del prompt, herramienta/pregunta o último mensaje del asistente, truncados) en el centro de notificaciones del sistema operativo local. **Nunca envía datos por red**.
 - La API key se lee únicamente de la variable de entorno `GEMINI_API_KEY` y vive en memoria durante la generación.
 - La variable de entorno puede heredarse en procesos hijos y, si el usuario la define de forma persistente, queda en su perfil fuera del control del plugin. Esa decisión y su protección son responsabilidad del usuario.
