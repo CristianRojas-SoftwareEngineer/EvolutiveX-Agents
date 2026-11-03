@@ -91,6 +91,10 @@ En orden; cada paso asume el anterior.
      clave) y con `Stop` en modo `llm` (con `GEMINI_API_KEY` definida); no
      basta con `Stop` — una superficie no probada puede liberarse con un bug;
    - emisión de toasts silenciosos del canal de notificaciones de escritorio
+     (`dist/notification-hook.js`), **transcript enriquecido** (toggle en `nfig`, turno, herramienta, subagente, ctrl+o, `--resume`) y **rotación de `worker.log`**;
+   - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
+
+   - emisión de toasts silenciosos del canal de notificaciones de escritorio
      (`dist/notification-hook.js`), funcionamiento de los toggles `notifications-on` /
      `notifications-off` y registro idempotente del AUMID en Windows
      (`dist/notification-register.js --install` y `--status`);

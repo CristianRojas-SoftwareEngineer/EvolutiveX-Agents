@@ -17,17 +17,11 @@ Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya est
 
 | Intención del usuario                | Comando                                            |
 | ------------------------------------ | -------------------------------------------------- |
-| Activar la narración por voz         | `narrate-ctl.js voice-on`                          |
-| Desactivar la narración por voz      | `narrate-ctl.js voice-off`                         |
-| Activar notificaciones de escritorio | `narrate-ctl.js notifications-on`                  |
-| Desactivar notificaciones escritorio | `narrate-ctl.js notifications-off`                 |
 | Ver el estado y la configuración     | `narrate-ctl.js status`                            |
-| Usar LLM (mensajes elaborados)       | `narrate-ctl.js mode llm`                          |
-| Solo local (sin red, privado)        | `narrate-ctl.js mode local`                        |
 | Narrar un texto ahora                | `narrate-ctl.js say "texto a narrar"`              |
 | Pre-sintetizar los anuncios          | `narrate-ctl.js presynth` (`--force` para re-sync) |
 
-Tras `voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`, confirma al usuario el nuevo estado en una frase. Para `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa).
+Tras `status`, resume la salida (no vuelques rutas si el usuario solo preguntó si está activa; los toggles se hacen en `/config` → `evolutivex-agents.*`).
 
 `presynth` pre-sintetiza de una vez los anuncios estáticos del plugin (acuse de `UserPromptSubmit` y fallbacks por evento) con `speech synthesize`, para que luego se reproduzcan al instante con `speech play`. Es **idempotente** (un anuncio ya pre-sintetizado no se re-sintetiza) y **requiere el daemon caliente**; normalmente lo ejecuta la instalación guiada, y solo hay que re-ejecutarlo tras borrar la caché del motor. Como los labels son slugs fijos, un **cambio de frase** de un anuncio no cambia su label, así que `presynth` a secas no lo detecta: para forzar la re-síntesis usa `presynth --force`, que pasa `--force` al motor y sobrescribe el WAV existente.
 
@@ -37,7 +31,7 @@ Cuando el usuario pida narrar algo, **redacta tú un texto breve y natural en es
 
 ## Transcript enriquecido (no se controla aquí)
 
-El transcript enriquecido (hora de inicio, duración y contadores en vivo en cada bloque del transcript) **no** se controla con `narrate-ctl`. Si el usuario pide activarlo o desactivarlo, indícale que lo haga desde `/config`, en la opción `evolutivex-agents.enhancedTranscript` (desactivada por defecto); el cambio se aplica al momento.
+El transcript enriquecido (hora de inicio, duración y contadores en vivo en cada bloque del transcript) **no** se controla con `narrate-ctl`. Si el usuario pide activarlo o desactivarlo, indícale que lo haga desde `/config`, en la opción `evolutivex-agents.enhancedTranscript` (desactivada por defecto); el cambio se aplica al momento. Las preferencias de voz, notificaciones y modo también se configuran en `/config` → `evolutivex-agents.*`.
 
 ## Configuración de claves (modo LLM)
 

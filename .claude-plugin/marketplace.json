@@ -4,7 +4,7 @@
     "name": "Cristián Rojas Arredondo"
   },
   "metadata": {
-    "description": "Marketplace del plugin EvolutiveX Agents: narración por voz con AI Voice-InterConnector, notificaciones de escritorio y transcript enriquecido opt-in para las sesiones de Claude Code."
+    "description": "Marketplace del plugin EvolutiveX Agents: narración por voz con AI Voice-InterConnector, notificaciones de escritorio, transcript enriquecido opt-in y configuración unificada en /config para las sesiones de Claude Code."
   },
   "plugins": [
     {

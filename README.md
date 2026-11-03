@@ -49,33 +49,22 @@ El **transcript enriquecido** es la tercera funcionalidad y no usa el motor de v
 
 ## Configuración
 
-### Estado (`config.json`)
+### Configuración (`/config`)
 
-`config.json` solo guarda preferencias no secretas (`voiceEnabled`, `notificationsEnabled` y `messageMode`). La API key **nunca** se escribe en este archivo.
+Todas las preferencias se configuran en `/config` → `evolutivex-agents.*`. El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar.
 
-Ubicación por SO:
+| Clave                 | Tipo    | Valor por defecto | Efecto |
+|-----------------------|---------|-------------------|--------|
+| `voiceEnabled`      | boolean | `true`          | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar. |
+| `notificationsEnabled` | boolean | `true`       | Activa/desactiva las notificaciones de escritorio nativas. |
+| `messageMode`       | string  | `local`         | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`). |
+| `enhancedTranscript` | boolean | `false`        | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in. |
 
-| SO      | Ruta                                                              |
-| ------- | ----------------------------------------------------------------- |
-| Windows | `%LOCALAPPDATA%\evolutivex-agents\config.json`                    |
-| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/config.json` |
-| macOS   | `~/Library/Application Support/evolutivex-agents/config.json`     |
-
-Ejemplo:
-
-```json
-{
-  "voiceEnabled": true,
-  "notificationsEnabled": true,
-  "messageMode": "local"
-}
-```
-
-- `voiceEnabled`: interruptor del canal de narración por voz.
-- `notificationsEnabled`: interruptor del canal de notificaciones de escritorio (independiente de `voiceEnabled`).
-- `messageMode`: `"local"` (por defecto, determinista y offline) o `"llm"` (parafraseo con Gemini). Sin `GEMINI_API_KEY`, `llm` degrada a `local`.
+La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en disco.
 
 ### Transcript enriquecido (`/config`)
+
+Se activa con `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior.### Transcript enriquecido (`/config`)
 
 Se activa desde `/config` con la opción `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior. No se controla con `narrate-ctl` ni con `config.json`: el sandbox de _function hooks_ no puede leer ese archivo, así que la opción vive en el `userConfig` del plugin.
 
@@ -94,7 +83,7 @@ Una funcionalidad es **opt-out** (activa por defecto) solo si no altera ni inter
 
 El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `EvolutiveX.Agents`.
 
-- **Control del canal:** `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" notifications-on` / `notifications-off`.
+- **Control del canal:** `/config` → `evolutivex-agents.notificationsEnabled`.
 - **CLI manual (`dist/notification-cli.js`):** conserva todas las opciones (`--event-type`, `--message`, `--title`, `--sound`, `--silent`, `--stdin-json`, `--app-id`, `--icon`):
   ```bash
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-cli.js" --event-type Stop --message "Listo"
@@ -104,9 +93,7 @@ El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `U
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --uninstall
-  ```
-
-### Clave API (solo modo `llm`)
+  ```### Clave API (solo modo `llm`)
 
 La clave se lee **exclusivamente** de la variable de entorno `GEMINI_API_KEY`; el plugin no la guarda en disco.
 
@@ -161,6 +148,10 @@ npm run check-dist # verifica dist/ sincronizado con src/
 npm test           # suite de Node (tests/*.spec.ts con node --test, sin framework externo)
 npm run test:transcript  # tests del transcript enriquecido (src/transcript/*.test.ts, kit oficial)
 npx tsc -p src/transcript  # tipos del transcript enriquecido (sandbox de function hooks)
+
+`npm run test:transcript` compila `dist/` y ejecuta `claude plugin test .`, que prueba el módulo `dist/transcript.js` con el kit oficial `claude-code/testing` en un entorno como el de los hooks reales; requiere el CLI de Claude Code instalado. Recorre todos los `*.test.ts` del plugin, por eso los tests de Node usan el sufijo `.spec.ts`.
+
+`npx tsc -p src/transcript` usa los tipos de la API de _function hooks_ que Claude Code genera en `.claude-plugin/types/` (no versionados) al cargar el plugin con `claude --plugin-dir .`; sin ellos no puede ejecutarse, por eso no forma parte de CI.
 ```
 
 `npm run test:transcript` compila `dist/` y ejecuta `claude plugin test .`, que prueba el módulo `dist/transcript.js` con el kit oficial `claude-code/testing` en un entorno como el de los hooks reales; requiere el CLI de Claude Code instalado. Recorre todos los `*.test.ts` del plugin, por eso los tests de Node usan el sufijo `.spec.ts`.

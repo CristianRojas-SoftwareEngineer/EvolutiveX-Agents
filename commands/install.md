@@ -139,10 +139,10 @@ Interpreta el resultado:
 ## Paso 5 — Activar la narración, las notificaciones de escritorio y, opcionalmente, el modo LLM
 
 1. Asegura que tanto la narración por voz como las notificaciones de escritorio están activas y revisa el estado:
+   - En `/config`, fija `evolutivex-agents.voiceEnabled` y `evolutivex-agents.notificationsEnabled` a `true`.
 
+   Verifica con:
    ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" voice-on
-   node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" notifications-on
    node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" status
    ```
 
@@ -156,10 +156,8 @@ Interpreta el resultado:
    En Linux y macOS este paso no es necesario (el notificador nativo aplica el icono directamente).
 
 3. **Modo de mensajes de voz** (pregunta al usuario su preferencia):
-   - `local` (por defecto, 100 % offline, mensajes simples):
-     `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode local`
-   - `llm` (mensajes más elaborados vía Gemini free tier):
-     `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode llm`
+   - `local` (por defecto, 100 % offline, mensajes simples): en `/config`, fija `evolutivex-agents.messageMode` a `local`.
+   - `llm` (mensajes más elaborados vía Gemini free tier): en `/config`, fija `evolutivex-agents.messageMode` a `llm`.
 4. Si elige `llm`, **advierte sobre privacidad**: contenido de la sesión sale
    hacia Google (Gemini). La clave es del usuario; guíalo a definirla por
    variable de entorno, sin escribirla en el chat:
@@ -218,6 +216,6 @@ Interpreta el resultado:
 
 ## Cierre
 
-Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/evolutivex-agents:narrate` (`voice-on`/`voice-off`/`notifications-on`/`notifications-off`/`mode`/`status`/`say`/`presynth`).
+Confirma al usuario, en pocas frases, que a partir de ahora **cada sesión de Claude Code narrará por voz y emitirá notificaciones de escritorio automáticamente**: el hook `SessionStart` verifica el entorno y levanta el daemon si hace falta; el canal de voz narra `UserPromptSubmit`, `Stop`, `SubagentStop`, `StopFailure` y `Notification`, mientras el canal de notificaciones muestra toasts silenciosos con icono propio en los 12 eventos del ciclo de vida de forma independiente del motor de voz. El daemon se relevanta solo en la primera sesión tras un reinicio (hook `SessionStart`), así que no hay mantenimiento manual. Recuérdale los controles a demanda de la skill `/evolutivex-agents:narrate` (`status`, `say` y `presynth`; los toggles se hacen en `/config`).
 
 Menciona también el mantenimiento de los anuncios pre-sintetizados: si se borran las locuciones del almacén del motor (`<data_dir>/speech/<voz>/<etiqueta>.wav`), basta re-ejecutar `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth` con el daemon caliente (es idempotente; los anuncios vigentes no se re-sintetizan). Ten en cuenta que `--synthetic-speech` es una categoría de `cleanup`, no una carpeta. Como los labels son slugs fijos, si en una actualización del plugin **cambia la frase** de un anuncio, `presynth` a secas no lo detecta (el label no cambió): hay que forzar la sobreescritura con `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --force`.
