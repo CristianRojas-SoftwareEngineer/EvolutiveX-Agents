@@ -93,10 +93,10 @@ test("un comando desconocido devuelve 2", () => {
 });
 
 for (const retired of [
-  ["voice-on"],  // subcomando retirado
-  ["voice-off"],  // subcomando retirado
-  ["notifications-on"],  // subcomando retirado
-  ["notifications-off"],  // subcomando retirado
+  ["voice-on"], // subcomando retirado
+  ["voice-off"], // subcomando retirado
+  ["notifications-on"], // subcomando retirado
+  ["notifications-off"], // subcomando retirado
   ["mode", "llm"],
 ]) {
   test(`el subcomando retirado ${retired[0]} devuelve 2`, () => {

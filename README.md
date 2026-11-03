@@ -2,6 +2,8 @@
 
 Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) y emite **notificaciones de escritorio nativas** (toasts silenciosos con icono por evento). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto y recibes un aviso visual independiente del motor de voz. Opcionalmente, el **transcript enriquecido** muestra en cada bloque del transcript su hora de inicio, su duración y contadores en vivo.
 
+> **Beta 0.1.0, solo en español.** Verificado en Windows 11; Linux y macOS son experimentales. Si algo falla, repórtalo con la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md).
+
 - **Automático**: disparado por hooks; sin intervención del modelo ni tuya.
 - **No intrusivo**: nunca bloquea ni retrasa el turno; los canales de voz y
   escritorio son independientes y fallan en silencio.
@@ -53,20 +55,20 @@ El **transcript enriquecido** es la tercera funcionalidad y no usa el motor de v
 
 Todas las preferencias se configuran en `/config` → `evolutivex-agents.*`. El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar.
 
-| Clave                 | Tipo    | Valor por defecto | Efecto |
-|-----------------------|---------|-------------------|--------|
-| `voiceEnabled`      | boolean | `true`          | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar. |
-| `notificationsEnabled` | boolean | `true`       | Activa/desactiva las notificaciones de escritorio nativas. |
-| `messageMode`       | string  | `local`         | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`). |
-| `enhancedTranscript` | boolean | `false`        | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in. |
+| Clave                  | Tipo    | Valor por defecto | Efecto                                                                                                                                                       |
+| ---------------------- | ------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `voiceEnabled`         | boolean | `true`            | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar.                                                                   |
+| `notificationsEnabled` | boolean | `true`            | Activa/desactiva las notificaciones de escritorio nativas.                                                                                                   |
+| `messageMode`          | string  | `local`           | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`). |
+| `enhancedTranscript`   | boolean | `false`           | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in.                                                                           |
 
 La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en disco.
 
 ### Transcript enriquecido (`/config`)
 
-Se activa con `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior.### Transcript enriquecido (`/config`)
+Se activa con `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior. No se controla con `narrate-ctl`: el sandbox de _function hooks_ no puede leer archivos locales, así que la opción vive en el `userConfig` del plugin.
 
-Se activa desde `/config` con la opción `evolutivex-agents.enhancedTranscript` (boolean, `false` por defecto). El cambio se aplica al momento, sin `/reload-plugins` ni reiniciar. Requiere Claude Code v2.1.287 o posterior. No se controla con `narrate-ctl`: el sandbox de _function hooks_ no puede leer archivos de configuración locales, así que la opción vive en el `userConfig` del plugin (`/config`).
+**Protección:** si un handler del transcript, su reloj o su volcado al almacenamiento fallan por su propio código 3 veces seguidas, el transcript enriquecido se apaga hasta el final de la sesión y Claude Code sigue con su transcript nativo. Un único toast indica la causa y la versión de Claude Code: cópialo en el reporte. Los errores que no son del plugin (por ejemplo, una herramienta interrumpida) no cuentan.
 
 ### Qué está activo por defecto
 
@@ -93,7 +95,9 @@ El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `U
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --install
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
   node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --uninstall
-  ```### Clave API (solo modo `llm`)
+  ```
+
+### Clave API (solo modo `llm`)
 
 La clave se lee **exclusivamente** de la variable de entorno `GEMINI_API_KEY`; el plugin no la guarda en disco.
 
@@ -123,18 +127,36 @@ Notas:
 
 - Claude Code lanzado desde una GUI puede no heredar el entorno de la shell. Si `status` reporta la clave ausente, define la variable de forma persistente (o lanza Claude Code desde una terminal donde esté definida) y reinicia Claude Code.
 - No uses `.env`: el plugin no lo lee.
-- Para activar el parafraseo: define `GEMINI_API_KEY` y ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" mode llm`. `status` confirma `gemini key: configurada` sin mostrar el valor.
+- Para activar el parafraseo: define `GEMINI_API_KEY` y fija `/config` → `evolutivex-agents.messageMode` en `llm`. `status` confirma `gemini key: configurada` sin mostrar el valor.
 
-Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolutivex-agents:narrate` expone toggles interactivos.
+Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolutivex-agents:narrate` muestra el estado y narra a demanda; las preferencias se cambian en `/config`.
 
 ---
 
 ## Privacidad
 
 - **Modo `local`**: cero red, 100 % offline, mensajes simples.
-- **Modo `llm`**: solo en evento `Stop` envía `last_assistant_message` (sin transcript ni historial) a Google (Gemini). Opt-in explícito: requiere `GEMINI_API_KEY` y `mode llm`.
+- **Modo `llm`**: solo en evento `Stop` envía `last_assistant_message` (sin transcript ni historial) a Google (Gemini). Opt-in explícito: requiere `GEMINI_API_KEY` y `messageMode` en `llm`.
 - El resto de hooks (`UserPromptSubmit`, `SubagentStop`, `StopFailure`, `Notification`) **nunca** usan red: reproducen avisos pre-sintetizados locales.
 - **Transcript enriquecido**: solo guarda horas y duraciones de los bloques en el almacenamiento local que Claude Code da al plugin (un bucket por día, 30 días de retención y como máximo 3,5 MiB) para que una sesión reanudada muestre las mismas cifras. No envía nada fuera.
+
+---
+
+## Solución de problemas
+
+- **No se oye nada:** `ai-voice-interconnector doctor --json` diagnostica la instalación del motor (binario en el PATH, modelos y runtime ONNX); la skill `/evolutivex-agents:narrate` con `status` muestra el motor, el daemon, la cola y si la clave de Gemini está configurada.
+- **Errores de la narración:** el worker los escribe en `worker.log`, en el _state dir_:
+
+  | SO      | Ruta                                                             |
+  | ------- | ---------------------------------------------------------------- |
+  | Windows | `%LOCALAPPDATA%evolutivex-agentsworker.log`                      |
+  | Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` |
+  | macOS   | `~/Library/Application Support/evolutivex-agents/worker.log`     |
+
+  Al superar 512 KiB se renombra a `worker.log.1` (que reemplaza al anterior), y `worker.log.1` se borra tras 14 días sin cambios: como máximo, 2 archivos y 1 MiB.
+
+- **El transcript enriquecido desapareció a mitad de sesión:** se apagó por fallos repetidos (ver la protección en [Transcript enriquecido](#transcript-enriquecido-config)); el toast indica la causa. Vuelve al reiniciar Claude Code o con `/reload-plugins`.
+- **Reportar un error:** usa la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md), que pide las versiones, la salida de `doctor --json`, las líneas de `worker.log` y el texto del toast.
 
 ---
 
@@ -148,10 +170,6 @@ npm run check-dist # verifica dist/ sincronizado con src/
 npm test           # suite de Node (tests/*.spec.ts con node --test, sin framework externo)
 npm run test:transcript  # tests del transcript enriquecido (src/transcript/*.test.ts, kit oficial)
 npx tsc -p src/transcript  # tipos del transcript enriquecido (sandbox de function hooks)
-
-`npm run test:transcript` compila `dist/` y ejecuta `claude plugin test .`, que prueba el módulo `dist/transcript.js` con el kit oficial `claude-code/testing` en un entorno como el de los hooks reales; requiere el CLI de Claude Code instalado. Recorre todos los `*.test.ts` del plugin, por eso los tests de Node usan el sufijo `.spec.ts`.
-
-`npx tsc -p src/transcript` usa los tipos de la API de _function hooks_ que Claude Code genera en `.claude-plugin/types/` (no versionados) al cargar el plugin con `claude --plugin-dir .`; sin ellos no puede ejecutarse, por eso no forma parte de CI.
 ```
 
 `npm run test:transcript` compila `dist/` y ejecuta `claude plugin test .`, que prueba el módulo `dist/transcript.js` con el kit oficial `claude-code/testing` en un entorno como el de los hooks reales; requiere el CLI de Claude Code instalado. Recorre todos los `*.test.ts` del plugin, por eso los tests de Node usan el sufijo `.spec.ts`.
@@ -177,7 +195,7 @@ claude plugin validate --strict .
 
 ### CI
 
-CircleCI (`.circleci/config.yml`): `check-dist`, `lint`, `format:check`, `typecheck` y `test` en Linux; `check-dist`, `typecheck` y `test` en Windows/macOS; `validate-manifest` (manifiestos, nombre del plugin y módulo de _function hooks_ `dist/transcript.js`, cuyos hooks y llamadas también analiza `claude plugin validate --strict`).
+CircleCI (`.circleci/config.yml`): `check-dist`, `lint`, `format:check`, `typecheck` y `test` en Linux; `check-dist`, `typecheck` y `test` en Windows/macOS; `validate-manifest` (manifiestos, nombre del plugin y módulo de _function hooks_ `dist/transcript.js`, cuyos hooks y llamadas también analiza `claude plugin validate --strict`, más `npm run test:transcript` con el CLI fijado).
 
 ---
 

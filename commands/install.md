@@ -142,6 +142,7 @@ Interpreta el resultado:
    - En `/config`, fija `evolutivex-agents.voiceEnabled` y `evolutivex-agents.notificationsEnabled` a `true`.
 
    Verifica con:
+
    ```bash
    node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" status
    ```

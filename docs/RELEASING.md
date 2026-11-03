@@ -49,8 +49,8 @@ En orden; cada paso asume el anterior.
    `.claude-plugin/plugin.json` al mismo `X.Y.Z`.
 2. **Cortar la sección del changelog**: en `CHANGELOG.md`, renombrar
    `## [No publicado]` a `## [X.Y.Z] — AAAA-MM-DD` y dejar la entrada lista
-   (incluida la versión del motor contra la que se verificó, ver la sección
-   de sincronización). Crear una nueva sección `## [No publicado]` vacía encima
+   (incluidas la versión del motor contra la que se verificó, ver la sección
+   de sincronización, y el sistema operativo en que pasó el smoke test). Crear una nueva sección `## [No publicado]` vacía encima
    y actualizar las referencias de enlaces del pie.
 3. **Verificar `dist/` y `vendor/`** (el pre-commit hook los regenera automáticamente al commitear):
    ```bash
@@ -91,12 +91,15 @@ En orden; cada paso asume el anterior.
      clave) y con `Stop` en modo `llm` (con `GEMINI_API_KEY` definida); no
      basta con `Stop` — una superficie no probada puede liberarse con un bug;
    - emisión de toasts silenciosos del canal de notificaciones de escritorio
-     (`dist/notification-hook.js`), **transcript enriquecido** (toggle en `nfig`, turno, herramienta, subagente, ctrl+o, `--resume`) y **rotación de `worker.log`**;
-   - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
-
-   - emisión de toasts silenciosos del canal de notificaciones de escritorio
-     (`dist/notification-hook.js`), funcionamiento del canal de notificaciones en `/config` y registro idempotente del AUMID en Windows
+     (`dist/notification-hook.js`) y registro idempotente del AUMID en Windows
      (`dist/notification-register.js --install` y `--status`);
+   - las preferencias en `/config` → `evolutivex-agents.*`: apagar
+     `voiceEnabled` o `notificationsEnabled` silencia su canal desde el
+     evento siguiente, sin reiniciar;
+   - el **transcript enriquecido**: activación en `/config`, turno,
+     herramienta, subagente, vista expandida (ctrl+o) y `--resume`;
+   - la **rotación de `worker.log`**: con más de 512 KiB, el siguiente error de
+     narración lo renombra a `worker.log.1`;
    - `narrate-ctl status` reporta el estado (sin preferencias; remite a `/config`);
    - el aviso de `SessionStart` cuando el motor no está en el `PATH`;
    - el aviso no bloqueante de `SessionStart` con un check de instalación
@@ -283,7 +286,7 @@ Test-Path "$PLUGIN_E2E\dist\notification-hook.js"
 Valida el pipeline TTS + daemon y el canal de notificaciones de escritorio de forma aislada. No requiere claves.
 
 ```powershell
-narrate-ctl status                    # voice: true, notifications: true, messageMode: local
+narrate-ctl status                    # preferencias: /config → evolutivex-agents.*; gemini key: ausente
 node "$PLUGIN_E2E\dist\notification-register.js" --install
 node "$PLUGIN_E2E\dist\notification-register.js" --status
 node "$PLUGIN_E2E\dist\notification-cli.js" --event-type SessionStart --message "Prueba visual E2E" --silent
@@ -303,7 +306,8 @@ claude --plugin-dir $PLUGIN_E2E
 ```
 
 - **(A) Las cinco superficies en modo `local` (sin claves):**
-  1. Antes de `claude`, sin claves definidas:
+  1. Con `evolutivex-agents.messageMode` en `local` en `/config` y sin claves
+     definidas, antes de `claude`:
      ```powershell
      narrate-ctl status
      ```
@@ -327,7 +331,8 @@ claude --plugin-dir $PLUGIN_E2E
      ```powershell
      $env:GEMINI_API_KEY = "<tu-clave-gemini>"
      ```
-  2. Fija el modo:
+  2. Fija `evolutivex-agents.messageMode` en `llm` en `/config` y confirma la
+     clave:
      ```powershell
      narrate-ctl status        # gemini key: configurada
      ```
@@ -400,6 +405,26 @@ claude --plugin-dir $PLUGIN_E2E
   # En una sesión de Claude, envía un prompt (UserPromptSubmit no suena).
   Get-Content "$STATE_DIR\worker.log" -Tail 5
   # Debe contener: speech play salió con código 3 (speech_not_found: ... narrate-ctl presynth)
+  narrate-ctl presynth   # restaura el anuncio
+  ```
+
+- **(G) Transcript enriquecido:** en `/config`, activa
+  `evolutivex-agents.enhancedTranscript`. En la sesión, envía un prompt que
+  use una herramienta y lance un subagente. **Comprobación:** cada bloque
+  aparece en su recuadro con la hora de inicio y, al pie, la duración; mientras
+  corre la herramienta, su contador avanza cada segundo; ctrl+o muestra la vista
+  expandida con los mismos recuadros; tras salir, `claude --plugin-dir
+$PLUGIN_E2E --resume` muestra las mismas horas y duraciones. Al terminar,
+  desactiva la opción y comprueba que el transcript vuelve a ser el nativo.
+
+- **(H) Rotación de `worker.log`:**
+
+  ```powershell
+  fsutil file createnew "$STATE_DIRworker.log" 600000
+  ai-voice-interconnector speech remove --label voice-user-prompt-submit
+  # En una sesión de Claude, envía un prompt (el acuse falla y escribe en worker.log).
+  Get-ChildItem "$STATE_DIRworker.log*" | Select-Object Name, Length
+  # Debe haber worker.log.1 (~600000 bytes) y un worker.log nuevo con la línea del fallo.
   narrate-ctl presynth   # restaura el anuncio
   ```
 

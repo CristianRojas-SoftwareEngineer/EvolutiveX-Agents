@@ -24,11 +24,11 @@ Ejecuta `ai-voice-interconnector doctor --json` y pega la salida aquí:
 
 Ruta del state dir según tu SO:
 
-| SO       | Ruta                                                         |
-| -------- | ------------------------------------------------------------ |
-| Windows  | `%LOCALAPPDATA%\evolutivex-agents\worker.log` y `.1`         |
-| Linux    | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` y `.1` |
-| macOS    | `~/Library/Application Support/evolutivex-agents/worker.log` y `.1` |
+| SO      | Ruta                                                                    |
+| ------- | ----------------------------------------------------------------------- |
+| Windows | `%LOCALAPPDATA%\evolutivex-agents\worker.log` y `.1`                    |
+| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` y `.1` |
+| macOS   | `~/Library/Application Support/evolutivex-agents/worker.log` y `.1`     |
 
 Pega las **últimas 30 líneas relevantes** de `worker.log` y, si existe, de `worker.log.1`:
 
@@ -46,9 +46,9 @@ Si el transcript enriquecido se desactivó solo, copia el texto exacto del toast
 
 ## Pasos para reproducir
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## Comportamiento esperado
 
