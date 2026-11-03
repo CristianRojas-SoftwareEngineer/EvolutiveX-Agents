@@ -25,8 +25,6 @@ export interface HookPayload {
   error?: string;
   /** Título nativo de la tarea en TaskCreated y TaskCompleted. */
   task_subject?: string;
-  /** Fallback de asunto de tarea cuando se envía en nivel raíz. */
-  subject?: string;
 }
 
 /** Parseo tolerante: nunca lanza; ante entrada inválida devuelve un objeto vacío. */

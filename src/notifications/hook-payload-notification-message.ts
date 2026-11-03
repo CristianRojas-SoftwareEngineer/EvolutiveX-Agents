@@ -163,37 +163,25 @@ export function formatStopMessage(
   return truncate(detail, MAX_ASSISTANT_MESSAGE_LEN);
 }
 
+/** PostToolUse de TaskUpdate: el asunto viaja en `tool_input.subject`. */
 export function formatTaskInProgressMessage(
   payload: Record<string, unknown>,
 ): string | null {
   const toolInput = payload.tool_input;
-  const subjectFromToolInput =
-    toolInput != null && typeof toolInput === "object"
-      ? (readStringField(toolInput as Record<string, unknown>, "subject") ??
-        readStringField(toolInput as Record<string, unknown>, "task_subject"))
-      : undefined;
   const subject =
-    subjectFromToolInput ??
-    readStringField(payload, "task_subject") ??
-    readStringField(payload, "subject");
+    toolInput != null && typeof toolInput === "object"
+      ? readStringField(toolInput as Record<string, unknown>, "subject")
+      : undefined;
   if (!subject) return null;
   return `Tarea iniciada: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}`;
 }
 
+/** TaskCreated y TaskCompleted: el asunto viaja en `task_subject` en la raíz. */
 function formatTaskMessage(
   payload: Record<string, unknown>,
   prefix: string,
 ): string | null {
-  const toolInput = payload.tool_input;
-  const subjectFromToolInput =
-    toolInput != null && typeof toolInput === "object"
-      ? (readStringField(toolInput as Record<string, unknown>, "subject") ??
-        readStringField(toolInput as Record<string, unknown>, "task_subject"))
-      : undefined;
-  const subject =
-    readStringField(payload, "task_subject") ??
-    subjectFromToolInput ??
-    readStringField(payload, "subject");
+  const subject = readStringField(payload, "task_subject");
   return subject
     ? `${prefix}: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}`
     : null;

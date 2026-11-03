@@ -4,7 +4,7 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Suite completa del canal de notificaciones de escritorio migrado al plugin:
+// Suite completa del canal de notificaciones de escritorio del plugin:
 // adaptador node-notifier, catálogo de perfiles, sonidos por SO, rutas de
 // imágenes, formatters de payload, CLI, MS-SHLLINK (.lnk), registro Windows,
 // helper de registro AUMID e independencia entre canales de voz y escritorio.

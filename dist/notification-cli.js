@@ -7495,15 +7495,12 @@ function formatStopMessage(payload) {
 }
 function formatTaskInProgressMessage(payload) {
   const toolInput = payload.tool_input;
-  const subjectFromToolInput = toolInput != null && typeof toolInput === "object" ? readStringField(toolInput, "subject") ?? readStringField(toolInput, "task_subject") : void 0;
-  const subject = subjectFromToolInput ?? readStringField(payload, "task_subject") ?? readStringField(payload, "subject");
+  const subject = toolInput != null && typeof toolInput === "object" ? readStringField(toolInput, "subject") : void 0;
   if (!subject) return null;
   return `Tarea iniciada: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}`;
 }
 function formatTaskMessage(payload, prefix) {
-  const toolInput = payload.tool_input;
-  const subjectFromToolInput = toolInput != null && typeof toolInput === "object" ? readStringField(toolInput, "subject") ?? readStringField(toolInput, "task_subject") : void 0;
-  const subject = readStringField(payload, "task_subject") ?? subjectFromToolInput ?? readStringField(payload, "subject");
+  const subject = readStringField(payload, "task_subject");
   return subject ? `${prefix}: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}` : null;
 }
 var HOOK_PAYLOAD_MESSAGE_FORMATTERS = {
