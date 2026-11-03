@@ -195,7 +195,7 @@ var ANNOUNCEMENTS = {
 };
 
 // src/voice/active-voice.ts
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 function readActiveVoice() {
   const voice = readOrUndefined(activeVoicePath());
   return voice ? { voice, source: "cache" } : { voice: DEFAULT_VOICE, source: "default" };
@@ -209,7 +209,7 @@ function readOrUndefined(path) {
 }
 
 // src/voice/operation-lock.ts
-import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 var LOCK_BUSY_EXIT = 6;
 var depth = 0;
@@ -224,7 +224,7 @@ function withVoiceOperationLock(fn) {
   try {
     return runNested(fn);
   } finally {
-    rmSync(voiceOperationLockPath(), { recursive: true, force: true });
+    rmSync2(voiceOperationLockPath(), { recursive: true, force: true });
   }
 }
 function runNested(fn) {
@@ -240,7 +240,7 @@ function acquire() {
   if (tryCreate()) return true;
   const owner = readOwner();
   if (owner === void 0 || isAlive(owner)) return false;
-  rmSync(voiceOperationLockPath(), { recursive: true, force: true });
+  rmSync2(voiceOperationLockPath(), { recursive: true, force: true });
   return tryCreate();
 }
 function tryCreate() {
@@ -251,7 +251,12 @@ function tryCreate() {
     if (err.code === "EEXIST") return false;
     throw err;
   }
-  writeFileSync2(join3(dir, "owner"), String(process.pid), "utf8");
+  try {
+    writeFileSync2(join3(dir, "owner"), String(process.pid), "utf8");
+  } catch (err) {
+    rmSync2(dir, { recursive: true, force: true });
+    throw err;
+  }
   return true;
 }
 function readOwner() {
@@ -347,7 +352,7 @@ ${hint}` : hint;
 
 // src/narrate-ctl.ts
 var SOURCE_LABELS = {
-  flag: "--voice",
+  flag: "indicada",
   cache: "seg\xFAn el \xFAltimo evento",
   default: "sin datos de /config todav\xEDa"
 };
@@ -485,13 +490,15 @@ function parseClone(rest) {
   const [rawName, wav, ...extra] = parsed.positionals;
   const name = normalizeVoiceName(rawName ?? "");
   const mic = parsed.values.mic === true;
+  const duration = parsed.values.duration;
   if (!name || extra.length > 0 || mic === (wav !== void 0))
     return void 0;
+  if (duration !== void 0 && !mic) return void 0;
   return {
     name,
     wav,
     mic,
-    duration: parsed.values.duration,
+    duration,
     force: parsed.values.force === true,
     denoise: parsed.values.denoise === true
   };
@@ -623,15 +630,34 @@ function parseOptions(rest, options) {
     return void 0;
   }
 }
+function parseSayArgs(rest) {
+  const words = [];
+  let voiceFlag;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg === "--") {
+      words.push(...rest.slice(i + 1));
+      break;
+    }
+    if (arg === "--voice") {
+      if (i + 1 >= rest.length) return void 0;
+      voiceFlag = rest[++i];
+    } else if (arg.startsWith("--voice=")) {
+      voiceFlag = arg.slice("--voice=".length);
+    } else {
+      words.push(arg);
+    }
+  }
+  return { text: words.join(" ").trim(), voiceFlag };
+}
 function runSay(rest) {
-  const parsed = parseOptions(rest, { voice: { type: "string" } });
-  const text = parsed?.positionals.join(" ").trim();
-  const voice = resolveVoice(parsed?.values.voice);
-  if (!parsed || !text || !voice.voice) {
+  const parsed = parseSayArgs(rest);
+  const voice = resolveVoice(parsed?.voiceFlag);
+  if (!parsed?.text || !voice.voice) {
     console.error('Uso: say [--voice <nombre>] "<texto>"');
     return 2;
   }
-  return say(text, voice);
+  return say(parsed.text, voice);
 }
 function runPresynth(rest) {
   const parsed = parseOptions(rest, {

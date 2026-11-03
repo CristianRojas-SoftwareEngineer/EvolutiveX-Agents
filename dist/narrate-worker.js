@@ -580,6 +580,9 @@ var KILL_GRACE_MS = 2e3;
 var REASON_HINTS = {
   speech_not_found: (voice) => `locuci\xF3n no pre-sintetizada para la voz ${voice}; ejecuta narrate-ctl presynth --voice ${voice}`,
   voice_not_found: (voice) => `la voz ${voice} no existe en el motor; elige otra en /config \u2192 evolutivex-agents.voice`,
+  // `speech play` responde así a un nombre de voz ilegal (las etiquetas del
+  // catálogo son fijas y válidas).
+  invalid_identifier: (voice) => `el nombre de voz \xAB${voice}\xBB no es v\xE1lido; corr\xEDgelo en /config \u2192 evolutivex-agents.voice`,
   no_output_device: "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
   audio_backend_unavailable: "backend de audio del sistema no disponible (en Linux, ALSA/libasound.so.2)",
   playback_failed: "fallo de reproducci\xF3n del audio",

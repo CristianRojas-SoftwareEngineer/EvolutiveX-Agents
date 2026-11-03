@@ -53,7 +53,7 @@ interface ResolvedVoice {
 }
 
 const SOURCE_LABELS: Record<ResolvedVoice["source"], string> = {
-  flag: "--voice",
+  flag: "indicada",
   cache: "según el último evento",
   default: "sin datos de /config todavía",
 };
@@ -236,7 +236,10 @@ interface CloneRequest {
   denoise: boolean;
 }
 
-/** Parsea `voice clone`; exige el nombre y exactamente una fuente. */
+/**
+ * Parsea `voice clone`; exige el nombre y exactamente una fuente, y
+ * `--duration` solo con `--mic`.
+ */
 function parseClone(rest: string[]): CloneRequest | undefined {
   const parsed = parseOptions(rest, {
     mic: { type: "boolean" },
@@ -248,13 +251,15 @@ function parseClone(rest: string[]): CloneRequest | undefined {
   const [rawName, wav, ...extra] = parsed.positionals;
   const name = normalizeVoiceName(rawName ?? "");
   const mic = parsed.values.mic === true;
+  const duration = parsed.values.duration as string | undefined;
   if (!name || extra.length > 0 || mic === (wav !== undefined))
     return undefined;
+  if (duration !== undefined && !mic) return undefined;
   return {
     name,
     wav,
     mic,
-    duration: parsed.values.duration as string | undefined,
+    duration,
     force: parsed.values.force === true,
     denoise: parsed.values.denoise === true,
   };
@@ -424,15 +429,42 @@ function parseOptions(
   }
 }
 
+/**
+ * Separa `--voice <nombre>` (o `--voice=<nombre>`) del texto de `say`. El
+ * resto de los argumentos es texto aunque empiece por guion (p. ej.
+ * «-5 grados»); tras `--`, todo es texto. undefined si `--voice` no trae valor.
+ */
+function parseSayArgs(
+  rest: string[],
+): { text: string; voiceFlag?: string } | undefined {
+  const words: string[] = [];
+  let voiceFlag: string | undefined;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i];
+    if (arg === "--") {
+      words.push(...rest.slice(i + 1));
+      break;
+    }
+    if (arg === "--voice") {
+      if (i + 1 >= rest.length) return undefined;
+      voiceFlag = rest[++i];
+    } else if (arg.startsWith("--voice=")) {
+      voiceFlag = arg.slice("--voice=".length);
+    } else {
+      words.push(arg);
+    }
+  }
+  return { text: words.join(" ").trim(), voiceFlag };
+}
+
 function runSay(rest: string[]): number {
-  const parsed = parseOptions(rest, { voice: { type: "string" } });
-  const text = parsed?.positionals.join(" ").trim();
-  const voice = resolveVoice(parsed?.values.voice as string | undefined);
-  if (!parsed || !text || !voice.voice) {
+  const parsed = parseSayArgs(rest);
+  const voice = resolveVoice(parsed?.voiceFlag);
+  if (!parsed?.text || !voice.voice) {
     console.error('Uso: say [--voice <nombre>] "<texto>"');
     return 2;
   }
-  return say(text, voice);
+  return say(parsed.text, voice);
 }
 
 function runPresynth(rest: string[]): number {

@@ -356,10 +356,47 @@ test("say --voice usa la voz indicada, normalizada", () => {
     assert.equal(res.status, 0);
     const [argv] = loggedArgvs(argvLog);
     assert.equal(argv[argv.indexOf("--voice") + 1], "mi_voz");
-    assert.match(res.stdout, /voz: mi_voz \(--voice\)/);
+    assert.match(res.stdout, /voz: mi_voz \(indicada\)/);
   } finally {
     removeDir(dir);
   }
+});
+
+for (const [label, args, text, voice] of [
+  [
+    "un texto que empieza por guion",
+    ["say", "-5 grados hoy"],
+    "-5 grados hoy",
+    "default",
+  ],
+  ["--voice=<nombre>", ["say", "--voice=otra", "hola"], "hola", "otra"],
+  ["--voice tras el texto", ["say", "hola", "--voice", "otra"], "hola", "otra"],
+  [
+    "-- antes de un texto literal",
+    ["say", "--", "--voice", "x"],
+    "--voice x",
+    "default",
+  ],
+] as const) {
+  test(`say acepta ${label}`, () => {
+    const dir = makeTempDir("avi-plugin-fakecli-");
+    try {
+      const { argvLog } = makeFakeCli(dir, [0]);
+      const res = runCtl([...args], fakeCliEnv(dir));
+      assert.equal(res.status, 0, res.stderr);
+      const [argv] = loggedArgvs(argvLog);
+      assert.equal(argv[argv.indexOf("--text") + 1], text);
+      assert.equal(argv[argv.indexOf("--voice") + 1], voice);
+    } finally {
+      removeDir(dir);
+    }
+  });
+}
+
+test("say --voice sin valor devuelve 2 con uso", () => {
+  const res = runCtl(["say", "hola", "--voice"]);
+  assert.equal(res.status, 2);
+  assert.match(res.stderr, /Uso: say/);
 });
 
 test("say sin --voice usa la voz de la caché y lo informa", () => {
@@ -682,6 +719,10 @@ for (const [label, args] of [
   [
     "voice clone con dos fuentes",
     ["voice", "clone", "mi_voz", "a.wav", "--mic"],
+  ],
+  [
+    "--duration sin --mic",
+    ["voice", "clone", "mi_voz", "a.wav", "--duration", "10"],
   ],
   ["un subcomando de voice desconocido", ["voice", "bailar"]],
 ] as const) {

@@ -11,7 +11,7 @@ Esta skill opera el plugin **EvolutiveX Agents** (`evolutivex-agents`), que narr
 node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" <comando> [args]
 ```
 
-Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya está presente por ser el runtime de Claude Code) y no requiere que AI Voice-InterConnector esté aprovisionado salvo para `say`.
+Ejecuta ese comando con la herramienta de shell. Es multiplataforma (Node ya está presente por ser el runtime de Claude Code) y no requiere que AI Voice-InterConnector esté aprovisionado salvo para `say`, `presynth` y `voice`.
 
 ## Comandos
 

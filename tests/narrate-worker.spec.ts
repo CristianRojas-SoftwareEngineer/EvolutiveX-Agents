@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Worker drenador: verifica que narra los payloads encolados en orden, sin
-// duplicados y con la voz anotada en cada ítem (`--voice`), que sale tras la ventana de inactividad y que rota worker.log por
-// tamaño y antigüedad. Usa dist/narrate-worker.js
-// como subprocesso real con un CLI falso y state dir aislado.
+// duplicados y con la voz anotada en cada ítem (`--voice`), que sale tras la
+// ventana de inactividad y que rota worker.log por tamaño y antigüedad. Usa
+// dist/narrate-worker.js como subproceso real con un CLI falso y state dir
+// aislado.
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -297,6 +298,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
     { stdout: '{"error":"e","reason":"playback_failed"}', exit: 1 },
     { stdout: '{"error":"e","reason":"reason_del_futuro"}', exit: 3 },
     { stdout: "no es json", exit: 3 },
+    { stdout: '{"error":"e","reason":"invalid_identifier"}', exit: 2 },
   ]);
 
   restoreEnv = withEnv({
@@ -306,7 +308,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
     GEMINI_API_KEY: undefined,
   });
 
-  for (let i = 1; i <= 7; i++) {
+  for (let i = 1; i <= 8; i++) {
     enqueuePayload(
       {
         session_id: `p${i}`,
@@ -326,7 +328,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.equal(res.status, 0);
 
   const lines = logLines("speech play salió con código");
-  assert.equal(lines.length, 7);
+  assert.equal(lines.length, 8);
   assert.match(
     lines[0]!,
     /código 3 \(speech_not_found: .*voz default; ejecuta narrate-ctl presynth --voice default\)$/,
@@ -341,6 +343,10 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.match(lines[4]!, /código 1 \(playback_failed: .*\)$/);
   assert.match(lines[5]!, /speech play salió con código 3$/);
   assert.match(lines[6]!, /speech play salió con código 3$/);
+  assert.match(
+    lines[7]!,
+    /código 2 \(invalid_identifier: el nombre de voz «default» no es válido; .*\/config.*\)$/,
+  );
 });
 
 test("worker registra la pista de cada reason de speech say", () => {

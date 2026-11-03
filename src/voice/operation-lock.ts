@@ -64,7 +64,11 @@ function acquire(): boolean {
   return tryCreate();
 }
 
-/** mkdir exclusivo del directorio y escritura del PID; false si ya existe. */
+/**
+ * mkdir exclusivo del directorio y escritura del PID; false si ya existe. Si
+ * el PID no se puede escribir, retira el directorio antes de propagar el
+ * error: un bloqueo sin `owner` bloquearía todas las operaciones siguientes.
+ */
 function tryCreate(): boolean {
   const dir = voiceOperationLockPath();
   try {
@@ -73,7 +77,12 @@ function tryCreate(): boolean {
     if ((err as NodeJS.ErrnoException).code === "EEXIST") return false;
     throw err;
   }
-  writeFileSync(join(dir, "owner"), String(process.pid), "utf8");
+  try {
+    writeFileSync(join(dir, "owner"), String(process.pid), "utf8");
+  } catch (err) {
+    rmSync(dir, { recursive: true, force: true });
+    throw err;
+  }
   return true;
 }
 

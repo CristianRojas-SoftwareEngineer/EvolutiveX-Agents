@@ -10,7 +10,7 @@
 // aquí en cada evento y narrate-ctl la lee cuando no recibe `--voice`. Es una
 // caché derivada de /config, no una preferencia: el usuario no la edita y se
 // reescribe desde /config en el siguiente evento.
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { activeVoicePath, ensureStateDir } from "../lib/state-dir.js";
 import { DEFAULT_VOICE } from "./voice.js";
 
@@ -22,16 +22,21 @@ export interface ActiveVoice {
 
 /**
  * Escribe la voz activa solo si el contenido cambia, para no tocar el disco en
- * cada evento. Nunca lanza: un fallo de escritura se ignora.
+ * cada evento, de forma atómica (temporal + rename) para que narrate-ctl nunca
+ * lea un archivo a medio escribir. Nunca lanza: un fallo de escritura se
+ * ignora y el siguiente evento lo reintenta.
  */
 export function writeActiveVoice(voice: string): void {
+  const path = activeVoicePath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
   try {
     ensureStateDir();
-    const path = activeVoicePath();
     if (readOrUndefined(path) === voice) return;
-    writeFileSync(path, `${voice}\n`, "utf8");
+    writeFileSync(tmpPath, `${voice}\n`, "utf8");
+    renameSync(tmpPath, path);
   } catch {
     // La caché es best-effort: narrate-ctl cae a `default` y lo informa.
+    rmSync(tmpPath, { force: true });
   }
 }
 

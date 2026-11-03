@@ -298,7 +298,7 @@ function decideHealthAction(input) {
 }
 
 // src/voice/active-voice.ts
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
@@ -331,13 +331,16 @@ function activeVoicePath() {
 
 // src/voice/active-voice.ts
 function writeActiveVoice(voice) {
+  const path = activeVoicePath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
   try {
     ensureStateDir();
-    const path = activeVoicePath();
     if (readOrUndefined(path) === voice) return;
-    writeFileSync(path, `${voice}
+    writeFileSync(tmpPath, `${voice}
 `, "utf8");
+    renameSync(tmpPath, path);
   } catch {
+    rmSync(tmpPath, { force: true });
   }
 }
 function readOrUndefined(path) {

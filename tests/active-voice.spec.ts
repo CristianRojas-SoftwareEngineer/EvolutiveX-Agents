@@ -11,10 +11,12 @@ import assert from "node:assert/strict";
 import {
   mkdirSync,
   readFileSync,
+  readdirSync,
   statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { dirname } from "node:path";
 import { activeVoicePath, ensureStateDir } from "../src/lib/state-dir.js";
 import {
   readActiveVoice,
@@ -40,6 +42,8 @@ test("writeActiveVoice crea el state dir y la caché se lee con origen cache", (
   writeActiveVoice("mi_voz");
   assert.equal(readFileSync(activeVoicePath(), "utf8"), "mi_voz\n");
   assert.deepEqual(readActiveVoice(), { voice: "mi_voz", source: "cache" });
+  // La escritura atómica no deja temporales en el state dir.
+  assert.deepEqual(readdirSync(dirname(activeVoicePath())), ["active-voice"]);
 });
 
 test("writeActiveVoice no reescribe el archivo si el contenido no cambia", () => {

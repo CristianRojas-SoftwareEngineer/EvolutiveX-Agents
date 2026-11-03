@@ -167,15 +167,18 @@ function isAlive(pid) {
 }
 
 // src/voice/active-voice.ts
-import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 function writeActiveVoice(voice) {
+  const path = activeVoicePath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
   try {
     ensureStateDir();
-    const path = activeVoicePath();
     if (readOrUndefined(path) === voice) return;
-    writeFileSync2(path, `${voice}
+    writeFileSync2(tmpPath, `${voice}
 `, "utf8");
+    renameSync2(tmpPath, path);
   } catch {
+    rmSync2(tmpPath, { force: true });
   }
 }
 function readOrUndefined(path) {
