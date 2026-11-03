@@ -6,8 +6,8 @@
 
 // Caracterización de buildMessage: enrutado MVP determinista. Solo `Stop` (y el
 // default) genera locución dinámica sobre `last_assistant_message`; el resto de
-// eventos reproduce su anuncio pre-sintetizado (`play`). La degradación local
-// narra hasta `LOCAL_SPEECH_MAX_SENTENCES` oraciones del texto saneado, y el
+// eventos reproduce su anuncio pre-sintetizado (`play`). Toda locución dinámica
+// (LLM o degradación local) narra hasta `SPEECH_MAX_SENTENCES` oraciones, y el
 // saneo descarta el cuerpo de los bloques de código cercados: una respuesta que
 // solo sea código degrada al anuncio estático. Blinda el invariante «el LLM nunca
 // recibe nada que no sea last_assistant_message» y el caso «Hola».
@@ -343,6 +343,25 @@ test("Stop (llm) con LLM caído degrada a las dos primeras oraciones del turno",
         last_assistant_message:
           "Corregí el umbral. Los tests pasan. Queda revisar el roadmap.",
       },
+      LLM,
+    );
+    assert.deepEqual(out, {
+      kind: "say",
+      text: "Corregí el umbral. Los tests pasan.",
+    });
+  } finally {
+    restoreEnv();
+  }
+});
+
+test("Stop (llm) recorta la salida de Gemini a las dos primeras oraciones", async () => {
+  const restoreEnv = withEnv({ GEMINI_API_KEY: "dummy" });
+  try {
+    mockGemini(
+      "Corregí el umbral. Los tests pasan. Además revisé el roadmap y el changelog.",
+    );
+    const out = await buildMessage(
+      { hook_event_name: "Stop", last_assistant_message: "Hecho." },
       LLM,
     );
     assert.deepEqual(out, {

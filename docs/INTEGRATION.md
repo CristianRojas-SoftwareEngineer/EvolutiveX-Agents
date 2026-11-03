@@ -56,8 +56,12 @@ El único punto de acoplamiento es el ejecutable `ai-voice-interconnector` en el
   final no tiene material narrable —porque era solo un bloque de código, que el
   saneo descarta—, o el LLM cae, degrada al resumen local acotado (las dos
   primeras oraciones del texto saneado, con 500 caracteres como freno de
-  emergencia) o al aviso estático pre-sintetizado (`speech play`). El worker
-  corre desanclado; nunca bloquea el turno.
+  emergencia) o al aviso estático pre-sintetizado (`speech play`). La salida del
+  LLM pasa por el mismo recorte, así que ninguna locución supera los 500
+  caracteres. Como `speech say` sintetiza la locución completa antes de
+  reproducirla, su timeout crece con el texto (30 s + 0,4 s por carácter); al
+  vencer, el daemon cancela la síntesis en curso. El worker corre desanclado;
+  nunca bloquea el turno.
 - **`SubagentStop` / `StopFailure` / `Notification`** → reproducen su anuncio
   pre-sintetizado con `speech play --label … --json`: sin LLM ni síntesis por evento. Para
   `Notification` el mensaje específico sigue visible en pantalla.

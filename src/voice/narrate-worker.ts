@@ -20,6 +20,7 @@ import { claimNext, clearQueue, pruneQueue } from "./queue.js";
 import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
 import { isAlive } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
+import { sayTimeoutMs } from "./say-timeout.js";
 
 function log(msg: string): void {
   try {
@@ -29,9 +30,9 @@ function log(msg: string): void {
   }
 }
 
-// Timeout de invocación CLI por tipo de narración.
+// Timeout de invocación CLI de `speech play`; el de `speech say` depende del
+// texto (sayTimeoutMs).
 const PLAY_TIMEOUT_MS = 10_000;
-const SAY_TIMEOUT_MS = 45_000;
 const KILL_GRACE_MS = 2_000;
 
 /**
@@ -145,13 +146,16 @@ async function runPlay(cliPath: string, label: string): Promise<void> {
  */
 async function runSay(cliPath: string, text: string): Promise<void> {
   const args = ["speech", "say", "--text", text, "--daemon", "--json"];
+  const timeoutMs = sayTimeoutMs(text);
   const res = await runCliWithTimeout(cliPath, args, {
     windowsHide: true,
-    timeoutMs: SAY_TIMEOUT_MS,
+    timeoutMs,
     killGraceMs: KILL_GRACE_MS,
   });
   if (res.timedOut) {
-    log(`speech say timeout tras ${SAY_TIMEOUT_MS} ms; proceso terminado`);
+    log(
+      `speech say timeout tras ${timeoutMs} ms (${text.length} caracteres); proceso terminado`,
+    );
     return;
   }
   if (res.code !== 0)

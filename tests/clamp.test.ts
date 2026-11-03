@@ -15,7 +15,7 @@ import {
   clampHead,
   clampSentences,
   LLM_INPUT_MAX_CHARS,
-  LOCAL_SPEECH_MAX_SENTENCES,
+  SPEECH_MAX_SENTENCES,
 } from "../src/voice/message/clamp.js";
 
 // --- clampHead ---
@@ -63,7 +63,7 @@ test("clampSentences acumula oraciones completas hasta el tope", () => {
 
 test("clampSentences devuelve el texto entero si ya cabe en ambos topes", () => {
   const text = "Corto y completo.";
-  assert.equal(clampSentences(text, 400, LOCAL_SPEECH_MAX_SENTENCES), text);
+  assert.equal(clampSentences(text, 400, SPEECH_MAX_SENTENCES), text);
 });
 
 test("clampSentences reconoce los terminadores . ! ? …", () => {
@@ -75,7 +75,7 @@ test("clampSentences reconoce los terminadores . ! ? …", () => {
 test("clampSentences corta la oración-gigante en límite de palabra, sin puntos suspensivos", () => {
   const text =
     "Esta primera oración es mucho más larga que el tope permitido aquí.";
-  const out = clampSentences(text, 20, LOCAL_SPEECH_MAX_SENTENCES);
+  const out = clampSentences(text, 20, SPEECH_MAX_SENTENCES);
   assert.ok(out.length <= 20);
   assert.ok(!out.endsWith("…"));
   assert.ok(!out.endsWith(" "));
@@ -87,14 +87,14 @@ test("clampSentences corta la oración-gigante en límite de palabra, sin puntos
 test("clampSentences con tope exacto incluye la oración que encaja justo", () => {
   const text = "Uno dos tres. Cuatro.";
   assert.equal(
-    clampSentences(text, "Uno dos tres.".length, LOCAL_SPEECH_MAX_SENTENCES),
+    clampSentences(text, "Uno dos tres.".length, SPEECH_MAX_SENTENCES),
     "Uno dos tres.",
   );
 });
 
 test("clampSentences con texto vacío o solo espacios devuelve ''", () => {
-  assert.equal(clampSentences("", 400, LOCAL_SPEECH_MAX_SENTENCES), "");
-  assert.equal(clampSentences("   ", 400, LOCAL_SPEECH_MAX_SENTENCES), "");
+  assert.equal(clampSentences("", 400, SPEECH_MAX_SENTENCES), "");
+  assert.equal(clampSentences("   ", 400, SPEECH_MAX_SENTENCES), "");
 });
 
 test("clampSentences el tope de oraciones frena aunque el texto quepa en el techo de caracteres", () => {
@@ -109,7 +109,7 @@ test("clampSentences el techo de caracteres retira la segunda oración, no parte
   const second = `${"b".repeat(295)}.`;
   const text = `${first} ${second}`;
   assert.ok(text.length > 500, "el texto completo excede el techo");
-  const out = clampSentences(text, 500, LOCAL_SPEECH_MAX_SENTENCES);
+  const out = clampSentences(text, 500, SPEECH_MAX_SENTENCES);
   assert.equal(out, first, "oración entera, no un fragmento");
   assert.ok(out.length <= 500);
   assert.ok(!out.includes("b"));

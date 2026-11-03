@@ -6,8 +6,8 @@
 
 // Topes de tamaño deterministas y puros para las dos rutas del subsistema:
 // `clampHead` acota el input al LLM (conserva la cabeza) y `clampSentences`
-// acota la degradación local (oraciones completas, con dos topes: uno de
-// selección y otro de emergencia). Ninguna función tiene efectos secundarios ni
+// acota toda locución dinámica, venga del LLM o de la degradación local
+// (oraciones completas, con dos topes: uno de selección y otro de emergencia). Ninguna función tiene efectos secundarios ni
 // depende del reloj: mismo input → mismo output. `sanitizeForSpeech` NO se toca
 // (su contrato heredado «sin truncamiento» se conserva; el corte es
 // responsabilidad de quien lo necesita).
@@ -16,23 +16,25 @@
 export const LLM_INPUT_MAX_CHARS = 16000;
 
 /**
- * Criterio de selección de la degradación local: cuántas oraciones se narran.
- * La hipótesis de producto es que las primeras frases del turno concentran la
- * respuesta general y resumida. Dos oraciones bastan para dar orientación y la
+ * Criterio de selección de toda locución dinámica: cuántas oraciones se narran.
+ * La hipótesis de producto es que las primeras frases concentran la respuesta
+ * general y resumida (el prompt del LLM ya pide una o dos frases). Dos oraciones bastan para dar orientación y la
  * señal de si hay que volver a la pantalla; una sola puede ser solo preámbulo
  * («voy a revisar el archivo») y no transportar ningún resultado, y más de
  * dos introduce referencias colgantes y fragmentos de código.
  */
-export const LOCAL_SPEECH_MAX_SENTENCES = 2;
+export const SPEECH_MAX_SENTENCES = 2;
 
 /**
- * Techo de caracteres de la degradación local. NO es el criterio de selección
- * (eso es `LOCAL_SPEECH_MAX_SENTENCES`): es el freno de emergencia que acota los
- * turnos patológicos. En el caso normal no llega a activarse, porque dos
- * oraciones de prosa suelen caber de sobra; 500 caracteres ≈ 40 s de locución a
- * ritmo TTS español, por encima de lo cual el audio pierde inteligibilidad.
+ * Techo de caracteres de toda locución dinámica. NO es el criterio de selección
+ * (eso es `SPEECH_MAX_SENTENCES`): es el freno de emergencia que acota los
+ * turnos patológicos y las respuestas largas del LLM. En el caso normal no llega
+ * a activarse, porque dos oraciones de prosa suelen caber de sobra; 500
+ * caracteres ≈ 1 min de locución a ritmo TTS español, por encima de lo cual el
+ * audio pierde inteligibilidad. También acota el timeout de `speech say`
+ * (`sayTimeoutMs`).
  */
-export const LOCAL_SPEECH_MAX_CHARS = 500;
+export const SPEECH_MAX_CHARS = 500;
 
 /** Terminadores de oración reconocidos por `clampSentences`. */
 const SENTENCE_TERMINATORS = new Set([".", "!", "?", "…"]);

@@ -19,7 +19,8 @@ Verificado contra **AI Voice-InterConnector v0.42.0**.
 - Cola FIFO de narración en disco, sin solapamiento ni duplicación.
 - `SessionStart` con gate de recursos y arranque del daemon sin bloquear la sesión.
 - Diagnóstico por `reason` del motor en `worker.log`.
-- Timeouts de invocación del CLI, con continuación de la cola al excederlos.
+- Timeouts de invocación del CLI, con continuación de la cola al excederlos; el de `speech say` crece con el texto, porque cubre síntesis y reproducción.
+- Tope común de 2 oraciones y 500 caracteres para toda locución dinámica, también la del modo `llm`.
 - Modos de mensaje `local` (por defecto, offline) y `llm` (Gemini, opt-in con `GEMINI_API_KEY`).
 - Saneamiento del texto para voz antes de narrar o de enviarlo a un proveedor externo.
 - Notificaciones de escritorio con icono por evento y registro del AUMID en Windows.

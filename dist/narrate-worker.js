@@ -427,8 +427,8 @@ function sanitizeForSpeech(input) {
 
 // src/voice/message/clamp.ts
 var LLM_INPUT_MAX_CHARS = 16e3;
-var LOCAL_SPEECH_MAX_SENTENCES = 2;
-var LOCAL_SPEECH_MAX_CHARS = 500;
+var SPEECH_MAX_SENTENCES = 2;
+var SPEECH_MAX_CHARS = 500;
 var SENTENCE_TERMINATORS = /* @__PURE__ */ new Set([".", "!", "?", "\u2026"]);
 function clampHead(text) {
   const t = text ?? "";
@@ -510,18 +510,25 @@ async function buildMessage(payload, cfg) {
       const input = { text: clampHead(raw) };
       const llm = (await new GeminiProvider(cfg.geminiApiKey).generate(input)).trim();
       const clean = sanitizeForSpeech(llm);
-      if (clean) return { kind: "say", text: clean };
+      if (clean)
+        return {
+          kind: "say",
+          text: clampSentences(clean, SPEECH_MAX_CHARS, SPEECH_MAX_SENTENCES)
+        };
     } catch {
     }
   }
   return {
     kind: "say",
-    text: clampSentences(
-      primary,
-      LOCAL_SPEECH_MAX_CHARS,
-      LOCAL_SPEECH_MAX_SENTENCES
-    )
+    text: clampSentences(primary, SPEECH_MAX_CHARS, SPEECH_MAX_SENTENCES)
   };
+}
+
+// src/voice/say-timeout.ts
+var SAY_BASE_MS = 3e4;
+var SAY_PER_CHAR_MS = 400;
+function sayTimeoutMs(text) {
+  return SAY_BASE_MS + text.length * SAY_PER_CHAR_MS;
 }
 
 // src/voice/narrate-worker.ts
@@ -533,7 +540,6 @@ function log(msg) {
   }
 }
 var PLAY_TIMEOUT_MS = 1e4;
-var SAY_TIMEOUT_MS = 45e3;
 var KILL_GRACE_MS = 2e3;
 var REASON_HINTS = {
   speech_not_found: "locuci\xF3n no pre-sintetizada; ejecuta narrate-ctl presynth",
@@ -608,13 +614,16 @@ async function runPlay(cliPath, label) {
 }
 async function runSay(cliPath, text) {
   const args = ["speech", "say", "--text", text, "--daemon", "--json"];
+  const timeoutMs = sayTimeoutMs(text);
   const res = await runCliWithTimeout(cliPath, args, {
     windowsHide: true,
-    timeoutMs: SAY_TIMEOUT_MS,
+    timeoutMs,
     killGraceMs: KILL_GRACE_MS
   });
   if (res.timedOut) {
-    log(`speech say timeout tras ${SAY_TIMEOUT_MS} ms; proceso terminado`);
+    log(
+      `speech say timeout tras ${timeoutMs} ms (${text.length} caracteres); proceso terminado`
+    );
     return;
   }
   if (res.code !== 0)

@@ -12,9 +12,9 @@
 // eventos (`Notification`, `SubagentStop`, `StopFailure`, `UserPromptSubmit`)
 // reproduce su anuncio pre-sintetizado (`play`), sin LLM ni síntesis por evento.
 // Degradación de la ruta `Stop`: Gemini (input acotado con clampHead) →
-// resumen local determinista (`clampSentences`: hasta
-// `LOCAL_SPEECH_MAX_SENTENCES` oraciones, con `LOCAL_SPEECH_MAX_CHARS` como freno
-// de emergencia) → anuncio estático por evento. Único proveedor, sin fallback
+// resumen local determinista → anuncio estático por evento. Las dos locuciones
+// dinámicas pasan por `clampSentences`: hasta `SPEECH_MAX_SENTENCES` oraciones,
+// con `SPEECH_MAX_CHARS` como freno de emergencia. Único proveedor, sin fallback
 // de proveedor: cualquier fallo de Gemini cae directamente al resumen local.
 // El sano descarta el cuerpo de los bloques de código cercados, así que una
 // respuesta que solo sea código no entra en ninguna ruta dinámica.
@@ -30,8 +30,8 @@ import { sanitizeForSpeech } from "./sanitize.js";
 import {
   clampHead,
   clampSentences,
-  LOCAL_SPEECH_MAX_CHARS,
-  LOCAL_SPEECH_MAX_SENTENCES,
+  SPEECH_MAX_CHARS,
+  SPEECH_MAX_SENTENCES,
 } from "./clamp.js";
 
 /** Punto de entrada del subsistema. Devuelve la petición de narración para el worker. */
@@ -76,7 +76,11 @@ export async function buildMessage(
         await new GeminiProvider(cfg.geminiApiKey).generate(input)
       ).trim();
       const clean = sanitizeForSpeech(llm);
-      if (clean) return { kind: "say", text: clean };
+      if (clean)
+        return {
+          kind: "say",
+          text: clampSentences(clean, SPEECH_MAX_CHARS, SPEECH_MAX_SENTENCES),
+        };
     } catch {
       // Sin key, error HTTP o timeout: se degrada al resumen local de abajo.
     }
@@ -88,10 +92,6 @@ export async function buildMessage(
   // parte una oración.
   return {
     kind: "say",
-    text: clampSentences(
-      primary,
-      LOCAL_SPEECH_MAX_CHARS,
-      LOCAL_SPEECH_MAX_SENTENCES,
-    ),
+    text: clampSentences(primary, SPEECH_MAX_CHARS, SPEECH_MAX_SENTENCES),
   };
 }
