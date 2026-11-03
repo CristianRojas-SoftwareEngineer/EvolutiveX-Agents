@@ -25,7 +25,7 @@ Este documento fija el diseño y los criterios de aceptación para que el usuari
 
 ## 1. Propósito
 
-Hoy el plugin narra siempre con la voz de fábrica `default`. Esta feature permite clonar una voz desde un archivo WAV o desde el micrófono, elegirla como voz activa en `/config` y oírla en toda la narración: los anuncios pre-sintetizados, el resumen de `Stop` y la narración a demanda.
+Sin voz elegida, el plugin narra con la voz de fábrica `default`. Esta feature permite clonar una voz desde un archivo WAV o desde el micrófono, elegirla como voz activa en `/config` y oírla en toda la narración: los anuncios pre-sintetizados, el resumen de `Stop` y la narración a demanda.
 
 El diseño respeta la arquitectura actual:
 
@@ -62,12 +62,12 @@ El diseño respeta la arquitectura actual:
 ### Plugin
 
 - **Configuración**: `loadConfig()` (`src/lib/config.ts`) lee `CLAUDE_PLUGIN_OPTION_*`. Claude Code entrega esas variables a los hooks de comando, pero **no a la herramienta de shell**, desde donde la skill ejecuta `narrate-ctl`.
-- **Narración por hooks**: `narrate-hook` encola el payload y lanza el worker desanclado; el worker (`src/voice/narrate-worker.ts`) reproduce con `speech play --label … --json` o sintetiza con `speech say --text … --daemon --json`. El worker carga la configuración de su propio entorno, heredado del hook que lo lanzó, y vive mientras la cola tenga trabajo más 5 s.
-- **`SessionStart`** (`src/voice/health-check.ts`): `doctor --json` (≤20 s) y, con recursos sanos, `daemon status --json` (≤5 s); si el daemon está parado, `daemon start` desanclado y sin observar el resultado (`src/voice/daemon.ts`).
-- **`narrate-ctl`** (`src/narrate-ctl.ts`): `status`, `say "<texto>"` y `presynth [--force]`. Ninguno pasa `--voice`.
+- **Narración por hooks**: `narrate-hook` encola el payload y lanza el worker desanclado; el worker (`src/voice/narrate-worker.ts`) reproduce con `speech play` o sintetiza con `speech say --daemon`. El worker carga la configuración de su propio entorno, heredado del hook que lo lanzó, y vive mientras la cola tenga trabajo más 5 s: por eso la voz viaja en cada ítem (D-02).
+- **`SessionStart`** (`src/voice/health-check.ts`): `doctor --json` (≤20 s) y, con recursos sanos, `daemon status --json` (≤5 s); si el daemon está parado, lo arranca desanclado y sin observar el resultado (`src/voice/daemon.ts`), así que un `daemon start` que falla al instante pasa inadvertido (§7.10).
+- **`narrate-ctl`** (`src/narrate-ctl.ts`): corre desde la herramienta de shell, sin `/config`; por eso conoce la voz activa por la caché (D-03).
 - **Catálogo**: seis anuncios con etiqueta fija (`src/voice/message/static-announcements.ts`).
 - **Invocación del CLI**: `runCli`/`spawnCli` (`src/voice/resolve-cli.ts`) es la única costura; en Windows cita los argumentos para los shims `.cmd`.
-- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.42.0`), y no comprueba la versión en tiempo de ejecución.
+- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.42.0`); los hooks no comprueban la versión en tiempo de ejecución (D-11).
 
 ### Motor (v0.42.0)
 
