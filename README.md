@@ -36,12 +36,14 @@ El comando de instalación guía todo el proceso: detecta tu SO, instala el bina
 
 El plugin se integra via **hooks de Claude Code** y consume la **CLI pública** de AI Voice-InterConnector (`ai-voice-interconnector` en el `PATH`). No hay código compartido ni dependencias de build.
 
-| Hook                                            | Acción                             | Superficie CLI                                          |
-| ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------- |
-| `UserPromptSubmit`                              | Acuse fijo «Procesando con Claude» | `speech play --label`                                   |
-| `Stop`                                          | Resumen del turno (local o LLM)    | `speech say --daemon`                                   |
-| `SubagentStop` / `StopFailure` / `Notification` | Avisos pre-sintetizados            | `speech play --label`                                   |
-| `SessionStart`                                  | Health-check + daemon autostart    | `doctor --json`, `daemon status --json`, `daemon start` |
+| Hook                                            | Acción                             | Superficie CLI                                                                            |
+| ----------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| `UserPromptSubmit`                              | Acuse fijo «Procesando con Claude» | `speech play --label --voice`                                                             |
+| `Stop`                                          | Resumen del turno (local o LLM)    | `speech say --voice --daemon`                                                             |
+| `SubagentStop` / `StopFailure` / `Notification` | Avisos pre-sintetizados            | `speech play --label --voice`                                                             |
+| `SessionStart`                                  | Health-check + daemon autostart    | `doctor --json`, `daemon status --json`, `voice list --json`, `daemon start --warm-voice` |
+
+Todas las rutas narran con la **voz activa** de `/config` (`default` si no está fijada), pasada siempre de forma explícita.
 
 El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (opt-in con `GEMINI_API_KEY`) parafrasea el último mensaje del asistente vía Gemini.
 
@@ -60,9 +62,26 @@ Todas las preferencias se configuran en `/config` → `evolutivex-agents.*`. El 
 | `voiceEnabled`         | boolean | `true`            | Activa/desactiva la narración por voz. Al desactivarla se descarta lo pendiente de narrar.                                                                   |
 | `notificationsEnabled` | boolean | `true`            | Activa/desactiva las notificaciones de escritorio nativas.                                                                                                   |
 | `messageMode`          | string  | `local`           | `local`: mensajes deterministas sin red. `llm`: mensajes conversacionales con Gemini (requiere `GEMINI_API_KEY` en el entorno; si falla, degrada a `local`). |
+| `voice`                | string  | `default`         | Voz del motor con la que se narra: `default`, `ryan`, `vivian` o una voz clonada. Antes de activarla, la voz necesita sus anuncios pre-sintetizados.         |
 | `enhancedTranscript`   | boolean | `false`           | Transcript enriquecido: recuadros con hora, duración y contadores en vivo. Opt-in.                                                                           |
 
 La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en disco.
+
+### Voz de la narración y clonado
+
+El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI Voice-InterConnector 0.42.0 o posterior). El comando `/evolutivex-agents:voice` guía el proceso, y la instalación guiada lo ofrece de forma opcional:
+
+```text
+/evolutivex-agents:voice clone <nombre> [<ruta.wav> | --mic [--duration <segs>]]
+/evolutivex-agents:voice list
+/evolutivex-agents:voice remove <nombre>
+```
+
+- **Referencia:** unos 10 s de habla clara (máximo 30 s), desde un archivo WAV o el micrófono. `--denoise` limpia el ruido de fondo de forma opcional.
+- **Activación:** el clonado pre-sintetiza los seis anuncios con la voz nueva y luego indica el valor de `/config` → `evolutivex-agents.voice`. El plugin nunca activa una voz por su cuenta; el cambio se oye desde el siguiente evento.
+- **Costo de cambiar de voz:** cada voz tiene sus propios anuncios (seis síntesis, una sola vez) y la primera síntesis con otra voz tarda algo más mientras el daemon la carga.
+- **Sin fallback:** si la voz activa no existe o su nombre no es válido, `SessionStart` lo avisa y la narración falla con el remedio en `worker.log`, en lugar de sonar otra voz.
+- **A demanda:** `narrate-ctl say` y `presynth` aceptan `--voice <nombre>`; sin él usan la voz activa del último evento narrado, que `status` muestra.
 
 ### Transcript enriquecido (`/config`)
 
@@ -136,6 +155,7 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 ## Privacidad
 
 - **Modo `local`**: cero red, 100 % offline, mensajes simples.
+- **Clonado de voz**: es local. El motor guarda solo la huella del timbre de la referencia; el audio no sale de la máquina y el plugin no lo copia, mueve ni conserva. `userConfig` solo guarda el nombre de la voz.
 - **Modo `llm`**: solo en evento `Stop` envía `last_assistant_message` (sin transcript ni historial) a Google (Gemini). Opt-in explícito: requiere `GEMINI_API_KEY` y `messageMode` en `llm`.
 - El resto de hooks (`UserPromptSubmit`, `SubagentStop`, `StopFailure`, `Notification`) **nunca** usan red: reproducen avisos pre-sintetizados locales.
 - **Transcript enriquecido**: solo guarda horas y duraciones de los bloques en el almacenamiento local que Claude Code da al plugin (un bucket por día, 30 días de retención y como máximo 3,5 MiB) para que una sesión reanudada muestre las mismas cifras. No envía nada fuera.
@@ -154,6 +174,12 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
   | macOS   | `~/Library/Application Support/evolutivex-agents/worker.log`     |
 
   Al superar 512 KiB se renombra a `worker.log.1` (que reemplaza al anterior), y `worker.log.1` se borra tras 14 días sin cambios: como máximo, 2 archivos y 1 MiB.
+
+  El mismo directorio guarda `active-voice` (la voz activa del último evento, que leen `say` y `presynth`) y, mientras dura una operación manual de voz, el bloqueo `voice-operation.lock`.
+
+- **`speech_not_found` en `worker.log`:** la voz activa no tiene sus anuncios pre-sintetizados. Ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice <voz>` con el daemon caliente.
+- **`voice_not_found` o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor. Consulta `/evolutivex-agents:voice list` y elige otra (o `default`).
+- **«Hay otra operación de voz en curso»:** otra operación de `clone`, `remove` o `presynth` tiene el bloqueo. Si no hay ninguna en marcha, borra `voice-operation.lock` del _state dir_.
 
 - **El transcript enriquecido desapareció a mitad de sesión:** se apagó por fallos repetidos (ver la protección en [Transcript enriquecido](#transcript-enriquecido-config)); el toast indica la causa. Vuelve al reiniciar Claude Code o con `/reload-plugins`.
 - **Reportar un error:** usa la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md), que pide las versiones, la salida de `doctor --json`, las líneas de `worker.log` y el texto del toast.

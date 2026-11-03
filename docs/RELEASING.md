@@ -96,6 +96,10 @@ En orden; cada paso asume el anterior.
    - las preferencias en `/config` → `evolutivex-agents.*`: apagar
      `voiceEnabled` o `notificationsEnabled` silencia su canal desde el
      evento siguiente, sin reiniciar;
+   - el **clonado de voz**: clonar una voz desde un WAV con
+     `/evolutivex-agents:voice clone`, activarla en `/config` →
+     `evolutivex-agents.voice`, oír un anuncio y `narrate-ctl say` sin
+     `--voice` con esa voz, volver a `default` y borrar la voz;
    - el **transcript enriquecido**: activación en `/config`, turno,
      herramienta, subagente, vista expandida (ctrl+o) y `--resume`;
    - la **rotación de `worker.log`**: con más de 512 KiB, el siguiente error de
@@ -404,7 +408,7 @@ claude --plugin-dir $PLUGIN_E2E
   ai-voice-interconnector speech remove --label voice-user-prompt-submit
   # En una sesión de Claude, envía un prompt (UserPromptSubmit no suena).
   Get-Content "$STATE_DIR\worker.log" -Tail 5
-  # Debe contener: speech play salió con código 3 (speech_not_found: ... narrate-ctl presynth)
+  # Debe contener: speech play salió con código 3 (speech_not_found: ... narrate-ctl presynth --voice default)
   narrate-ctl presynth   # restaura el anuncio
   ```
 
@@ -427,6 +431,29 @@ $PLUGIN_E2E --resume` muestra las mismas horas y duraciones. Al terminar,
   # Debe haber worker.log.1 (~600000 bytes) y un worker.log nuevo con la línea del fallo.
   narrate-ctl presynth   # restaura el anuncio
   ```
+
+- **(I) Clonado y voz activa:** usa un WAV de prueba de unos 10 s y un nombre
+  libre (por ejemplo, `smoke_voz`).
+
+  ```powershell
+  narrate-ctl voice clone smoke_voz "<ruta al WAV>"
+  # Exit 0: seis anuncios re-sintetizados y la indicación de fijar /config → evolutivex-agents.voice = smoke_voz.
+  narrate-ctl voice list   # smoke_voz aparece; default, ryan y vivian marcadas como fábrica
+  ```
+
+  1. En `/config`, fija `evolutivex-agents.voice` = `smoke_voz` y envía un
+     prompt. **Comprobación:** el acuse y el `Stop` suenan con la voz clonada,
+     y `narrate-ctl status` muestra `voz activa: smoke_voz`.
+  2. `narrate-ctl say "Prueba de voz"` (sin `--voice`) suena con la voz
+     clonada.
+  3. Fija `evolutivex-agents.voice` = `voz_inexistente` y abre una sesión nueva.
+     **Comprobación:** `SessionStart` avisa de que la voz no existe y el daemon
+     no se reinicia.
+  4. Vuelve a `default` en `/config` y borra la voz de prueba:
+
+     ```powershell
+     narrate-ctl voice remove smoke_voz --yes   # informa las locuciones borradas
+     ```
 
 Esta fase requiere verificación humana (audible) y no se automatiza por completo.
 

@@ -61,8 +61,8 @@ perder la fidelidad al turno ni la privacidad por defecto.
 ### Voz y streaming
 
 - `speech say --stream` para reproducir mientras el motor sintetiza.
-- Integrar en el plugin la clonación de voz que ya expone el motor, según la
-  [especificación propuesta](specs/VOICE_CLONING.md).
+- Perfiles de voz por evento y voces por proyecto, sobre la voz activa única
+  de `/config`.
 - Mostrar la operación en curso (síntesis, clonación, doblaje) en `status`.
 
 ### Distribución

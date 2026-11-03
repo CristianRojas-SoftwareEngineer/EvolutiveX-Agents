@@ -1,6 +1,6 @@
 # Especificación de diseño: clonado de voz y voz activa
 
-> **Estado**: propuesta, no implementada · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.42.0 · **Fecha**: 2026-11-03
+> **Estado**: implementada en el plugin (pendiente de release) · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.42.0 · **Fecha**: 2026-11-03
 
 Este documento fija el diseño y los criterios de aceptación para que el usuario narre la actividad de Claude Code con **su propia voz**, clonada con el motor AI Voice-InterConnector. Es la fuente de verdad funcional de la feature: la implementación, la documentación de usuario y los tests se derivan de él.
 
@@ -175,9 +175,9 @@ Reglas de `loadConfig()`:
 - Un nombre que no pasa `isPlausibleVoiceName` **no** se sustituye por `default`: se conserva, y `SessionStart` avisa (RF-12, RF-13).
 - No consulta al motor.
 
-Caché de voz activa:
+Caché de voz activa (`src/voice/active-voice.ts`: `writeActiveVoice` y `readActiveVoice`):
 
-- Archivo `active-voice` en `stateDir()`, con el nombre en una línea.
+- Archivo `active-voice` en `stateDir()` (`activeVoicePath()`), con el nombre en una línea.
 - La escriben `narrate-hook` (en cada evento, también con la voz desactivada) y `health-check`, solo si el contenido cambió; un fallo de escritura se ignora.
 - `narrate-ctl` la lee cuando no recibe `--voice`; si falta o no se puede leer, usa `default` e informa de dónde salió la voz.
 - No es una preferencia: el usuario no la edita y se reescribe desde `/config` en el siguiente evento.
@@ -230,9 +230,9 @@ Usuario ──► /evolutivex-agents:voice clone <nombre> [<ruta.wav> | --mic [-
                │ explica la referencia, la privacidad y la duración; pide confirmación
                ▼
 narrate-ctl voice clone
-  1. versión mínima y bloqueo de operaciones manuales
-  2. rechaza nombres de fábrica (exit 2, sin invocar al motor)
-  3. con --mic sin --duration y sin terminal interactiva: exit 2 con la guía de D-12
+  1. rechaza nombres de fábrica (exit 2, sin invocar al motor)
+  2. con --mic sin --duration y sin terminal interactiva: exit 2 con la guía de D-12
+  3. versión mínima y bloqueo de operaciones manuales
   4. voice clone --name … (--speech-reference … | --mic [--duration …]) [--force] [--denoise] --daemon --json
      (stdin y stderr heredados para el push-to-talk y el progreso; stdout capturado para el JSON)
   5. presynth --voice <nombre> --force (reutiliza el bloqueo ya tomado)
@@ -265,11 +265,15 @@ Si la voz no tiene locuciones, los anuncios fallan con `speech_not_found` (regis
 | `src/voice/narrate-worker.ts` → `runSay`      | `speech say --text <texto> --voice <voz del ítem> --daemon --json`. |
 | `src/voice/narrate-worker.ts` → pistas        | `speech_not_found` y `voice_not_found` nombran la voz y su remedio. |
 | `src/voice/daemon.ts` → `startDaemonDetached` | Recibe la voz y pasa `--warm-voice <voz>`.                          |
+| `src/voice/health-check.ts`                   | Caché, validación de la voz y deadline global (§7.10).              |
+| `src/voice/active-voice.ts`                   | Caché de voz activa (§7.1).                                         |
+| `src/voice/operation-lock.ts`                 | Bloqueo de operaciones manuales (§7.8).                             |
+| `src/voice/voice-errors.ts`                   | Tabla pura `reason` → mensaje de §9.                                |
 | `src/narrate-ctl.ts`                          | `say`, `presynth`, `status` y la familia `voice` (§7.3).            |
 
 ### 7.7 Borrado
 
-1. `narrate-ctl` exige `--yes`; sin él, exit 2 sin invocar al motor.
+1. `narrate-ctl` exige `--yes`; sin él, exit 2 sin invocar al motor (los errores propios del plugin de §9 se detectan siempre antes de consultar la versión del motor).
 2. Versión mínima y bloqueo de operaciones manuales.
 3. `voice remove --name <nombre> --yes --json`.
 4. El motor protege las voces de fábrica (`cannot_remove_default`) y responde `voice_not_found` si la voz no existe.
@@ -279,7 +283,7 @@ El comando `/evolutivex-agents:voice` muestra antes qué se borrará (la voz y s
 
 ### 7.8 Exclusión entre operaciones manuales
 
-- Directorio `voice-operation.lock` en `stateDir()`, creado con `mkdir` exclusivo; dentro, el archivo `owner` con el PID.
+- `withVoiceOperationLock` (`src/voice/operation-lock.ts`) toma el directorio `voice-operation.lock` en `stateDir()` (`voiceOperationLockPath()`), creado con `mkdir` exclusivo; dentro, el archivo `owner` con el PID.
 - Si ya existe: con un PID vivo (`isAlive`, que cuenta `EPERM` como vivo) o un `owner` ausente o ilegible, la operación termina con exit 6 y el mensaje de §9, sin modificar nada; con un PID que ya no existe, se retira y se reintenta una vez.
 - Se libera al terminar, también ante error.
 - `voice clone` reutiliza el bloqueo para su pre-síntesis interna.

@@ -6,6 +6,13 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+### Añadido
+
+- Clonado de voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`), que pre-sintetiza los anuncios con la voz nueva; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.42.0 o posterior.
+- Voz activa en `/config` → `evolutivex-agents.voice` (`default` por defecto): toda la narración la usa de forma explícita, y un cambio se oye desde el siguiente evento.
+- `SessionStart` arranca el daemon precalentando la voz activa y avisa si la voz no existe o su nombre no es válido, sin caer a `default`.
+- `narrate-ctl` con `voice list|clone|remove`, `--voice` en `say` y `presynth`, y la voz activa en `status`; las operaciones manuales de voz se excluyen entre sí.
+
 ### Corregido
 
 - Transcript enriquecido: si el plugin fallaba al registrar una herramienta antes de ejecutarla, su bloque mostraba un contador «en curso» que no se detenía y el reloj seguía haciendo un tic por segundo.
