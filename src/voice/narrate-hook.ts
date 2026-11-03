@@ -5,9 +5,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // LAUNCHER (fire-and-forget). Corre DENTRO del hook de Claude Code: lee el
-// payload, decide si narrar, lo encola y lanza el worker desanclado solo si
-// no hay uno vivo drenando. Debe salir en <100 ms — nada de red, síntesis ni
-// espera. Sirve a los cinco hooks que narran (Stop, SubagentStop, StopFailure,
+// payload, actualiza la caché de la voz activa, decide si narrar, lo encola
+// anotado con la voz vigente de /config y lanza el worker desanclado solo si
+// no hay uno vivo drenando. Debe salir en <100 ms — nada de red, síntesis,
+// invocaciones al motor ni espera. Sirve a los cinco hooks que narran (Stop, SubagentStop, StopFailure,
 // UserPromptSubmit, Notification); el worker distingue el evento por
 // hook_event_name.
 import { readFileSync } from "node:fs";
@@ -17,14 +18,19 @@ import { loadConfig } from "../lib/config.js";
 import { workerPidPath } from "../lib/state-dir.js";
 import { clearQueue, enqueuePayload } from "./queue.js";
 import { isAlive, spawnDetached } from "./spawn.js";
+import { writeActiveVoice } from "./active-voice.js";
 import { readStdin, parsePayload } from "../lib/hook-payload.js";
 
 async function main(): Promise<void> {
   const raw = await readStdin();
 
+  // La caché se escribe en cada evento, también con la voz desactivada, para
+  // que narrate-ctl conozca la voz vigente de /config.
+  const cfg = loadConfig();
+  writeActiveVoice(cfg.voice);
+
   // Voz desactivada en /config: se vacía la cola para que el worker en curso
   // calle tras el ítem actual, y se sale sin encolar ni lanzar el worker.
-  const cfg = loadConfig();
   if (!cfg.voiceEnabled) {
     clearQueue();
     return;
@@ -32,8 +38,8 @@ async function main(): Promise<void> {
 
   const payload = parsePayload(raw);
 
-  // Encolar el payload para el worker (traspaso launcher → worker).
-  enqueuePayload(payload);
+  // Encolar el payload con la voz vigente (traspaso launcher → worker).
+  enqueuePayload(payload, cfg.voice);
 
   // Lanzar el worker desanclado solo si no hay uno vivo drenando la cola.
   const owner = readOwnerPid();

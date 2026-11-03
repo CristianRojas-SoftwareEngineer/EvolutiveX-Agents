@@ -138,18 +138,6 @@ import {
   writeFileSync
 } from "node:fs";
 import { join as join2 } from "node:path";
-
-// src/lib/hook-payload.ts
-function parsePayload(raw) {
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-  }
-  return {};
-}
-
-// src/voice/queue.ts
 var MAX_PENDING = 64;
 var MAX_AGE_MS = 60 * 60 * 1e3;
 function listPending() {
@@ -161,20 +149,38 @@ function listPending() {
   }
 }
 function claimNext() {
-  const pending = listPending();
-  if (pending.length === 0) return void 0;
-  const file = join2(queueDir(), pending[0]);
-  let payload;
-  try {
-    payload = parsePayload(readFileSync(file, "utf8"));
-  } catch {
-    payload = {};
+  for (const name of listPending()) {
+    const file = join2(queueDir(), name);
+    let raw;
+    try {
+      raw = readFileSync(file, "utf8");
+    } catch {
+      raw = void 0;
+    }
+    try {
+      rmSync(file, { force: true });
+    } catch {
+    }
+    const item = raw === void 0 ? void 0 : parseQueueItem(raw);
+    if (item) return { file, ...item };
   }
+  return void 0;
+}
+function parseQueueItem(raw) {
+  let parsed;
   try {
-    rmSync(file, { force: true });
+    parsed = JSON.parse(raw);
   } catch {
+    return void 0;
   }
-  return { file, payload };
+  if (!isRecord(parsed)) return void 0;
+  const { payload, voice } = parsed;
+  if (!isRecord(payload) || typeof voice !== "string" || voice === "")
+    return void 0;
+  return { payload, voice };
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function pruneQueue(options) {
   const max = options.max ?? MAX_PENDING;

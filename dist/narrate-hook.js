@@ -7,7 +7,7 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/voice/narrate-hook.ts
-import { readFileSync as readFileSync2 } from "node:fs";
+import { readFileSync as readFileSync3 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join as join3 } from "node:path";
 
@@ -81,6 +81,9 @@ function workerPidPath() {
 function queueDir() {
   return join(stateDir(), "queue");
 }
+function activeVoicePath() {
+  return join(stateDir(), "active-voice");
+}
 
 // src/voice/queue.ts
 import {
@@ -93,34 +96,6 @@ import {
   writeFileSync
 } from "node:fs";
 import { join as join2 } from "node:path";
-
-// src/lib/hook-payload.ts
-function parsePayload(raw) {
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") return parsed;
-  } catch {
-  }
-  return {};
-}
-function readStdin() {
-  return new Promise((resolve) => {
-    const chunks = [];
-    const stdin = process.stdin;
-    let settled = false;
-    const done = () => {
-      if (settled) return;
-      settled = true;
-      resolve(Buffer.concat(chunks).toString("utf8"));
-    };
-    stdin.on("data", (c) => chunks.push(c));
-    stdin.on("end", done);
-    stdin.on("error", done);
-    stdin.on("close", done);
-  });
-}
-
-// src/voice/queue.ts
 var MAX_AGE_MS = 60 * 60 * 1e3;
 var lastTimeMs = 0;
 var seq = 0;
@@ -142,14 +117,15 @@ function nextQueueFileName() {
   const rand = Math.random().toString(36).slice(2, 10).padEnd(8, "0");
   return `${ts}-${step}-${pid}-${rand}.json`;
 }
-function enqueuePayload(payload) {
+function enqueuePayload(payload, voice) {
   ensureStateDir();
   const dir = queueDir();
   mkdirSync2(dir, { recursive: true });
   const name = nextQueueFileName();
   const finalPath = join2(dir, name);
   const tmpPath = join2(dir, `.tmp-${name}`);
-  writeFileSync(tmpPath, JSON.stringify(payload), "utf8");
+  const item = { payload, voice };
+  writeFileSync(tmpPath, JSON.stringify(item), "utf8");
   renameSync(tmpPath, finalPath);
   return finalPath;
 }
@@ -190,16 +166,63 @@ function isAlive(pid) {
   }
 }
 
+// src/voice/active-voice.ts
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync2 } from "node:fs";
+function writeActiveVoice(voice) {
+  try {
+    ensureStateDir();
+    const path = activeVoicePath();
+    if (readOrUndefined(path) === voice) return;
+    writeFileSync2(path, `${voice}
+`, "utf8");
+  } catch {
+  }
+}
+function readOrUndefined(path) {
+  try {
+    return readFileSync2(path, "utf8").trim() || void 0;
+  } catch {
+    return void 0;
+  }
+}
+
+// src/lib/hook-payload.ts
+function parsePayload(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch {
+  }
+  return {};
+}
+function readStdin() {
+  return new Promise((resolve) => {
+    const chunks = [];
+    const stdin = process.stdin;
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks).toString("utf8"));
+    };
+    stdin.on("data", (c) => chunks.push(c));
+    stdin.on("end", done);
+    stdin.on("error", done);
+    stdin.on("close", done);
+  });
+}
+
 // src/voice/narrate-hook.ts
 async function main() {
   const raw = await readStdin();
   const cfg = loadConfig();
+  writeActiveVoice(cfg.voice);
   if (!cfg.voiceEnabled) {
     clearQueue();
     return;
   }
   const payload = parsePayload(raw);
-  enqueuePayload(payload);
+  enqueuePayload(payload, cfg.voice);
   const owner = readOwnerPid();
   if (!Number.isInteger(owner) || !isAlive(owner)) {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -209,7 +232,7 @@ async function main() {
 }
 function readOwnerPid() {
   try {
-    return Number.parseInt(readFileSync2(workerPidPath(), "utf8").trim(), 10);
+    return Number.parseInt(readFileSync3(workerPidPath(), "utf8").trim(), 10);
   } catch {
     return NaN;
   }

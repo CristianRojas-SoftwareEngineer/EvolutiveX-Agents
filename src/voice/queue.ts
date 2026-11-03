@@ -5,11 +5,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Cola FIFO de payloads de narración en disco. Cada hook escribe un archivo
-// único y el worker drena en orden lexicográfico de nombre (timestamp
+// único con el payload y la voz activa vigente al encolar (`{payload, voice}`),
+// de modo que cada evento se narra con la voz de /config de su momento aunque
+// el worker haya heredado un entorno anterior. El worker drena en orden lexicográfico de nombre (timestamp
 // monotónico + secuencia + pid + aleatorio, todos de ancho fijo), que equivale
 // estrictamente al orden de llegada. Los archivos se borran al reclamarlos,
 // por lo que la cola es persistente solo mientras hay eventos pendientes y
-// no hay riesgo de narrar dos veces el mismo evento.
+// no hay riesgo de narrar dos veces el mismo evento. Un archivo sin la forma
+// `{payload, voice}` se descarta como inválido.
 import {
   mkdirSync,
   readFileSync,
@@ -21,7 +24,13 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { ensureStateDir, queueDir } from "../lib/state-dir.js";
-import { parsePayload, type HookPayload } from "../lib/hook-payload.js";
+import type { HookPayload } from "../lib/hook-payload.js";
+
+/** Ítem de la cola: el payload del hook y la voz con la que narrarlo. */
+export interface QueueItem {
+  payload: HookPayload;
+  voice: string;
+}
 
 const MAX_PENDING = 64;
 const MAX_AGE_MS = 60 * 60 * 1000; // 1 h
@@ -54,15 +63,19 @@ function nextQueueFileName(): string {
   return `${ts}-${step}-${pid}-${rand}.json`;
 }
 
-/** Escribe un payload en la cola de forma atómica (temporal + rename) y devuelve su ruta. */
-export function enqueuePayload(payload: HookPayload): string {
+/**
+ * Escribe un payload y su voz en la cola de forma atómica (temporal + rename)
+ * y devuelve su ruta.
+ */
+export function enqueuePayload(payload: HookPayload, voice: string): string {
   ensureStateDir();
   const dir = queueDir();
   mkdirSync(dir, { recursive: true });
   const name = nextQueueFileName();
   const finalPath = join(dir, name);
   const tmpPath = join(dir, `.tmp-${name}`);
-  writeFileSync(tmpPath, JSON.stringify(payload), "utf8");
+  const item: QueueItem = { payload, voice };
+  writeFileSync(tmpPath, JSON.stringify(item), "utf8");
   renameSync(tmpPath, finalPath);
   return finalPath;
 }
@@ -79,28 +92,47 @@ export function listPending(): string[] {
   }
 }
 
-/** Reclama el primer elemento de la cola: lo lee y lo borra antes de narrar. */
-export function claimNext():
-  | {
-      file: string;
-      payload: HookPayload;
+/**
+ * Reclama el primer ítem válido de la cola: lo lee y lo borra antes de narrar.
+ * Los ítems ilegibles o sin la forma `{payload, voice}` se borran y se saltan.
+ */
+export function claimNext(): (QueueItem & { file: string }) | undefined {
+  for (const name of listPending()) {
+    const file = join(queueDir(), name);
+    let raw: string | undefined;
+    try {
+      raw = readFileSync(file, "utf8");
+    } catch {
+      raw = undefined;
     }
-  | undefined {
-  const pending = listPending();
-  if (pending.length === 0) return undefined;
-  const file = join(queueDir(), pending[0]);
-  let payload: HookPayload;
-  try {
-    payload = parsePayload(readFileSync(file, "utf8"));
-  } catch {
-    payload = {};
+    try {
+      rmSync(file, { force: true });
+    } catch {
+      // Si otro proceso lo borró, igual usamos el contenido leído.
+    }
+    const item = raw === undefined ? undefined : parseQueueItem(raw);
+    if (item) return { file, ...item };
   }
+  return undefined;
+}
+
+/** Parsea un ítem `{payload, voice}`; cualquier otra forma devuelve undefined. */
+function parseQueueItem(raw: string): QueueItem | undefined {
+  let parsed: unknown;
   try {
-    rmSync(file, { force: true });
+    parsed = JSON.parse(raw);
   } catch {
-    // Si otro proceso lo borró, igual devolvemos el payload leído.
+    return undefined;
   }
-  return { file, payload };
+  if (!isRecord(parsed)) return undefined;
+  const { payload, voice } = parsed;
+  if (!isRecord(payload) || typeof voice !== "string" || voice === "")
+    return undefined;
+  return { payload: payload as HookPayload, voice };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Poda la cola: elimina los más viejos si supera el tope y los expirados por TTL. */

@@ -6,11 +6,19 @@
 
 // El launcher real (dist/narrate-hook.js) como subproceso, con el state dir
 // redirigido a un temporal vía env vars del SO anfitrión: con la voz apagada
-// en /config vacía la cola pendiente y no lanza el worker.
+// en /config vacía la cola pendiente y no lanza el worker; con la voz activa
+// encola el payload anotado con la voz de /config; en ambos casos escribe la
+// caché de la voz activa.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { makeTempDir, removeDir } from "./helpers.js";
 
@@ -62,4 +70,53 @@ test("con la voz apagada vacía la cola y no lanza el worker", async () => {
   // Un worker lanzado escribiría worker.pid al arrancar: se le da margen.
   await new Promise((resolve) => setTimeout(resolve, 500));
   assert.equal(existsSync(join(pluginStateDir(), "worker.pid")), false);
+  assert.equal(
+    readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
+    "default\n",
+  );
+});
+
+test("encola el payload anotado con la voz de /config y escribe la caché", () => {
+  // Un worker «vivo» (este proceso) en worker.pid evita que el launcher lance
+  // uno real que drene la cola antes de inspeccionarla.
+  mkdirSync(pluginStateDir(), { recursive: true });
+  writeFileSync(join(pluginStateDir(), "worker.pid"), String(process.pid));
+
+  const res = spawnSync(process.execPath, [HOOK], {
+    env: hookEnv({ CLAUDE_PLUGIN_OPTION_VOICE: " Mi_Voz " }),
+    input: JSON.stringify({ hook_event_name: "Stop", session_id: "s1" }),
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(res.status, 0);
+
+  const queue = join(pluginStateDir(), "queue");
+  const files = readdirSync(queue);
+  assert.equal(files.length, 1);
+  const item = JSON.parse(readFileSync(join(queue, files[0]!), "utf8"));
+  assert.deepEqual(item, {
+    payload: { hook_event_name: "Stop", session_id: "s1" },
+    voice: "mi_voz",
+  });
+  assert.equal(
+    readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
+    "mi_voz\n",
+  );
+});
+
+test("con la voz apagada escribe igualmente la caché con la voz de /config", () => {
+  const res = spawnSync(process.execPath, [HOOK], {
+    env: hookEnv({
+      CLAUDE_PLUGIN_OPTION_VOICEENABLED: "false",
+      CLAUDE_PLUGIN_OPTION_VOICE: "mi_voz",
+    }),
+    input: JSON.stringify({ hook_event_name: "Stop" }),
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(res.status, 0);
+  assert.equal(
+    readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
+    "mi_voz\n",
+  );
 });

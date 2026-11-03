@@ -117,16 +117,22 @@ test("worker narra dos payloads encolados en orden y sin duplicados", () => {
   });
 
   // Encolar dos payloads directamente en la cola del state dir aislado.
-  enqueuePayload({
-    session_id: "s1",
-    hook_event_name: "UserPromptSubmit",
-    prompt: "primero",
-  });
-  enqueuePayload({
-    session_id: "s2",
-    hook_event_name: "Stop",
-    last_assistant_message: "segundo",
-  });
+  enqueuePayload(
+    {
+      session_id: "s1",
+      hook_event_name: "UserPromptSubmit",
+      prompt: "primero",
+    },
+    "default",
+  );
+  enqueuePayload(
+    {
+      session_id: "s2",
+      hook_event_name: "Stop",
+      last_assistant_message: "segundo",
+    },
+    "default",
+  );
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -192,11 +198,14 @@ test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola"
 
   ensureStateDir();
   writeFileSync(workerPidPath(), "999999", "utf8");
-  enqueuePayload({
-    session_id: "s-stale",
-    hook_event_name: "Stop",
-    last_assistant_message: "recuperado tras caída",
-  });
+  enqueuePayload(
+    {
+      session_id: "s-stale",
+      hook_event_name: "Stop",
+      last_assistant_message: "recuperado tras caída",
+    },
+    "default",
+  );
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -240,11 +249,14 @@ test("worker respeta lock activo (PID vivo en worker.pid) y sale sin drenar", ()
   ensureStateDir();
   // process.pid está vivo durante toda la ejecución del test.
   writeFileSync(workerPidPath(), String(process.pid), "utf8");
-  enqueuePayload({
-    session_id: "s-live",
-    hook_event_name: "Stop",
-    last_assistant_message: "no debe narrarse por segundo worker",
-  });
+  enqueuePayload(
+    {
+      session_id: "s-live",
+      hook_event_name: "Stop",
+      last_assistant_message: "no debe narrarse por segundo worker",
+    },
+    "default",
+  );
 
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -291,11 +303,14 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   });
 
   for (let i = 1; i <= 7; i++) {
-    enqueuePayload({
-      session_id: `p${i}`,
-      hook_event_name: "UserPromptSubmit",
-      prompt: "x",
-    });
+    enqueuePayload(
+      {
+        session_id: `p${i}`,
+        hook_event_name: "UserPromptSubmit",
+        prompt: "x",
+      },
+      "default",
+    );
   }
 
   const env: NodeJS.ProcessEnv = {
@@ -339,11 +354,14 @@ test("worker registra la pista de cada reason de speech say", () => {
   });
 
   for (const [i, text] of ["uno", "dos", "tres"].entries()) {
-    enqueuePayload({
-      session_id: `s${i + 1}`,
-      hook_event_name: "Stop",
-      last_assistant_message: text,
-    });
+    enqueuePayload(
+      {
+        session_id: `s${i + 1}`,
+        hook_event_name: "Stop",
+        last_assistant_message: text,
+      },
+      "default",
+    );
   }
 
   const env: NodeJS.ProcessEnv = {
@@ -387,11 +405,14 @@ function runWorkerWithOneLogLine(setup: () => void, label: string): void {
   });
   ensureStateDir();
   setup();
-  enqueuePayload({
-    session_id: "r1",
-    hook_event_name: "Stop",
-    last_assistant_message: "rotar",
-  });
+  enqueuePayload(
+    {
+      session_id: "r1",
+      hook_event_name: "Stop",
+      last_assistant_message: "rotar",
+    },
+    "default",
+  );
   const res = runWorker({
     ...process.env,
     PATH: cliDir + delimiter + process.env.PATH,
