@@ -11,8 +11,41 @@ import { parseArgs } from "node:util";
 
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
+var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var MIN_ENGINE_VERSION = "0.42.0";
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
+}
+function isFactoryVoice(name) {
+  return FACTORY_VOICES.includes(name);
+}
+function parseVoiceList(stdout) {
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return void 0;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    return void 0;
+  const voices = parsed.voices;
+  if (!Array.isArray(voices) || !voices.every((v) => typeof v === "string"))
+    return void 0;
+  return voices;
+}
+function meetsMinVersion(version) {
+  const actual = parseVersion(version);
+  const min = parseVersion(MIN_ENGINE_VERSION);
+  if (!actual || !min) return false;
+  for (let i = 0; i < 3; i++) {
+    if (actual[i] !== min[i]) return actual[i] > min[i];
+  }
+  return true;
+}
+function parseVersion(version) {
+  const match = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(version.trim());
+  if (!match) return void 0;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 // src/lib/config.ts
@@ -265,6 +298,53 @@ function objectEnd(text) {
   return -1;
 }
 
+// src/voice/voice-errors.ts
+var NOT_COMPLETED_MESSAGE = "No se pudo completar la operaci\xF3n.";
+var UNEXPECTED_RESPONSE_MESSAGE = "El motor devolvi\xF3 una respuesta inesperada.";
+var AUDIO_HINT = "Usa un WAV v\xE1lido de hasta 30 s; se recomiendan ~10 s.";
+var DEVICE_HINT = "No hay micr\xF3fono predeterminado o falta el backend de audio: revisa `ai-voice-interconnector devices`.";
+var DENOISE_HINT = "Comprueba la instalaci\xF3n y el modelo de limpieza.";
+var REASON_MESSAGES = {
+  invalid_voice_name: "Usa letras, n\xFAmeros, punto, guion o guion bajo.",
+  audio_not_found: "La ruta de referencia no existe.",
+  invalid_audio: AUDIO_HINT,
+  empty_audio: AUDIO_HINT,
+  audio_too_long: AUDIO_HINT,
+  no_input_device: DEVICE_HINT,
+  audio_backend_unavailable: DEVICE_HINT,
+  transcription_failed: "No se pudo capturar audio: revisa los permisos del micr\xF3fono o usa un WAV.",
+  voice_exists: "Elige otro nombre o usa `--force` para reemplazarla.",
+  denoise_busy: "Reintenta al terminar la limpieza en curso.",
+  denoise_unsupported: DENOISE_HINT,
+  denoise_failed: DENOISE_HINT,
+  model_missing: "Ejecuta `ai-voice-interconnector setup`.",
+  daemon_unreachable: "Levanta el daemon con `ai-voice-interconnector daemon start`.",
+  voice_clone_failed: "El clonado fall\xF3; el mensaje del motor indica su log.",
+  cannot_remove_default: "Las voces de f\xE1brica no se pueden borrar.",
+  voice_not_found: "Consulta `voice list` y elige una voz existente.",
+  lifecycle_locked: "Espera a que termine la instalaci\xF3n o limpieza del motor."
+};
+function engineJson(stdout) {
+  if (typeof stdout !== "string") return void 0;
+  const payload = parseSingleJsonObject(stdout);
+  return typeof payload === "object" && payload !== null ? payload : void 0;
+}
+function engineFailure(run) {
+  if (run.error || run.status === null)
+    return { exitCode: 1, message: NOT_COMPLETED_MESSAGE };
+  if (run.status === 0) return void 0;
+  const payload = engineJson(run.stdout);
+  if (!payload) return { exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE };
+  return { exitCode: run.status, message: failureMessage(run.status, payload) };
+}
+function failureMessage(status, payload) {
+  const reason = typeof payload.reason === "string" ? payload.reason : "";
+  const hint = Object.hasOwn(REASON_MESSAGES, reason) ? REASON_MESSAGES[reason] : `El motor fall\xF3 con exit ${status}${reason ? ` (${reason})` : ""}.`;
+  const error = typeof payload.error === "string" ? payload.error : "";
+  return error ? `${error}
+${hint}` : hint;
+}
+
 // src/narrate-ctl.ts
 var SOURCE_LABELS = {
   flag: "--voice",
@@ -324,37 +404,208 @@ function presynth(voice, force) {
         stdio: ["ignore", "pipe", "inherit"],
         windowsHide: true
       });
-      const code = typeof res.status === "number" ? res.status : null;
-      const reason = reasonOf(res.stdout);
-      if (!reportPresynth(eventKey, label, code, reason, force)) failed = true;
+      if (!reportPresynth(eventKey, label, res, force)) failed = true;
     }
     return failed ? 1 : 0;
   });
 }
-function reasonOf(stdout) {
-  if (typeof stdout !== "string") return void 0;
-  const payload = parseSingleJsonObject(stdout);
-  if (typeof payload !== "object" || payload === null) return void 0;
-  const reason = payload.reason;
-  return typeof reason === "string" ? reason : void 0;
-}
-function reportPresynth(eventKey, label, code, reason, force) {
-  if (code === 0) {
+function reportPresynth(eventKey, label, res, force) {
+  const failure = engineFailure(res);
+  if (!failure) {
     console.log(
       `${eventKey}: ${force ? "re-sintetizado" : "pre-sintetizado"} (${label})`
     );
     return true;
   }
-  if (code === 6 && reason === "label_exists") {
+  const reason = engineJson(res.stdout)?.reason;
+  if (res.status === 6 && reason === "label_exists") {
     console.log(`${eventKey}: ya pre-sintetizado (${label})`);
     return true;
   }
-  const hint = code === 5 ? " \u2014 daemon ca\xEDdo; lev\xE1ntalo con `ai-voice-interconnector daemon start`" : code === 4 ? " \u2014 modelo ausente; provisi\xF3nalo con `ai-voice-interconnector setup`" : "";
-  const detail = code === null ? "no se pudo completar" : `exit ${code}`;
+  const detail = res.status === null ? "no se pudo completar" : `exit ${res.status}${typeof reason === "string" ? `, ${reason}` : ""}`;
   console.error(
-    `${eventKey}: fallo (${detail}${reason ? `, ${reason}` : ""})${hint}`
+    `${eventKey}: fallo (${detail}) (${label}) \u2014 ${failure.message}`
   );
   return false;
+}
+function reportFailure(failure) {
+  console.error(failure.message);
+  return failure.exitCode;
+}
+function meetsEngineVersion(cli) {
+  const res = runCli(cli, ["version", "--json"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 5e3,
+    windowsHide: true
+  });
+  const version = res.status === 0 ? engineJson(res.stdout)?.version : "";
+  if (typeof version === "string" && meetsMinVersion(version)) return true;
+  console.error(
+    `La gesti\xF3n de voces requiere AI Voice-InterConnector ${MIN_ENGINE_VERSION} o posterior.`
+  );
+  return false;
+}
+function requireVoiceCli(action) {
+  const cli = requireCli(action);
+  return cli && meetsEngineVersion(cli) ? cli : void 0;
+}
+function voiceList() {
+  const cli = requireVoiceCli("listar las voces");
+  if (!cli) return 1;
+  const res = runCli(cli, ["voice", "list", "--json"], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
+    windowsHide: true
+  });
+  const failure = engineFailure(res);
+  if (failure) return reportFailure(failure);
+  const voices = typeof res.stdout === "string" ? parseVoiceList(res.stdout) : void 0;
+  if (!voices)
+    return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
+  const active = readActiveVoice();
+  console.log(`voz activa: ${describeVoice(active)}`);
+  for (const voice of voices) {
+    const tags = [
+      isFactoryVoice(voice) ? "f\xE1brica" : "",
+      voice === active.voice ? "activa" : ""
+    ].filter(Boolean);
+    console.log(`  ${voice}${tags.length ? ` (${tags.join(", ")})` : ""}`);
+  }
+  return 0;
+}
+function parseClone(rest) {
+  const parsed = parseOptions(rest, {
+    mic: { type: "boolean" },
+    duration: { type: "string" },
+    force: { type: "boolean", short: "f" },
+    denoise: { type: "boolean" }
+  });
+  if (!parsed) return void 0;
+  const [rawName, wav, ...extra] = parsed.positionals;
+  const name = normalizeVoiceName(rawName ?? "");
+  const mic = parsed.values.mic === true;
+  if (!name || extra.length > 0 || mic === (wav !== void 0))
+    return void 0;
+  return {
+    name,
+    wav,
+    mic,
+    duration: parsed.values.duration,
+    force: parsed.values.force === true,
+    denoise: parsed.values.denoise === true
+  };
+}
+function cloneArgs(req) {
+  const args = ["voice", "clone", "--name", req.name];
+  if (req.wav !== void 0) args.push("--speech-reference", req.wav);
+  else args.push("--mic");
+  if (req.duration !== void 0) args.push("--duration", req.duration);
+  if (req.force) args.push("--force");
+  if (req.denoise) args.push("--denoise");
+  args.push("--daemon", "--json");
+  return args;
+}
+function voiceClone(rest) {
+  const req = parseClone(rest);
+  if (!req) {
+    console.error(
+      "Uso: voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise]"
+    );
+    return 2;
+  }
+  if (isFactoryVoice(req.name)) {
+    console.error(
+      "`default`, `ryan` y `vivian` son voces de f\xE1brica; elige otro nombre."
+    );
+    return 2;
+  }
+  if (req.mic && req.duration === void 0 && !process.stdin.isTTY) {
+    console.error(
+      "Usa `--duration <segs>` (se sugieren 10) o ejecuta el comando en tu terminal para el push-to-talk."
+    );
+    return 2;
+  }
+  const cli = requireVoiceCli("clonar la voz");
+  if (!cli) return 1;
+  return withVoiceOperationLock(() => runClone(cli, req));
+}
+function runClone(cli, req) {
+  const res = runCli(cli, cloneArgs(req), {
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "inherit"],
+    windowsHide: true
+  });
+  const failure = engineFailure(res);
+  if (failure) return reportFailure(failure);
+  if (!engineJson(res.stdout))
+    return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
+  console.log(`Voz ${req.name} clonada; pre-sintetizando sus anuncios\u2026`);
+  if (presynth({ voice: req.name, source: "flag" }, true) !== 0) {
+    console.error(
+      `La huella de la voz ${req.name} ya cambi\xF3, pero la pre-s\xEDntesis fall\xF3; reintenta con: narrate-ctl presynth --voice ${req.name} --force`
+    );
+    return 1;
+  }
+  console.log(
+    `Voz ${req.name} lista. Para usarla, fija /config \u2192 evolutivex-agents.voice = ${req.name}`
+  );
+  return 0;
+}
+function voiceRemove(rest) {
+  const parsed = parseOptions(rest, { yes: { type: "boolean" } });
+  const name = normalizeVoiceName(parsed?.positionals[0] ?? "");
+  if (!parsed || parsed.positionals.length !== 1 || !name) {
+    console.error("Uso: voice remove <nombre> --yes");
+    return 2;
+  }
+  if (parsed.values.yes !== true) {
+    console.error("Confirma el borrado con `--yes`.");
+    return 2;
+  }
+  const cli = requireVoiceCli("borrar la voz");
+  if (!cli) return 1;
+  return withVoiceOperationLock(() => runRemove(cli, name));
+}
+function runRemove(cli, name) {
+  const res = runCli(
+    cli,
+    ["voice", "remove", "--name", name, "--yes", "--json"],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "inherit"],
+      windowsHide: true
+    }
+  );
+  const failure = engineFailure(res);
+  if (failure) return reportFailure(failure);
+  const removed = engineJson(res.stdout)?.removed_speech;
+  if (!Array.isArray(removed))
+    return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
+  console.log(
+    `Voz ${name} borrada; locuciones borradas: ${removed.length > 0 ? removed.join(", ") : "ninguna"}.`
+  );
+  const active = readActiveVoice();
+  if (active.source === "cache" && active.voice === name)
+    console.log(
+      `Aviso: ${name} es la voz activa seg\xFAn el \xFAltimo evento; la narraci\xF3n fallar\xE1 hasta elegir otra en /config \u2192 evolutivex-agents.voice.`
+    );
+  return 0;
+}
+function runVoice([sub, ...rest]) {
+  switch (sub) {
+    case "list":
+      if (rest.length === 0) return voiceList();
+      break;
+    case "clone":
+      return voiceClone(rest);
+    case "remove":
+      return voiceRemove(rest);
+  }
+  console.error(
+    "Uso: voice list | voice clone <nombre> (<ruta.wav> | --mic [--duration <segs>]) [--force] [--denoise] | voice remove <nombre> --yes"
+  );
+  return 2;
 }
 function parseOptions(rest, options) {
   try {
@@ -405,6 +656,8 @@ function main() {
       return runSay(rest);
     case "presynth":
       return runPresynth(rest);
+    case "voice":
+      return runVoice(rest);
     default:
       console.error(`Comando desconocido: ${cmd}`);
       return 2;

@@ -24,7 +24,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
-import { makeTempDir, removeDir } from "./helpers.js";
+import { ENGINE_VERSION, makeTempDir, removeDir } from "./helpers.js";
 import { ANNOUNCEMENTS } from "../src/voice/message/static-announcements.js";
 
 const CTL = join(process.cwd(), "dist", "narrate-ctl.js");
@@ -295,11 +295,21 @@ test("presynth es idempotente: exit 6 (label ya existe) cuenta como éxito", () 
 test("presynth propaga el fallo (exit 5, daemon caído) con código ≠ 0", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
-    makeFakeCli(dir, [5, 0, 0, 0, 0, 0]);
+    makeFakeCli(dir, [
+      {
+        exit: 5,
+        stdout: JSON.stringify({ error: "e", reason: "daemon_unreachable" }),
+      },
+      0,
+      0,
+      0,
+      0,
+      0,
+    ]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
     assert.equal(res.status, 1);
-    assert.match(res.stderr, /exit 5/);
-    assert.match(res.stderr, /daemon caído/);
+    assert.match(res.stderr, /exit 5, daemon_unreachable/);
+    assert.match(res.stderr, /ai-voice-interconnector daemon start/);
   } finally {
     removeDir(dir);
   }
@@ -447,5 +457,437 @@ test("status sin caché muestra default sin datos de /config", () => {
   assert.match(
     res.stdout,
     /voz activa: {5}default \(sin datos de \/config todavía\)/,
+  );
+});
+
+// --- Familia voice: CLI falso programable por comando ---
+
+/** Respuesta de un comando del CLI falso. */
+type CmdResponse = { exit: number; stdout: string };
+
+type VoiceCliOptions = {
+  /** Versión que informa `version --json` (default: la verificada). */
+  version?: string;
+  /** Respuestas por `<comando> <subcomando>` (p. ej. "voice clone"). */
+  responses?: Record<string, CmdResponse>;
+  /** Etiqueta de `speech synthesize` que falla con la respuesta dada. */
+  failLabel?: { label: string } & CmdResponse;
+};
+
+/**
+ * CLI falso que anota su argv en `argv.log` y despacha por comando:
+ * `version --json` informa `version`; `<cmd> <sub>` con respuesta programada
+ * la imprime y sale con su exit; `speech synthesize` de `failLabel` falla; el
+ * resto sale con 0 e imprime `{}`.
+ */
+function makeVoiceCli(dir: string, opts: VoiceCliOptions = {}): string {
+  writeFileSync(
+    join(dir, "cfg.json"),
+    JSON.stringify({ version: ENGINE_VERSION, responses: {}, ...opts }),
+  );
+  writeFileSync(
+    join(dir, "impl.cjs"),
+    [
+      'const fs = require("node:fs");',
+      'const path = require("node:path");',
+      "const argv = process.argv.slice(2);",
+      'fs.appendFileSync(path.join(__dirname, "argv.log"), JSON.stringify(argv) + "\\n");',
+      'const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "cfg.json"), "utf8"));',
+      "const reply = (r) => { process.stdout.write(r.stdout); process.exitCode = r.exit; };",
+      'const key = argv[0] + " " + argv[1];',
+      'if (argv[0] === "version") reply({ exit: 0, stdout: JSON.stringify({ name: "ai-voice-interconnector", version: cfg.version }) });',
+      "else if (cfg.responses[key]) reply(cfg.responses[key]);",
+      'else if (key === "speech synthesize" && cfg.failLabel && argv[argv.indexOf("--label") + 1] === cfg.failLabel.label) reply(cfg.failLabel);',
+      'else reply({ exit: 0, stdout: "{}" });',
+    ].join("\n"),
+  );
+  if (process.platform === "win32") {
+    writeFileSync(
+      join(dir, "ai-voice-interconnector.cmd"),
+      '@node "%~dp0impl.cjs" %*\r\n@exit /b %errorlevel%\r\n',
+    );
+  } else {
+    const sh = join(dir, "ai-voice-interconnector");
+    writeFileSync(sh, '#!/bin/sh\nexec node "${0%/*}/impl.cjs" "$@"\n');
+    chmodSync(sh, 0o755);
+  }
+  return join(dir, "argv.log");
+}
+
+function argvsOf(argvLog: string): string[][] {
+  return existsSync(argvLog) ? loggedArgvs(argvLog) : [];
+}
+
+function synthesizeArgvs(argvLog: string): string[][] {
+  return argvsOf(argvLog).filter(
+    (a) => a[0] === "speech" && a[1] === "synthesize",
+  );
+}
+
+const CLONE_OK: CmdResponse = {
+  exit: 0,
+  stdout: JSON.stringify({ name: "mi_voz", speech: "x", precomputed: true }),
+};
+
+/** Ejecuta `fn` con un CLI falso de voces en un temporal. */
+function withVoiceCli(
+  opts: VoiceCliOptions,
+  fn: (argvLog: string, env: Record<string, string>) => void,
+): void {
+  const dir = makeTempDir("avi-plugin-voicecli-");
+  try {
+    fn(makeVoiceCli(dir, opts), fakeCliEnv(dir));
+  } finally {
+    removeDir(dir);
+  }
+}
+
+/** Deja el bloqueo de operaciones manuales con el `owner` indicado. */
+function seedLock(owner: string | undefined): string {
+  const lock = join(pluginStateDir(), "voice-operation.lock");
+  mkdirSync(lock, { recursive: true });
+  if (owner !== undefined) writeFileSync(join(lock, "owner"), owner);
+  return lock;
+}
+
+test("voice clone desde WAV (ruta con espacios) clona con --daemon --json y pre-sintetiza seis veces", () => {
+  withVoiceCli({ responses: { "voice clone": CLONE_OK } }, (argvLog, env) => {
+    const ref = join(stateBase, "mi referencia", "ref voz.wav");
+    const res = runCtl(["voice", "clone", "Mi_Voz", ref], env);
+    assert.equal(res.status, 0, res.stderr);
+    const clone = argvsOf(argvLog).find((a) => a[0] === "voice");
+    assert.deepEqual(clone, [
+      "voice",
+      "clone",
+      "--name",
+      "mi_voz",
+      "--speech-reference",
+      ref,
+      "--daemon",
+      "--json",
+    ]);
+    const synth = synthesizeArgvs(argvLog);
+    assert.equal(synth.length, 6);
+    for (const argv of synth) {
+      assert.equal(argv[argv.indexOf("--voice") + 1], "mi_voz");
+      assert.ok(argv.includes("--force"));
+    }
+    assert.match(res.stdout, /evolutivex-agents\.voice = mi_voz/);
+    // La pre-síntesis interna reutilizó el bloqueo y se liberó al terminar.
+    assert.equal(
+      existsSync(join(pluginStateDir(), "voice-operation.lock")),
+      false,
+    );
+  });
+});
+
+test("voice clone --mic --duration 10 transmite --force y --denoise", () => {
+  withVoiceCli({ responses: { "voice clone": CLONE_OK } }, (argvLog, env) => {
+    const res = runCtl(
+      [
+        "voice",
+        "clone",
+        "mi_voz",
+        "--mic",
+        "--duration",
+        "10",
+        "--force",
+        "--denoise",
+      ],
+      env,
+    );
+    assert.equal(res.status, 0, res.stderr);
+    const clone = argvsOf(argvLog).find((a) => a[0] === "voice");
+    assert.deepEqual(clone, [
+      "voice",
+      "clone",
+      "--name",
+      "mi_voz",
+      "--mic",
+      "--duration",
+      "10",
+      "--force",
+      "--denoise",
+      "--daemon",
+      "--json",
+    ]);
+    assert.equal(synthesizeArgvs(argvLog).length, 6);
+  });
+});
+
+test("voice clone con una pre-síntesis fallida sale ≠ 0, informa la etiqueta y no indica /config", () => {
+  withVoiceCli(
+    {
+      responses: { "voice clone": CLONE_OK },
+      failLabel: {
+        label: "voice-stop",
+        exit: 5,
+        stdout: JSON.stringify({ error: "e", reason: "daemon_unreachable" }),
+      },
+    },
+    (argvLog, env) => {
+      const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+      assert.notEqual(res.status, 0);
+      assert.match(res.stderr, /voice-stop/);
+      assert.match(res.stderr, /presynth --voice mi_voz --force/);
+      assert.doesNotMatch(res.stdout, /evolutivex-agents\.voice =/);
+      assert.equal(synthesizeArgvs(argvLog).length, 6);
+    },
+  );
+});
+
+test("voice clone sobre una voz existente sin --force sale con 6 y ofrece --force", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice clone": {
+          exit: 6,
+          stdout: JSON.stringify({ error: "existe", reason: "voice_exists" }),
+        },
+      },
+    },
+    (argvLog, env) => {
+      const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+      assert.equal(res.status, 6);
+      assert.match(res.stderr, /--force/);
+      assert.equal(synthesizeArgvs(argvLog).length, 0);
+    },
+  );
+});
+
+test("voice clone con un reason desconocido conserva el exit con un mensaje genérico", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice clone": {
+          exit: 9,
+          stdout: JSON.stringify({ error: "raro", reason: "algo_nuevo" }),
+        },
+      },
+    },
+    (_argvLog, env) => {
+      const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+      assert.equal(res.status, 9);
+      assert.match(res.stderr, /exit 9 \(algo_nuevo\)/);
+    },
+  );
+});
+
+for (const [label, args] of [
+  ["clonar una voz de fábrica", ["voice", "clone", "Default", "ref.wav"]],
+  ["clonar ryan", ["voice", "clone", "ryan", "--mic", "--duration", "5"]],
+  ["--mic sin --duration sin terminal", ["voice", "clone", "mi_voz", "--mic"]],
+  ["voice remove sin --yes", ["voice", "remove", "mi_voz"]],
+  ["voice clone sin fuente", ["voice", "clone", "mi_voz"]],
+  [
+    "voice clone con dos fuentes",
+    ["voice", "clone", "mi_voz", "a.wav", "--mic"],
+  ],
+  ["un subcomando de voice desconocido", ["voice", "bailar"]],
+] as const) {
+  test(`${label}: exit 2 sin invocar al motor`, () => {
+    withVoiceCli({}, (argvLog, env) => {
+      const res = runCtl([...args], env);
+      assert.equal(res.status, 2);
+      assert.deepEqual(argvsOf(argvLog), []);
+    });
+  });
+}
+
+test("los errores propios del plugin dan los mensajes de la spec", () => {
+  const factory = runCtl(["voice", "clone", "vivian", "ref.wav"]);
+  assert.match(factory.stderr, /voces de fábrica; elige otro nombre/);
+  const mic = runCtl(["voice", "clone", "mi_voz", "--mic"]);
+  assert.match(mic.stderr, /--duration <segs>.*push-to-talk/);
+  const remove = runCtl(["voice", "remove", "mi_voz"]);
+  assert.match(remove.stderr, /Confirma el borrado con `--yes`/);
+});
+
+test("voice list marca las voces de fábrica y la activa según la caché", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice list": {
+          exit: 0,
+          stdout: JSON.stringify({
+            schema_version: "6",
+            voices: ["default", "ryan", "vivian", "mi_voz", "otra"],
+          }),
+        },
+      },
+    },
+    (argvLog, env) => {
+      seedActiveVoice("mi_voz");
+      const res = runCtl(["voice", "list"], env);
+      assert.equal(res.status, 0);
+      assert.match(res.stdout, /^ {2}default \(fábrica\)$/m);
+      assert.match(res.stdout, /^ {2}mi_voz \(activa\)$/m);
+      assert.match(res.stdout, /^ {2}otra$/m);
+      assert.ok(
+        argvsOf(argvLog).some((a) => a.join(" ") === "voice list --json"),
+      );
+    },
+  );
+});
+
+test("voice list con JSON inválido sale con 1", () => {
+  withVoiceCli(
+    { responses: { "voice list": { exit: 0, stdout: "no es json" } } },
+    (_argvLog, env) => {
+      const res = runCtl(["voice", "list"], env);
+      assert.equal(res.status, 1);
+      assert.match(res.stderr, /respuesta inesperada/);
+    },
+  );
+});
+
+test("voice remove --yes borra, informa las locuciones y advierte si es la voz activa", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice remove": {
+          exit: 0,
+          stdout: JSON.stringify({
+            status: "removed",
+            voice: "mi_voz",
+            removed_speech: ["voice-stop", "voice-subagent-stop"],
+          }),
+        },
+      },
+    },
+    (argvLog, env) => {
+      seedActiveVoice("mi_voz");
+      const res = runCtl(["voice", "remove", "mi_voz", "--yes"], env);
+      assert.equal(res.status, 0, res.stderr);
+      assert.ok(
+        argvsOf(argvLog).some(
+          (a) => a.join(" ") === "voice remove --name mi_voz --yes --json",
+        ),
+      );
+      assert.match(res.stdout, /voice-stop, voice-subagent-stop/);
+      assert.match(res.stdout, /es la voz activa/);
+    },
+  );
+});
+
+test("voice remove de una voz que no es la activa no advierte", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice remove": {
+          exit: 0,
+          stdout: JSON.stringify({
+            status: "removed",
+            voice: "otra",
+            removed_speech: [],
+          }),
+        },
+      },
+    },
+    (_argvLog, env) => {
+      seedActiveVoice("mi_voz");
+      const res = runCtl(["voice", "remove", "otra", "--yes"], env);
+      assert.equal(res.status, 0);
+      assert.match(res.stdout, /locuciones borradas: ninguna/);
+      assert.doesNotMatch(res.stdout, /voz activa/);
+    },
+  );
+});
+
+test("voice remove de una voz de fábrica: el motor la protege y sale con 2", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice remove": {
+          exit: 2,
+          stdout: JSON.stringify({
+            error: "no",
+            reason: "cannot_remove_default",
+          }),
+        },
+      },
+    },
+    (_argvLog, env) => {
+      const res = runCtl(["voice", "remove", "default", "--yes"], env);
+      assert.equal(res.status, 2);
+      assert.match(res.stderr, /fábrica no se pueden borrar/);
+    },
+  );
+});
+
+for (const version of ["0.41.9", "abc"]) {
+  test(`motor con versión ${version}: voice * sale con 1 sin invocar voice`, () => {
+    withVoiceCli({ version }, (argvLog, env) => {
+      for (const args of [
+        ["voice", "list"],
+        ["voice", "clone", "mi_voz", "ref.wav"],
+        ["voice", "remove", "mi_voz", "--yes"],
+      ]) {
+        const res = runCtl(args, env);
+        assert.equal(res.status, 1);
+        assert.match(res.stderr, /requiere AI Voice-InterConnector 0\.42\.0/);
+      }
+      assert.ok(argvsOf(argvLog).every((a) => a[0] === "version"));
+    });
+  });
+}
+
+test("voice clone con el bloqueo de un dueño vivo sale con 6 sin clonar", () => {
+  withVoiceCli({ responses: { "voice clone": CLONE_OK } }, (argvLog, env) => {
+    seedLock(String(process.pid));
+    const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+    assert.equal(res.status, 6);
+    assert.ok(!argvsOf(argvLog).some((a) => a[0] === "voice"));
+  });
+});
+
+test("voice clone con un owner ilegible sale con 6 y conserva el bloqueo", () => {
+  withVoiceCli({ responses: { "voice clone": CLONE_OK } }, (argvLog, env) => {
+    const lock = seedLock(undefined);
+    const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+    assert.equal(res.status, 6);
+    assert.equal(existsSync(lock), true);
+    assert.ok(!argvsOf(argvLog).some((a) => a[0] === "voice"));
+  });
+});
+
+test("voice remove con un bloqueo de dueño muerto lo retira y sigue", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice remove": {
+          exit: 0,
+          stdout: JSON.stringify({ removed_speech: [] }),
+        },
+      },
+    },
+    (_argvLog, env) => {
+      const lock = seedLock("999999");
+      const res = runCtl(["voice", "remove", "mi_voz", "--yes"], env);
+      assert.equal(res.status, 0, res.stderr);
+      assert.equal(existsSync(lock), false);
+    },
+  );
+});
+
+test("voice clone libera el bloqueo aunque el motor falle", () => {
+  withVoiceCli(
+    {
+      responses: {
+        "voice clone": {
+          exit: 3,
+          stdout: JSON.stringify({ error: "e", reason: "audio_not_found" }),
+        },
+      },
+    },
+    (_argvLog, env) => {
+      const res = runCtl(["voice", "clone", "mi_voz", "ref.wav"], env);
+      assert.equal(res.status, 3);
+      assert.match(res.stderr, /La ruta de referencia no existe/);
+      assert.equal(
+        existsSync(join(pluginStateDir(), "voice-operation.lock")),
+        false,
+      );
+    },
   );
 });
