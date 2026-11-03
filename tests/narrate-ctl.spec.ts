@@ -9,12 +9,20 @@
 // refleja src/), con el state dir redirigido a un temporal vía env vars del SO
 // anfitrión. El test de status fija por contrato que las claves jamás se
 // imprimen y que las preferencias no se muestran (viven en /config). Cubre
-// presynth idempotente y presynth --force (que pasa --force al motor para
-// reescribir los WAV existentes).
+// presynth idempotente (solo exit 6 con `label_exists`), presynth --force (que
+// pasa --force al motor para reescribir los WAV existentes), la resolución de
+// la voz (`--voice`, la caché `active-voice` o `default`) en say, presynth y
+// status, y el bloqueo de operaciones manuales ocupado.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { makeTempDir, removeDir } from "./helpers.js";
 import { ANNOUNCEMENTS } from "../src/voice/message/static-announcements.js";
@@ -30,6 +38,19 @@ beforeEach(() => {
 afterEach(() => {
   removeDir(stateBase);
 });
+
+/** State dir del plugin dentro del temporal, según el SO real del host. */
+function pluginStateDir(): string {
+  const sub =
+    process.platform === "darwin" ? join("Library", "Application Support") : "";
+  return join(stateBase, sub, "evolutivex-agents");
+}
+
+/** Simula la caché que escriben los hooks con la voz activa de /config. */
+function seedActiveVoice(voice: string): void {
+  mkdirSync(pluginStateDir(), { recursive: true });
+  writeFileSync(join(pluginStateDir(), "active-voice"), `${voice}\n`);
+}
 
 /** Env que redirige el state dir al temporal según el SO real del host. */
 function ctlEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
@@ -125,12 +146,16 @@ test("say sin ai-voice-interconnector en el PATH devuelve 1 con aviso", () => {
 
 // --- CLI falso: registra argv por invocación y sale con códigos de una secuencia ---
 
+/** Respuesta programada del CLI falso: un exit (6 emite `label_exists`) o exit + stdout. */
+type FakeResponse = number | { exit: number; stdout: string };
+
 /**
  * Crea un `ai-voice-interconnector` falso en `dir` (shim .cmd en Windows, script sh en
  * Unix, ambos delegando en un impl Node). Cada invocación anota su argv en
- * `argv.log` y consume el siguiente código de la secuencia (0 si se agota).
+ * `argv.log` y consume la siguiente respuesta de la secuencia (exit 0 si se
+ * agota); un exit 6 numérico imprime el envelope de `label_exists`.
  */
-function makeFakeCli(dir: string, codes: number[]): { argvLog: string } {
+function makeFakeCli(dir: string, codes: FakeResponse[]): { argvLog: string } {
   const argvLog = join(dir, "argv.log");
   writeFileSync(join(dir, "seq.json"), JSON.stringify(codes));
   writeFileSync(
@@ -141,9 +166,11 @@ function makeFakeCli(dir: string, codes: number[]): { argvLog: string } {
       'fs.appendFileSync(path.join(__dirname, "argv.log"), JSON.stringify(process.argv.slice(2)) + "\\n");',
       'const seqPath = path.join(__dirname, "seq.json");',
       'const codes = JSON.parse(fs.readFileSync(seqPath, "utf8"));',
-      "const code = codes.length ? codes.shift() : 0;",
+      "const next = codes.length ? codes.shift() : 0;",
       "fs.writeFileSync(seqPath, JSON.stringify(codes));",
-      "process.exit(code);",
+      'const r = typeof next === "number" ? { exit: next, stdout: next === 6 ? JSON.stringify({ error: "e", reason: "label_exists" }) : "" } : next;',
+      "process.stdout.write(r.stdout);",
+      "process.exitCode = r.exit;",
     ].join("\n"),
   );
   if (process.platform === "win32") {
@@ -183,8 +210,15 @@ test("say invoca speech say --text --daemon (contrato §12)", () => {
     const res = runCtl(["say", "hola"], fakeCliEnv(dir));
     assert.equal(res.status, 0);
     const [argv] = loggedArgvs(argvLog);
-    assert.deepEqual(argv.slice(0, 3), ["speech", "say", "--text"]);
-    assert.ok(argv.includes("--daemon"));
+    assert.deepEqual(argv, [
+      "speech",
+      "say",
+      "--text",
+      "hola",
+      "--voice",
+      "default",
+      "--daemon",
+    ]);
   } finally {
     removeDir(dir);
   }
@@ -203,6 +237,8 @@ test("presynth pre-sintetiza los seis anuncios con speech synthesize --label --d
     const labels = argvs.map((argv) => {
       assert.deepEqual(argv.slice(0, 2), ["speech", "synthesize"]);
       assert.ok(argv.includes("--daemon"));
+      assert.ok(argv.includes("--json"));
+      assert.equal(argv[argv.indexOf("--voice") + 1], "default");
       assert.ok(!argv.includes("--force"));
       return argv[argv.indexOf("--label") + 1];
     });
@@ -278,4 +314,138 @@ test("presynth sin ai-voice-interconnector en el PATH devuelve 1 con aviso", () 
   } finally {
     removeDir(emptyPath);
   }
+});
+
+test("presynth trata un exit 6 con otro reason como fallo", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    makeFakeCli(dir, [
+      { exit: 6, stdout: JSON.stringify({ error: "e", reason: "otra_cosa" }) },
+      0,
+      0,
+      0,
+      0,
+      0,
+    ]);
+    const res = runCtl(["presynth"], fakeCliEnv(dir));
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /fallo \(exit 6, otra_cosa\)/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+// --- Resolución de la voz: --voice, caché de los hooks o default ---
+
+test("say --voice usa la voz indicada, normalizada", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, [0]);
+    seedActiveVoice("otra");
+    const res = runCtl(["say", "--voice", "Mi_Voz", "hola"], fakeCliEnv(dir));
+    assert.equal(res.status, 0);
+    const [argv] = loggedArgvs(argvLog);
+    assert.equal(argv[argv.indexOf("--voice") + 1], "mi_voz");
+    assert.match(res.stdout, /voz: mi_voz \(--voice\)/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("say sin --voice usa la voz de la caché y lo informa", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, [0]);
+    seedActiveVoice("mi_voz");
+    const res = runCtl(["say", "hola"], fakeCliEnv(dir));
+    assert.equal(res.status, 0);
+    const [argv] = loggedArgvs(argvLog);
+    assert.equal(argv[argv.indexOf("--voice") + 1], "mi_voz");
+    assert.match(res.stdout, /voz: mi_voz \(según el último evento\)/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("say sin --voice ni caché usa default y lo informa", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    makeFakeCli(dir, [0]);
+    const res = runCtl(["say", "hola"], fakeCliEnv(dir));
+    assert.equal(res.status, 0);
+    assert.match(res.stdout, /voz: default \(sin datos de \/config todavía\)/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("say propaga el exit del motor", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    makeFakeCli(dir, [3]);
+    const res = runCtl(["say", "hola"], fakeCliEnv(dir));
+    assert.equal(res.status, 3);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+for (const [label, args, seed, expected] of [
+  ["--voice", ["presynth", "--voice", "mi_voz"], undefined, "mi_voz"],
+  ["la caché", ["presynth"], "mi_voz", "mi_voz"],
+] as const) {
+  test(`presynth usa la voz de ${label} en las seis síntesis`, () => {
+    const dir = makeTempDir("avi-plugin-fakecli-");
+    try {
+      const { argvLog } = makeFakeCli(dir, [0, 0, 0, 0, 0, 0]);
+      if (seed) seedActiveVoice(seed);
+      const res = runCtl([...args], fakeCliEnv(dir));
+      assert.equal(res.status, 0);
+      const argvs = loggedArgvs(argvLog);
+      assert.equal(argvs.length, 6);
+      for (const argv of argvs)
+        assert.equal(argv[argv.indexOf("--voice") + 1], expected);
+      // El bloqueo se libera al terminar.
+      assert.equal(
+        existsSync(join(pluginStateDir(), "voice-operation.lock")),
+        false,
+      );
+    } finally {
+      removeDir(dir);
+    }
+  });
+}
+
+test("presynth con el bloqueo ocupado por un dueño vivo sale con 6 sin invocar al motor", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, [0, 0, 0, 0, 0, 0]);
+    const lock = join(pluginStateDir(), "voice-operation.lock");
+    mkdirSync(lock, { recursive: true });
+    writeFileSync(join(lock, "owner"), String(process.pid));
+    const res = runCtl(["presynth"], fakeCliEnv(dir));
+    assert.equal(res.status, 6);
+    assert.match(res.stderr, /otra operación de voz en curso/);
+    assert.match(res.stderr, /voice-operation\.lock/);
+    assert.equal(existsSync(argvLog), false);
+    assert.equal(existsSync(lock), true);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("status muestra la voz activa de la caché con su origen", () => {
+  seedActiveVoice("mi_voz");
+  const res = runCtl(["status"]);
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /voz activa: {5}mi_voz \(según el último evento\)/);
+});
+
+test("status sin caché muestra default sin datos de /config", () => {
+  const res = runCtl(["status"]);
+  assert.equal(res.status, 0);
+  assert.match(
+    res.stdout,
+    /voz activa: {5}default \(sin datos de \/config todavía\)/,
+  );
 });
