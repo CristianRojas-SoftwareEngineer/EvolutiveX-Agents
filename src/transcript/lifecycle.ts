@@ -312,27 +312,9 @@ function consumeBlock(
   return i < 0 ? undefined : list!.splice(i, 1)[0];
 }
 
-// Fija el ToolUse al arrancar (🧠 escritura de la llamada: el bloque del
-// modelo ya está cerrado) y el ToolResult al terminar (🔧 ejecución, permiso
-// incluido), en cualquier agente. Al arrancar y al terminar escribe `second`
-// una vez para que el contador 🔧 del ToolUse aparezca y se retire en el
-// momento, sin esperar al tic siguiente.
-export async function onToolCall(
-  $: EngineInterface,
-  e: Parameters<Hook<"tool.call">>[1],
-  next: Parameters<Hook<"tool.call">>[2],
-) {
-  const start = Date.now();
-  runningCalls.set(e.tool_use_id, start);
-  lastCall.set(agentOf(e), e.tool_use_id);
-  scheduleClock($);
-  const b = consumeBlock(agentOf(e), (b) => b.toolId === e.tool_use_id);
-  if (b)
-    pinTiming($, `u:${e.tool_use_id}`, {
-      time: b.attributedStart,
-      duration: b.last - b.attributedStart,
-      persist: true,
-    });
+// Tarea en curso para el Spinner: la de TodoWrite en `in_progress`, o el
+// registro de TaskUpdate (alta, cambio de estado y borrado).
+function trackTasks(e: Parameters<Hook<"tool.call">>[1]): void {
   if (e.tool === "TodoWrite" && Array.isArray(e.todos)) {
     const active = e.todos.find((t) => t.status === "in_progress");
     session.todoActiveLabel = active
@@ -346,8 +328,34 @@ export async function onToolCall(
     if (status === "deleted") taskRegistry.delete(id);
     else taskRegistry.set(id, { label, status });
   }
-  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, start);
+}
+
+// Fija el ToolUse al arrancar (🧠 escritura de la llamada: el bloque del
+// modelo ya está cerrado) y el ToolResult al terminar (🔧 ejecución, permiso
+// incluido), en cualquier agente. Al arrancar y al terminar escribe `second`
+// una vez para que el contador 🔧 del ToolUse aparezca y se retire en el
+// momento, sin esperar al tic siguiente.
+export async function onToolCall(
+  $: EngineInterface,
+  e: Parameters<Hook<"tool.call">>[1],
+  next: Parameters<Hook<"tool.call">>[2],
+) {
+  const start = Date.now();
+  runningCalls.set(e.tool_use_id, start);
+  // Desde el alta en runningCalls, el `finally` la retira aunque algo falle
+  // antes de `next`: si no, su contador quedaría corriendo para siempre.
   try {
+    lastCall.set(agentOf(e), e.tool_use_id);
+    scheduleClock($);
+    const b = consumeBlock(agentOf(e), (b) => b.toolId === e.tool_use_id);
+    if (b)
+      pinTiming($, `u:${e.tool_use_id}`, {
+        time: b.attributedStart,
+        duration: b.last - b.attributedStart,
+        persist: true,
+      });
+    trackTasks(e);
+    void $.state.set({ plugin: "evolutivex-agents", key: "second" }, start);
     const out = await next(e);
     if (e.tool === "TaskCreate") {
       const id =

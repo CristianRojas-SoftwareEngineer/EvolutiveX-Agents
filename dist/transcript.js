@@ -429,18 +429,7 @@ function consumeBlock(agent, predicate) {
   const i = list?.findIndex(predicate) ?? -1;
   return i < 0 ? void 0 : list.splice(i, 1)[0];
 }
-async function onToolCall($, e, next) {
-  const start = Date.now();
-  runningCalls.set(e.tool_use_id, start);
-  lastCall.set(agentOf(e), e.tool_use_id);
-  scheduleClock($);
-  const b = consumeBlock(agentOf(e), (b2) => b2.toolId === e.tool_use_id);
-  if (b)
-    pinTiming($, `u:${e.tool_use_id}`, {
-      time: b.attributedStart,
-      duration: b.last - b.attributedStart,
-      persist: true
-    });
+function trackTasks(e) {
   if (e.tool === "TodoWrite" && Array.isArray(e.todos)) {
     const active = e.todos.find((t) => t.status === "in_progress");
     session.todoActiveLabel = active ? active.activeForm ?? active.content : void 0;
@@ -452,8 +441,22 @@ async function onToolCall($, e, next) {
     if (status === "deleted") taskRegistry.delete(id);
     else taskRegistry.set(id, { label, status });
   }
-  void $.state.set({ plugin: "evolutivex-agents", key: "second" }, start);
+}
+async function onToolCall($, e, next) {
+  const start = Date.now();
+  runningCalls.set(e.tool_use_id, start);
   try {
+    lastCall.set(agentOf(e), e.tool_use_id);
+    scheduleClock($);
+    const b = consumeBlock(agentOf(e), (b2) => b2.toolId === e.tool_use_id);
+    if (b)
+      pinTiming($, `u:${e.tool_use_id}`, {
+        time: b.attributedStart,
+        duration: b.last - b.attributedStart,
+        persist: true
+      });
+    trackTasks(e);
+    void $.state.set({ plugin: "evolutivex-agents", key: "second" }, start);
     const out = await next(e);
     if (e.tool === "TaskCreate") {
       const id = out?.result?.task?.id ?? /^Task #(\S+)/.exec(out?.text ?? "")?.[1];

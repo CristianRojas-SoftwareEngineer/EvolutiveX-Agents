@@ -212,6 +212,23 @@ describe("sin efectos repetidos", () => {
     },
   );
 
+  test(
+    "un fallo propio antes de next no deja un contador huérfano",
+    ENABLED,
+    async ($, on) => {
+      const { toasts, clock } = setup(on);
+      const ticks = countTicks(on);
+      on("tool.call", async () => ({ result: {}, text: "ok" }) as never);
+      await badTodo($, "a");
+      // El tic ya programado puede llegar una vez; después, el reloj se detiene.
+      await clock.advance(2000);
+      const before = ticks.count;
+      await clock.advance(5000);
+      expect(ticks.count).toBe(before);
+      expect(toasts).toEqual([]);
+    },
+  );
+
   test("el reloj se detiene al apagarse", ENABLED, async ($, on) => {
     const { toasts, clock } = setup(on);
     const ticks = countTicks(on);
