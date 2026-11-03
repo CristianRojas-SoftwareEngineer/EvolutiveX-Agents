@@ -37,7 +37,13 @@ import {
   onTurnStart,
 } from "./lifecycle.js";
 import { withSpinner, withTimestamp, withTurnDuration } from "./render.js";
-import { guardCall, caught, countTimeout, belowStream } from "./guard.js";
+import {
+  belowNext,
+  belowStream,
+  caught,
+  countTimeout,
+  guardCall,
+} from "./guard.js";
 
 // Claude Code llama a `register` una vez al cargar el plugin, con su
 // userConfig en `options`. Sin `enhancedTranscript` activado no registra nada.
@@ -58,7 +64,7 @@ export function register(on: On, options: PluginOptions): void {
       guardCall(
         $,
         "withTimestamp",
-        () => withTimestamp($, e, next),
+        () => withTimestamp($, e, belowNext(next)),
         () => next(e),
       ),
     ).catch(($, e, next) => caught($, "withTimestamp", e, next));
@@ -69,7 +75,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "withSpinner",
-      () => withSpinner($, e, next),
+      () => withSpinner($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "withSpinner", e, next));
@@ -77,7 +83,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "withTurnDuration",
-      () => withTurnDuration($, e, next),
+      () => withTurnDuration($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "withTurnDuration", e, next));
@@ -88,7 +94,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "prompt.submit",
-      () => onSubmit($, e, next),
+      () => onSubmit($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "prompt.submit", e, next));
@@ -96,7 +102,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "turn.start",
-      () => onTurnStart($, e, next),
+      () => onTurnStart($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "turn.start", e, next));
@@ -108,7 +114,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "tool.call",
-      () => onToolCall($, e, next),
+      () => onToolCall($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "tool.call", e, next));
@@ -116,7 +122,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "command.run",
-      () => onCommandRun($, e, next),
+      () => onCommandRun($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "command.run", e, next));
@@ -124,7 +130,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "session.append",
-      () => onAppend($, e, next),
+      () => onAppend($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "session.append", e, next));
@@ -132,7 +138,7 @@ export function register(on: On, options: PluginOptions): void {
     guardCall(
       $,
       "turn.complete",
-      () => onTurnComplete($, e, next),
+      () => onTurnComplete($, e, belowNext(next)),
       () => next(e),
     ),
   ).catch(($, e, next) => caught($, "turn.complete", e, next));

@@ -48,6 +48,16 @@ function recordFailure($, name, message) {
   );
 }
 var messageOf = (err) => err instanceof Error ? err.message : String(err);
+function belowNext(next) {
+  return new Proxy(next, {
+    apply: (target, self, args) => Reflect.apply(target, self, args).catch(
+      (err) => {
+        if (typeof err === "object" && err !== null) belowErrors.add(err);
+        throw err;
+      }
+    )
+  });
+}
 var isBelow = (err) => typeof err === "object" && err !== null && belowErrors.has(err);
 async function guardCall($, name, run, native) {
   if (disabled) return native();
@@ -392,8 +402,7 @@ async function* onStep($, e, next) {
   for (; ; ) {
     const { value: chunk, done } = await stream.next();
     if (done) {
-      prune();
-      if (!failed) recordSuccess("turn.step");
+      finishStep($, failed);
       return chunk;
     }
     if (!failed && isBlockChunk(chunk)) {
@@ -405,6 +414,14 @@ async function* onStep($, e, next) {
       }
     }
     yield chunk;
+  }
+}
+function finishStep($, failed) {
+  try {
+    prune();
+    if (!failed) recordSuccess("turn.step");
+  } catch (err) {
+    recordFailure($, "turn.step", messageOf(err));
   }
 }
 function consumeBlock(agent, predicate) {
@@ -780,7 +797,7 @@ function register(on, options) {
       ($, e, next) => guardCall(
         $,
         "withTimestamp",
-        () => withTimestamp($, e, next),
+        () => withTimestamp($, e, belowNext(next)),
         () => next(e)
       )
     ).catch(($, e, next) => caught($, "withTimestamp", e, next));
@@ -791,7 +808,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "withSpinner",
-      () => withSpinner($, e, next),
+      () => withSpinner($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "withSpinner", e, next));
@@ -801,7 +818,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "withTurnDuration",
-      () => withTurnDuration($, e, next),
+      () => withTurnDuration($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "withTurnDuration", e, next));
@@ -810,7 +827,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "prompt.submit",
-      () => onSubmit($, e, next),
+      () => onSubmit($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "prompt.submit", e, next));
@@ -819,7 +836,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "turn.start",
-      () => onTurnStart($, e, next),
+      () => onTurnStart($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "turn.start", e, next));
@@ -832,7 +849,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "tool.call",
-      () => onToolCall($, e, next),
+      () => onToolCall($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "tool.call", e, next));
@@ -841,7 +858,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "command.run",
-      () => onCommandRun($, e, next),
+      () => onCommandRun($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "command.run", e, next));
@@ -850,7 +867,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "session.append",
-      () => onAppend($, e, next),
+      () => onAppend($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "session.append", e, next));
@@ -859,7 +876,7 @@ function register(on, options) {
     ($, e, next) => guardCall(
       $,
       "turn.complete",
-      () => onTurnComplete($, e, next),
+      () => onTurnComplete($, e, belowNext(next)),
       () => next(e)
     )
   ).catch(($, e, next) => caught($, "turn.complete", e, next));

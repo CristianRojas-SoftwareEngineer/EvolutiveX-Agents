@@ -24,7 +24,7 @@ const streaks = new Map<string, number>();
 let disabled = false;
 // Lo que se apaga junto con el transcript (el reloj de live-clock).
 const disableListeners: (() => void)[] = [];
-// Rechazos que vienen de abajo de la cadena (marcados por `below`).
+// Rechazos que vienen de abajo de la cadena (marcados por `belowNext`).
 const belowErrors = new WeakSet<object>();
 
 export const isDisabled = (): boolean => disabled;
@@ -66,12 +66,20 @@ export function recordFailure(
 export const messageOf = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);
 
-// Marca el rechazo de lo de abajo (`below(next(e))`) para que no cuente como
-// fallo propio del handler que lo recibe.
-export function below<T>(pending: Promise<T>): Promise<T> {
-  return pending.catch((err: unknown) => {
-    if (typeof err === "object" && err !== null) belowErrors.add(err);
-    throw err;
+// El `next` que recibe el handler, con sus rechazos marcados como "de abajo"
+// para que no cuenten como fallo propio (index.ts se lo pasa a cada handler).
+// Un Proxy conserva las propiedades de `next` (`to`, `signal`…) y su tipo.
+export function belowNext<N extends (...args: never[]) => Promise<unknown>>(
+  next: N,
+): N {
+  return new Proxy(next, {
+    apply: (target, self, args) =>
+      (Reflect.apply(target, self, args) as Promise<unknown>).catch(
+        (err: unknown) => {
+          if (typeof err === "object" && err !== null) belowErrors.add(err);
+          throw err;
+        },
+      ),
   });
 }
 
@@ -126,7 +134,7 @@ export function caught<E, R>(
   return next(e);
 }
 
-// Igual que `below` pero para un stream: marca sus rechazos como "de abajo"
+// Igual que `belowNext` pero para un stream: marca sus rechazos como "de abajo"
 // para que no cuenten.
 export function belowStream<C, R>(
   stream: AsyncGenerator<C, R> & { readonly result: Promise<R> },

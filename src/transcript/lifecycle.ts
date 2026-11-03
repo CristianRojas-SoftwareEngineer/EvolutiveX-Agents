@@ -276,8 +276,7 @@ export async function* onStep(
   for (;;) {
     const { value: chunk, done } = await stream.next();
     if (done) {
-      prune();
-      if (!failed) recordSuccess("turn.step");
+      finishStep($, failed);
       return chunk;
     }
     if (!failed && isBlockChunk(chunk)) {
@@ -289,6 +288,17 @@ export async function* onStep(
       }
     }
     yield chunk;
+  }
+}
+
+// Cierre de un paso: poda los registros y, si la contabilidad no falló,
+// reinicia la racha de turn.step. Un fallo aquí también cuenta para el guard.
+function finishStep($: EngineInterface, failed: boolean): void {
+  try {
+    prune();
+    if (!failed) recordSuccess("turn.step");
+  } catch (err) {
+    recordFailure($, "turn.step", messageOf(err));
   }
 }
 
