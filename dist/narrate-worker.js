@@ -9,12 +9,14 @@ const __dirname = __pathDirname(__filename);
 // src/voice/narrate-worker.ts
 import {
   appendFileSync,
-  readFileSync as readFileSync2,
-  renameSync as renameSync2,
-  rmSync as rmSync2,
+  readFileSync as readFileSync3,
+  renameSync as renameSync3,
+  rmSync as rmSync3,
   statSync as statSync3,
-  writeFileSync as writeFileSync2
+  writeFileSync as writeFileSync3
 } from "node:fs";
+import { dirname, join as join4 } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // src/voice/voice.ts
 var DEFAULT_VOICE = "default";
@@ -132,6 +134,9 @@ function workerLogPath() {
 function rotatedWorkerLogPath() {
   return join(stateDir(), "worker.log.1");
 }
+function voiceProblemPath() {
+  return join(stateDir(), "voice-problem.json");
+}
 
 // src/voice/queue.ts
 import {
@@ -233,6 +238,15 @@ import { delimiter, join as join3 } from "node:path";
 
 // src/voice/spawn.ts
 import { spawn, spawnSync } from "node:child_process";
+function spawnDetached(cmd, args) {
+  const child = spawn(cmd, args, {
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true
+  });
+  child.unref();
+  return child.pid;
+}
 function isAlive(pid) {
   try {
     process.kill(pid, 0);
@@ -557,6 +571,51 @@ function sayTimeoutMs(text) {
   return SAY_BASE_MS + text.length * SAY_PER_CHAR_MS;
 }
 
+// src/voice/voice-problem.ts
+import { readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+var NOTIFIABLE_REASONS = [
+  "voice_not_found",
+  "speech_not_found",
+  "invalid_identifier"
+];
+function readProblem() {
+  try {
+    const data = JSON.parse(readFileSync2(voiceProblemPath(), "utf8"));
+    if (typeof data !== "object" || data === null) return void 0;
+    const { voice, reason } = data;
+    if (typeof voice !== "string" || typeof reason !== "string")
+      return void 0;
+    return { voice, reason };
+  } catch {
+    return void 0;
+  }
+}
+function writeProblem(problem) {
+  ensureStateDir();
+  const path = voiceProblemPath();
+  const tmpPath = `${path}.${process.pid}.tmp`;
+  writeFileSync2(tmpPath, `${JSON.stringify(problem)}
+`, "utf8");
+  renameSync2(tmpPath, path);
+}
+function trackVoiceProblem(voice, outcome) {
+  try {
+    if (outcome.ok) {
+      rmSync2(voiceProblemPath(), { force: true });
+      return false;
+    }
+    const { reason } = outcome;
+    if (reason === void 0 || !NOTIFIABLE_REASONS.includes(reason))
+      return false;
+    const last = readProblem();
+    if (last?.voice === voice && last.reason === reason) return false;
+    writeProblem({ voice, reason });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // src/voice/narrate-worker.ts
 var WORKER_LOG_MAX_BYTES = 512 * 1024;
 var WORKER_LOG_ROTATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1e3;
@@ -565,11 +624,11 @@ function rotateWorkerLog() {
     const rotated = rotatedWorkerLogPath();
     try {
       if (Date.now() - statSync3(rotated).mtimeMs > WORKER_LOG_ROTATED_MAX_AGE_MS)
-        rmSync2(rotated, { force: true });
+        rmSync3(rotated, { force: true });
     } catch {
     }
     if (statSync3(workerLogPath()).size > WORKER_LOG_MAX_BYTES)
-      renameSync2(workerLogPath(), rotated);
+      renameSync3(workerLogPath(), rotated);
   } catch {
   }
 }
@@ -595,15 +654,37 @@ var REASON_HINTS = {
   daemon_unreachable: "daemon ca\xEDdo; SessionStart lo levanta o ejecuta ai-voice-interconnector daemon start",
   model_missing: "modelo no provisionado; ejecuta ai-voice-interconnector setup"
 };
-function failureDetail(stdout, voice) {
-  const payload = parseSingleJsonObject(stdout);
-  if (typeof payload !== "object" || payload === null) return "";
-  const reason = payload.reason;
-  if (typeof reason !== "string" || !Object.hasOwn(REASON_HINTS, reason)) {
-    return "";
-  }
+function reasonHint(reason, voice) {
+  if (!Object.hasOwn(REASON_HINTS, reason)) return void 0;
   const hint = REASON_HINTS[reason];
-  return ` (${reason}: ${typeof hint === "function" ? hint(voice) : hint})`;
+  return typeof hint === "function" ? hint(voice) : hint;
+}
+function failureReason(stdout) {
+  const payload = parseSingleJsonObject(stdout);
+  if (typeof payload !== "object" || payload === null) return void 0;
+  const reason = payload.reason;
+  return typeof reason === "string" ? reason : void 0;
+}
+function failureDetail(reason, voice) {
+  const hint = reason === void 0 ? void 0 : reasonHint(reason, voice);
+  return hint === void 0 ? "" : ` (${reason}: ${hint})`;
+}
+function notifyVoiceProblem(hint) {
+  const cliPath = join4(
+    dirname(fileURLToPath(import.meta.url)),
+    "notification-cli.js"
+  );
+  const message = hint.charAt(0).toUpperCase() + hint.slice(1);
+  spawnDetached(process.execPath, [
+    cliPath,
+    "--event-type",
+    "VoiceProblem",
+    "--title",
+    "EvolutiveX Agents",
+    "--message",
+    message,
+    "--silent"
+  ]);
 }
 var NARRATION_GAP_MS = 1e3;
 var IDLE_MS = 5e3;
@@ -614,17 +695,17 @@ function sleepSync(ms) {
 function acquireLock() {
   const pidPath = workerPidPath();
   try {
-    writeFileSync2(pidPath, String(process.pid), {
+    writeFileSync3(pidPath, String(process.pid), {
       encoding: "utf8",
       flag: "wx"
     });
     return true;
   } catch {
     try {
-      const owner = Number.parseInt(readFileSync2(pidPath, "utf8").trim(), 10);
+      const owner = Number.parseInt(readFileSync3(pidPath, "utf8").trim(), 10);
       if (Number.isInteger(owner) && isAlive(owner)) return false;
-      rmSync2(pidPath, { force: true });
-      writeFileSync2(pidPath, String(process.pid), {
+      rmSync3(pidPath, { force: true });
+      writeFileSync3(pidPath, String(process.pid), {
         encoding: "utf8",
         flag: "wx"
       });
@@ -637,10 +718,10 @@ function acquireLock() {
 function releaseLock() {
   try {
     const owner = Number.parseInt(
-      readFileSync2(workerPidPath(), "utf8").trim(),
+      readFileSync3(workerPidPath(), "utf8").trim(),
       10
     );
-    if (owner === process.pid) rmSync2(workerPidPath(), { force: true });
+    if (owner === process.pid) rmSync3(workerPidPath(), { force: true });
   } catch {
   }
 }
@@ -653,12 +734,14 @@ async function runPlay(cliPath, label, voice) {
   });
   if (res.timedOut) {
     log(`speech play timeout tras ${PLAY_TIMEOUT_MS} ms; proceso terminado`);
-    return;
+    return { ok: false };
   }
-  if (res.code !== 0)
-    log(
-      `speech play sali\xF3 con c\xF3digo ${res.code}${failureDetail(res.stdout, voice)}`
-    );
+  if (res.code === 0) return { ok: true };
+  const reason = failureReason(res.stdout);
+  log(
+    `speech play sali\xF3 con c\xF3digo ${res.code}${failureDetail(reason, voice)}`
+  );
+  return { ok: false, reason };
 }
 async function runSay(cliPath, text, voice) {
   const args = [
@@ -681,12 +764,12 @@ async function runSay(cliPath, text, voice) {
     log(
       `speech say timeout tras ${timeoutMs} ms (${text.length} caracteres); proceso terminado`
     );
-    return;
+    return { ok: false };
   }
-  if (res.code !== 0)
-    log(
-      `speech say sali\xF3 con c\xF3digo ${res.code}${failureDetail(res.stdout, voice)}`
-    );
+  if (res.code === 0) return { ok: true };
+  const reason = failureReason(res.stdout);
+  log(`speech say sali\xF3 con c\xF3digo ${res.code}${failureDetail(reason, voice)}`);
+  return { ok: false, reason };
 }
 async function narrate({ payload, voice }) {
   const cfg = loadConfig();
@@ -704,8 +787,12 @@ async function narrate({ payload, voice }) {
     log("ai-voice-interconnector no encontrado en PATH; se omite la narraci\xF3n");
     return true;
   }
-  if (request.kind === "play") await runPlay(cli, request.label, voice);
-  else await runSay(cli, request.text, voice);
+  const outcome = request.kind === "play" ? await runPlay(cli, request.label, voice) : await runSay(cli, request.text, voice);
+  const isNewProblem = trackVoiceProblem(voice, outcome);
+  if (isNewProblem && cfg.notificationsEnabled && !outcome.ok) {
+    const hint = reasonHint(outcome.reason ?? "", voice);
+    if (hint !== void 0) notifyVoiceProblem(hint);
+  }
   if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);
   return true;
 }

@@ -6,16 +6,18 @@
 
 // Hook de SessionStart: verifica una sola vez por sesión que la cadena de
 // narración está completa (CLI en PATH + recursos del motor provisionados +
-// voz activa existente) y, solo en ese caso, deja el daemon en marcha
-// precalentando la voz activa (`daemon start --warm-voice <voz>`) para que
-// `speech say --daemon` esté caliente durante la sesión. También escribe la
-// caché de la voz activa para narrate-ctl. El veredicto sale del exit de
-// `doctor --json` más su reporte (failed/checks del contrato vigente); ante un
-// check de recursos fallido, un estado degradado/incierto del daemon, una voz
-// activa fuera de las opciones de /config o inexistente en el motor, o un
-// `voice list` incierto avisa al
-// usuario con el campo systemMessage del JSON de salida (único mecanismo de
-// aviso portable) y no arranca el daemon. Los checks de instalación fallidos
+// voz activa existente) y deja el daemon en marcha precalentando la voz
+// activa (`daemon start --warm-voice <voz>`) para que `speech say --daemon`
+// esté caliente durante la sesión. Si la voz activa no existe en el motor o
+// `voice list` es incierto, lo avisa y arranca el daemon precalentando
+// `default`, para que clonar y pre-sintetizar funcionen; la narración sigue
+// pidiendo la voz elegida. También escribe la caché de la voz activa para
+// narrate-ctl. El veredicto sale del exit de `doctor --json` más su reporte
+// (failed/checks del contrato vigente); ante un check de recursos fallido, un
+// estado degradado/incierto del daemon o una voz activa fuera de las opciones
+// de /config avisa al usuario con el campo systemMessage del JSON de salida
+// (único mecanismo de aviso portable) y no arranca el daemon. Los checks de
+// instalación fallidos
 // (`install_receipt`, `path_*`, `pending_artifacts`) se avisan sin impedir el
 // arranque, y ese aviso se combina con el del daemon o la voz en un único
 // systemMessage. Nunca falla la sesión: exit 0 siempre.
@@ -106,7 +108,7 @@ function checkVoice(cli: string, voice: string): VoiceCheck {
 function voiceCheckMessage(
   voice: string,
   check: "absent" | "uncertain",
-  daemonStopped: boolean,
+  daemonStarted: boolean,
 ): string {
   const base =
     check === "uncertain"
@@ -118,7 +120,10 @@ function voiceCheckMessage(
           "en /config → evolutivex-agents.voice."
         : `EvolutiveX Agents: la voz ${voice} no existe; elige otra en ` +
           "/config → evolutivex-agents.voice.";
-  return daemonStopped ? `${base} El daemon no se arrancó.` : base;
+  return daemonStarted
+    ? `${base} El daemon se arrancó precalentando ${DEFAULT_VOICE}, sin ` +
+        "cambiar la voz de la narración."
+    : base;
 }
 
 /**
@@ -143,7 +148,8 @@ function handleDaemon(
   }
   if (status.kind === "stopped") {
     // Arranque único, desanclado y best-effort ante el único estado que lo
-    // permite, con la voz activa ya validada.
+    // permite, con la voz activa ya validada (si falta o es incierta, el
+    // arranque con default ocurre antes, en checkDaemonAndVoice).
     startDaemonDetached(cli, voice);
     return undefined;
   }
@@ -154,15 +160,20 @@ function handleDaemon(
 
 /**
  * Con recursos sanos: consulta el daemon, valida la voz activa si el daemon
- * está running o stopped limpio y, solo si la voz existe, gestiona el daemon.
- * Devuelve el aviso, si lo hay.
+ * está running o stopped limpio y gestiona el daemon. Si la voz falta o es
+ * incierta y el daemon está parado, lo arranca precalentando `default` solo
+ * para las operaciones manuales (clonar, pre-sintetizar). Devuelve el aviso,
+ * si lo hay.
  */
 function checkDaemonAndVoice(cli: string, voice: string): string | undefined {
   const status = getDaemonStatus(cli, budget(DAEMON_STATUS_TIMEOUT_MS));
   if (status.kind === "running" || status.kind === "stopped") {
     const check = checkVoice(cli, voice);
-    if (check !== "present")
-      return voiceCheckMessage(voice, check, status.kind === "stopped");
+    if (check !== "present") {
+      const stopped = status.kind === "stopped";
+      if (stopped) startDaemonDetached(cli, DEFAULT_VOICE);
+      return voiceCheckMessage(voice, check, stopped);
+    }
   }
   return handleDaemon(cli, voice, status);
 }

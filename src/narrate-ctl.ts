@@ -107,17 +107,24 @@ function requireCli(action: string): string | undefined {
   return cli;
 }
 
+/**
+ * Narra un texto con `speech say --voice <voz> --daemon --json`. El progreso
+ * del motor (stderr) se ve en la terminal; su JSON (stdout) se captura para
+ * traducir un fallo a un remedio con engineFailure, y en un éxito no se
+ * imprime. Un hijo no iniciado o terminado por señal es un fallo.
+ */
 function say(text: string, voice: ResolvedVoice): number {
   const cli = requireCli("narrar");
   if (!cli) return 1;
   console.log(`voz: ${describeVoice(voice)}`);
   const args = ["speech", "say", "--text", text, "--voice", voice.voice];
-  const res = runCli(cli, [...args, "--daemon"], {
-    stdio: "inherit",
+  const res = runCli(cli, [...args, "--daemon", "--json"], {
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
   });
-  // Un hijo no iniciado o terminado por señal es un fallo, nunca un éxito.
-  return typeof res.status === "number" ? res.status : 1;
+  const failure = engineFailure(res, voice.voice);
+  return failure ? reportFailure(failure) : 0;
 }
 
 /**
@@ -152,7 +159,8 @@ function presynth(
         stdio: ["ignore", "pipe", "inherit"],
         windowsHide: true,
       });
-      if (!reportPresynth(eventKey, label, res, resynth)) failed = true;
+      if (!reportPresynth(eventKey, label, voice.voice, res, resynth))
+        failed = true;
     }
     return failed ? 1 : 0;
   });
@@ -165,10 +173,11 @@ function presynth(
 function reportPresynth(
   eventKey: string,
   label: string,
+  voice: string,
   res: EngineRun,
   resynth: boolean,
 ): boolean {
-  const failure = engineFailure(res);
+  const failure = engineFailure(res, voice);
   if (!failure) {
     console.log(
       `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`,

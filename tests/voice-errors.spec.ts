@@ -52,6 +52,29 @@ for (const [reason, exit, hint] of CASES) {
   });
 }
 
+test("voice_not_found con la voz custom remite a clonarla", () => {
+  const failure = engineFailure(
+    { status: 3, stdout: envelope("voice_not_found") },
+    "custom",
+  );
+  assert.ok(failure);
+  assert.equal(failure.exitCode, 3);
+  assert.match(
+    failure.message,
+    /La voz custom todavía no está clonada; clónala con \/evolutivex-agents:voice clone\./,
+  );
+});
+
+test("voice_not_found con otra voz remite a voice list", () => {
+  const failure = engineFailure(
+    { status: 3, stdout: envelope("voice_not_found") },
+    "ryan",
+  );
+  assert.ok(failure);
+  assert.match(failure.message, /voice list/);
+  assert.doesNotMatch(failure.message, /clónala/);
+});
+
 test("un reason desconocido conserva el exit con un mensaje genérico", () => {
   const failure = engineFailure({
     status: 7,

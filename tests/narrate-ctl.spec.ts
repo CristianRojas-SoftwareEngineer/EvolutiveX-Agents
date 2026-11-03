@@ -12,7 +12,8 @@
 // presynth idempotente (solo exit 6 con `label_exists`), presynth --force (que
 // pasa --force al motor para reescribir los WAV existentes), la resolución de
 // la voz (`--voice`, la caché `active-voice` o `default`) en say, presynth y
-// status, el bloqueo de operaciones manuales y la familia `voice` (list, clone
+// status, los errores accionables de say y presynth (la voz custom sin clonar
+// remite a clonarla), el bloqueo de operaciones manuales y la familia `voice` (list, clone
 // y remove) contra un CLI falso programable por comando.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
@@ -204,12 +205,15 @@ function loggedArgvs(argvLog: string): string[][] {
     .map((line) => JSON.parse(line) as string[]);
 }
 
-test("say invoca speech say --text --daemon (contrato §12)", () => {
+test("say invoca speech say --text --daemon --json y no imprime el JSON del motor (contrato §12)", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
-    const { argvLog } = makeFakeCli(dir, [0]);
+    const { argvLog } = makeFakeCli(dir, [
+      { exit: 0, stdout: JSON.stringify({ played: "sentinela-json" }) },
+    ]);
     const res = runCtl(["say", "hola"], fakeCliEnv(dir));
     assert.equal(res.status, 0);
+    assert.ok(!res.stdout.includes("sentinela-json"));
     const [argv] = loggedArgvs(argvLog);
     assert.deepEqual(argv, [
       "speech",
@@ -219,6 +223,7 @@ test("say invoca speech say --text --daemon (contrato §12)", () => {
       "--voice",
       "default",
       "--daemon",
+      "--json",
     ]);
   } finally {
     removeDir(dir);
@@ -427,12 +432,55 @@ test("say sin --voice ni caché usa default y lo informa", () => {
   }
 });
 
-test("say propaga el exit del motor", () => {
+test("say con custom sin clonar sale con 3 y remite a clonarla", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
-    makeFakeCli(dir, [3]);
-    const res = runCtl(["say", "hola"], fakeCliEnv(dir));
+    makeFakeCli(dir, [
+      {
+        exit: 3,
+        stdout: JSON.stringify({ error: "e", reason: "voice_not_found" }),
+      },
+    ]);
+    const res = runCtl(["say", "--voice", "custom", "hola"], fakeCliEnv(dir));
     assert.equal(res.status, 3);
+    assert.match(
+      res.stderr,
+      /La voz custom todavía no está clonada; clónala con \/evolutivex-agents:voice clone\./,
+    );
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("say con el daemon caído sale con 5 y remite a levantarlo", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    makeFakeCli(dir, [
+      {
+        exit: 5,
+        stdout: JSON.stringify({ error: "e", reason: "daemon_unreachable" }),
+      },
+    ]);
+    const res = runCtl(["say", "hola"], fakeCliEnv(dir));
+    assert.equal(res.status, 5);
+    assert.match(res.stderr, /ai-voice-interconnector daemon start/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("presynth --voice custom sin clonar remite a clonarla", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    const notFound = {
+      exit: 3,
+      stdout: JSON.stringify({ error: "e", reason: "voice_not_found" }),
+    };
+    makeFakeCli(dir, Array(6).fill(notFound));
+    const res = runCtl(["presynth", "--voice", "custom"], fakeCliEnv(dir));
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /exit 3, voice_not_found/);
+    assert.match(res.stderr, /clónala con \/evolutivex-agents:voice clone/);
   } finally {
     removeDir(dir);
   }

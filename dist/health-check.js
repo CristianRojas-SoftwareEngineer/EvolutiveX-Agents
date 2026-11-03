@@ -389,9 +389,9 @@ function checkVoice(cli, voice) {
   if (!voices) return "uncertain";
   return voices.includes(voice) ? "present" : "absent";
 }
-function voiceCheckMessage(voice, check, daemonStopped) {
+function voiceCheckMessage(voice, check, daemonStarted) {
   const base = check === "uncertain" ? `EvolutiveX Agents: no se pudo comprobar si la voz ${voice} existe. Ejecuta ai-voice-interconnector voice list --json para diagnosticarlo.` : voice === CUSTOM_VOICE ? "EvolutiveX Agents: elegiste la voz custom, pero todav\xEDa no est\xE1 clonada; cl\xF3nala con /evolutivex-agents:voice clone o elige otra en /config \u2192 evolutivex-agents.voice." : `EvolutiveX Agents: la voz ${voice} no existe; elige otra en /config \u2192 evolutivex-agents.voice.`;
-  return daemonStopped ? `${base} El daemon no se arranc\xF3.` : base;
+  return daemonStarted ? `${base} El daemon se arranc\xF3 precalentando ${DEFAULT_VOICE}, sin cambiar la voz de la narraci\xF3n.` : base;
 }
 function handleDaemon(cli, voice, status) {
   if (status.kind === "running") {
@@ -408,8 +408,11 @@ function checkDaemonAndVoice(cli, voice) {
   const status = getDaemonStatus(cli, budget(DAEMON_STATUS_TIMEOUT_MS2));
   if (status.kind === "running" || status.kind === "stopped") {
     const check = checkVoice(cli, voice);
-    if (check !== "present")
-      return voiceCheckMessage(voice, check, status.kind === "stopped");
+    if (check !== "present") {
+      const stopped = status.kind === "stopped";
+      if (stopped) startDaemonDetached(cli, DEFAULT_VOICE);
+      return voiceCheckMessage(voice, check, stopped);
+    }
   }
   return handleDaemon(cli, voice, status);
 }

@@ -14,10 +14,11 @@
 // exit 0 en todos los caminos. Los checks informativos fallidos (instalación o
 // ciclo de vida) avisan sin impedir la consulta ni el arranque del daemon.
 // Con la voz activa de /config: arranque con `--warm-voice`, validación con
-// `voice list --json` (custom sin clonar, voz ausente, valor fuera de las
-// opciones de /config o listado incierto avisan sin arrancar), sin reinicio
-// del daemon corriendo y caché `active-voice` escrita también con la voz
-// desactivada.
+// `voice list --json` (custom sin clonar, voz ausente o listado incierto
+// avisan y, con el daemon parado limpio, lo arrancan precalentando default; un
+// valor fuera de las opciones de /config o el daemon degraded avisan sin
+// arrancar), sin reinicio del daemon corriendo y caché `active-voice` escrita
+// también con la voz desactivada.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -661,7 +662,10 @@ test("voz custom clonada + daemon stopped: arranca con --warm-voice custom", asy
   }
 });
 
-test("voz custom sin clonar + daemon stopped: avisa cómo clonarla y no arranca", async () => {
+const STARTED_WITH_DEFAULT =
+  "El daemon se arrancó precalentando default, sin cambiar la voz de la narración.";
+
+test("voz custom sin clonar + daemon stopped: avisa cómo clonarla y arranca con --warm-voice default", async () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
@@ -672,10 +676,57 @@ test("voz custom sin clonar + daemon stopped: avisa cómo clonarla y no arranca"
     assert.equal(res.status, 0);
     const message = systemMessageOf(res.stdout);
     assert.ok(message.includes("custom, pero todavía no está clonada"));
-    assert.ok(message.includes("/evolutivex-agents:voice clone"));
+    assert.ok(message.includes("clónala con /evolutivex-agents:voice clone"));
     assert.ok(message.includes("evolutivex-agents.voice"));
-    assert.ok(message.includes("no se arrancó"));
+    assert.ok(message.endsWith(STARTED_WITH_DEFAULT));
+    assert.ok(await waitFor(() => startCount(argvLog) === 1));
+    assert.deepEqual(startArgvs(argvLog)[0], [
+      "daemon",
+      "start",
+      "--warm-voice",
+      "default",
+    ]);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("voz custom sin clonar + daemon running: avisa sin arrancar ni hablar del daemon", async () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({ schema_version: "6", daemon: "running" }),
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "custom" });
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("todavía no está clonada"));
+    assert.ok(!message.includes("El daemon"));
     // Margen para un arranque desanclado que no debe ocurrir.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    assert.equal(startCount(argvLog), 0);
+  } finally {
+    removeDir(dir);
+  }
+});
+
+test("voz custom sin clonar + daemon degraded: avisa del daemon sin arrancar", async () => {
+  const dir = makeTempDir("avi-plugin-health-cli-");
+  try {
+    const { argvLog } = makeFakeCli(dir, {
+      doctorJson: healthyDoctorJson(),
+      daemonJson: JSON.stringify({
+        schema_version: "6",
+        daemon: "stopped",
+        degraded: "unresponsive",
+      }),
+    });
+    const res = runHealth(dir, { CLAUDE_PLUGIN_OPTION_VOICE: "custom" });
+    assert.equal(res.status, 0);
+    const message = systemMessageOf(res.stdout);
+    assert.ok(message.includes("degraded"));
+    assert.ok(message.includes("el daemon no se arrancó"));
     await new Promise((resolve) => setTimeout(resolve, 300));
     assert.equal(startCount(argvLog), 0);
   } finally {
@@ -706,7 +757,7 @@ for (const [label, opts] of [
   ["voice list con exit 1", { voicesJson: "{}", voicesExit: 1 }],
   ["voice list con JSON inválido", { voicesJson: "esto no es json" }],
 ] as const) {
-  test(`${label}: diagnóstico incierto sin afirmar que la voz falta y sin arrancar`, async () => {
+  test(`${label}: diagnóstico incierto sin afirmar que la voz falta y arranque con default`, async () => {
     const dir = makeTempDir("avi-plugin-health-cli-");
     try {
       const { argvLog } = makeFakeCli(dir, {
@@ -719,8 +770,14 @@ for (const [label, opts] of [
       const message = systemMessageOf(res.stdout);
       assert.ok(message.includes("no se pudo comprobar si la voz custom"));
       assert.ok(!message.includes("todavía no está clonada"));
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      assert.equal(startCount(argvLog), 0);
+      assert.ok(message.endsWith(STARTED_WITH_DEFAULT));
+      assert.ok(await waitFor(() => startCount(argvLog) === 1));
+      assert.deepEqual(startArgvs(argvLog)[0], [
+        "daemon",
+        "start",
+        "--warm-voice",
+        "default",
+      ]);
     } finally {
       removeDir(dir);
     }
@@ -749,7 +806,7 @@ test("daemon corriendo con otra voz caliente: no se reinicia ni avisa", () => {
   }
 });
 
-test("daemon corriendo y voz de fábrica ausente: avisa sin decir que no se arrancó", () => {
+test("daemon corriendo y voz de fábrica ausente: avisa sin hablar del daemon", () => {
   const dir = makeTempDir("avi-plugin-health-cli-");
   try {
     const { argvLog } = makeFakeCli(dir, {
@@ -761,7 +818,7 @@ test("daemon corriendo y voz de fábrica ausente: avisa sin decir que no se arra
     assert.equal(res.status, 0);
     const message = systemMessageOf(res.stdout);
     assert.ok(message.includes("la voz ryan no existe"));
-    assert.ok(!message.includes("no se arrancó"));
+    assert.ok(!message.includes("El daemon"));
     assert.equal(startCount(argvLog), 0);
   } finally {
     removeDir(dir);

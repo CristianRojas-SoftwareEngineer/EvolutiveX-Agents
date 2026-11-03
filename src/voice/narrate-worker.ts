@@ -7,8 +7,10 @@
 // WORKER (proceso independiente del hook). Único consumidor de la cola FIFO en
 // disco: reclama un evento, lo narra y lo borra antes de pasar al siguiente, así
 // no hay solapamiento ni duplicación. Construye el mensaje y narra vía el CLI
-// con la voz anotada en el ítem (siempre explícita con `--voice`). Degrada en
-// silencio; los errores van a worker.log.
+// con la voz anotada en el ítem (siempre explícita con `--voice`). Los errores
+// van a worker.log; si la voz falta, no tiene sus anuncios o su nombre es
+// ilegal, además emite una notificación de escritorio con el remedio, una sola
+// vez por problema (voice-problem.ts), sin pasar por el stdout de ningún hook.
 import {
   appendFileSync,
   readFileSync,
@@ -17,6 +19,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadConfig } from "../lib/config.js";
 import { parseSingleJsonObject } from "./health-decision.js";
 import {
@@ -28,10 +32,12 @@ import {
 import { claimNext, clearQueue, pruneQueue } from "./queue.js";
 import type { QueueItem } from "./queue.js";
 import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
-import { isAlive } from "./spawn.js";
+import { isAlive, spawnDetached } from "./spawn.js";
 import { buildMessage } from "./message/build-message.js";
 import { sayTimeoutMs } from "./say-timeout.js";
 import { CUSTOM_VOICE } from "./voice.js";
+import { trackVoiceProblem } from "./voice-problem.js";
+import type { NarrationOutcome } from "./voice-problem.js";
 
 // Cota de worker.log: al superar WORKER_LOG_MAX_BYTES se renombra a
 // worker.log.1 (que reemplaza al anterior), y worker.log.1 se borra tras
@@ -106,16 +112,49 @@ const REASON_HINTS: Record<string, string | ((voice: string) => string)> = {
     "modelo no provisionado; ejecuta ai-voice-interconnector setup",
 };
 
-/** Sufijo de diagnóstico ` (<reason>: <pista>)` o "" si el reason no es conocido. */
-function failureDetail(stdout: string, voice: string): string {
-  const payload = parseSingleJsonObject(stdout);
-  if (typeof payload !== "object" || payload === null) return "";
-  const reason = (payload as Record<string, unknown>).reason;
-  if (typeof reason !== "string" || !Object.hasOwn(REASON_HINTS, reason)) {
-    return "";
-  }
+/** Pista de un reason para la voz dada, o undefined si no es conocido. */
+function reasonHint(reason: string, voice: string): string | undefined {
+  if (!Object.hasOwn(REASON_HINTS, reason)) return undefined;
   const hint = REASON_HINTS[reason];
-  return ` (${reason}: ${typeof hint === "function" ? hint(voice) : hint})`;
+  return typeof hint === "function" ? hint(voice) : hint;
+}
+
+/** `reason` del envelope de error `--json`, o undefined si no lo trae. */
+function failureReason(stdout: string): string | undefined {
+  const payload = parseSingleJsonObject(stdout);
+  if (typeof payload !== "object" || payload === null) return undefined;
+  const reason = (payload as Record<string, unknown>).reason;
+  return typeof reason === "string" ? reason : undefined;
+}
+
+/** Sufijo de diagnóstico ` (<reason>: <pista>)` o "" si el reason no es conocido. */
+function failureDetail(reason: string | undefined, voice: string): string {
+  const hint = reason === undefined ? undefined : reasonHint(reason, voice);
+  return hint === undefined ? "" : ` (${reason}: ${hint})`;
+}
+
+/**
+ * Lanza desanclada una notificación de escritorio silenciosa con la pista,
+ * vía dist/notification-cli.js (junto a este bundle). El CLI exige un
+ * `--event-type`; `VoiceProblem` no está en su catálogo, así que usa el icono
+ * genérico, y el título se fija con la marca.
+ */
+function notifyVoiceProblem(hint: string): void {
+  const cliPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "notification-cli.js",
+  );
+  const message = hint.charAt(0).toUpperCase() + hint.slice(1);
+  spawnDetached(process.execPath, [
+    cliPath,
+    "--event-type",
+    "VoiceProblem",
+    "--title",
+    "EvolutiveX Agents",
+    "--message",
+    message,
+    "--silent",
+  ]);
 }
 
 // Pausa de respiración entre narraciones: evita que dos locuciones suenen pegadas.
@@ -170,18 +209,19 @@ function releaseLock(): void {
 }
 
 /**
- * Ejecuta `speech play --label <label> --voice <voz> --json` con timeout.
- * Política de fallo:
+ * Ejecuta `speech play --label <label> --voice <voz> --json` con timeout y
+ * devuelve el resultado. Política de fallo:
  * cualquier exit ≠ 0 se registra en worker.log con su `reason` y su pista
  * cuando el envelope `--json` trae uno conocido (exit 3: `speech_not_found`,
  * `voice_not_found`, `no_output_device` o `audio_backend_unavailable`) y el
- * turno queda sin audio — sin re-sintetizado ni fallback a `speech say`.
+ * turno queda sin audio — sin re-sintetizado ni fallback a `speech say`. Un
+ * timeout cuenta como fallo sin razón.
  */
 async function runPlay(
   cliPath: string,
   label: string,
   voice: string,
-): Promise<void> {
+): Promise<NarrationOutcome> {
   const args = ["speech", "play", "--label", label, "--voice", voice, "--json"];
   const res = await runCliWithTimeout(cliPath, args, {
     windowsHide: true,
@@ -190,23 +230,26 @@ async function runPlay(
   });
   if (res.timedOut) {
     log(`speech play timeout tras ${PLAY_TIMEOUT_MS} ms; proceso terminado`);
-    return;
+    return { ok: false };
   }
-  if (res.code !== 0)
-    log(
-      `speech play salió con código ${res.code}${failureDetail(res.stdout, voice)}`,
-    );
+  if (res.code === 0) return { ok: true };
+  const reason = failureReason(res.stdout);
+  log(
+    `speech play salió con código ${res.code}${failureDetail(reason, voice)}`,
+  );
+  return { ok: false, reason };
 }
 
 /**
  * Ejecuta `speech say --text <texto> --voice <voz> --daemon --json` con
- * timeout; un exit ≠ 0 se registra con su `reason` y su pista si es conocido.
+ * timeout y devuelve el resultado; un exit ≠ 0 se registra con su `reason` y
+ * su pista si es conocido. Un timeout cuenta como fallo sin razón.
  */
 async function runSay(
   cliPath: string,
   text: string,
   voice: string,
-): Promise<void> {
+): Promise<NarrationOutcome> {
   const args = [
     "speech",
     "say",
@@ -227,18 +270,19 @@ async function runSay(
     log(
       `speech say timeout tras ${timeoutMs} ms (${text.length} caracteres); proceso terminado`,
     );
-    return;
+    return { ok: false };
   }
-  if (res.code !== 0)
-    log(
-      `speech say salió con código ${res.code}${failureDetail(res.stdout, voice)}`,
-    );
+  if (res.code === 0) return { ok: true };
+  const reason = failureReason(res.stdout);
+  log(`speech say salió con código ${res.code}${failureDetail(reason, voice)}`);
+  return { ok: false, reason };
 }
 
 /**
  * Narra un ítem: construye el mensaje y lo reproduce o sintetiza vía el CLI
- * con la voz del ítem. Devuelve false si la narración está desactivada, tras
- * descartar el resto de la cola.
+ * con la voz del ítem, y avisa por notificación si el resultado es un problema
+ * de voz nuevo (y las notificaciones están activas). Devuelve false si la
+ * narración está desactivada, tras descartar el resto de la cola.
  */
 async function narrate({ payload, voice }: QueueItem): Promise<boolean> {
   const cfg = loadConfig();
@@ -259,8 +303,17 @@ async function narrate({ payload, voice }: QueueItem): Promise<boolean> {
     return true;
   }
 
-  if (request.kind === "play") await runPlay(cli, request.label, voice);
-  else await runSay(cli, request.text, voice);
+  const outcome =
+    request.kind === "play"
+      ? await runPlay(cli, request.label, voice)
+      : await runSay(cli, request.text, voice);
+  // trackVoiceProblem solo da true ante un fallo con razón notificable, y
+  // todas tienen pista en REASON_HINTS.
+  const isNewProblem = trackVoiceProblem(voice, outcome);
+  if (isNewProblem && cfg.notificationsEnabled && !outcome.ok) {
+    const hint = reasonHint(outcome.reason ?? "", voice);
+    if (hint !== undefined) notifyVoiceProblem(hint);
+  }
 
   // Hueco entre narraciones para que no suenen pegadas.
   if (NARRATION_GAP_MS > 0) sleepSync(NARRATION_GAP_MS);

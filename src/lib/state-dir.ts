@@ -9,8 +9,9 @@
 // del worker), queue/ (cola de payloads de narración), worker.log y su
 // rotación worker.log.1, active-voice (caché de la voz activa que escriben los
 // hooks para narrate-ctl), custom-display-name (nombre de presentación de la
-// voz personalizada) y voice-operation.lock (exclusión entre operaciones
-// manuales de voz). Las preferencias viven en el userConfig del plugin y la
+// voz personalizada), voice-problem.json (último problema de voz avisado por
+// el worker) y voice-operation.lock (exclusión entre operaciones manuales de
+// voz). Las preferencias viven en el userConfig del plugin y la
 // API key en el entorno: ninguna se guarda aquí.
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -67,6 +68,11 @@ export function activeVoicePath(): string {
 /** Etiqueta de presentación de la voz `custom`, escrita por `voice clone`. */
 export function customDisplayNamePath(): string {
   return join(stateDir(), "custom-display-name");
+}
+
+/** Último problema de voz avisado o silenciado, escrito por el worker. */
+export function voiceProblemPath(): string {
+  return join(stateDir(), "voice-problem.json");
 }
 
 /** Directorio de exclusión entre operaciones manuales de voz. */

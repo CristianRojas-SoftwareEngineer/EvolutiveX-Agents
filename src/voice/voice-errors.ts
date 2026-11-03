@@ -11,6 +11,7 @@
 // terminado por señal o con timeout es un fallo del plugin (exit 1), igual que
 // un JSON inválido del motor.
 import { parseSingleJsonObject } from "./health-decision.js";
+import { CUSTOM_VOICE } from "./voice.js";
 
 export const NOT_COMPLETED_MESSAGE = "No se pudo completar la operación.";
 export const UNEXPECTED_RESPONSE_MESSAGE =
@@ -69,24 +70,42 @@ export function engineJson(
     : undefined;
 }
 
-/** Fallo de la invocación, o undefined si el motor terminó con exit 0. */
-export function engineFailure(run: EngineRun): EngineFailure | undefined {
+/** Pista de `voice_not_found` cuando la voz pedida es `custom`. */
+const CUSTOM_NOT_CLONED_MESSAGE =
+  "La voz custom todavía no está clonada; clónala con /evolutivex-agents:voice clone.";
+
+/**
+ * Fallo de la invocación, o undefined si el motor terminó con exit 0. `voice`
+ * es la voz pedida, si la hay: con `custom`, un `voice_not_found` remite a
+ * clonarla.
+ */
+export function engineFailure(
+  run: EngineRun,
+  voice?: string,
+): EngineFailure | undefined {
   if (run.error || run.status === null)
     return { exitCode: 1, message: NOT_COMPLETED_MESSAGE };
   if (run.status === 0) return undefined;
   const payload = engineJson(run.stdout);
   if (!payload) return { exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE };
-  return { exitCode: run.status, message: failureMessage(run.status, payload) };
+  return {
+    exitCode: run.status,
+    message: failureMessage(run.status, payload, voice),
+  };
 }
 
 function failureMessage(
   status: number,
   payload: Record<string, unknown>,
+  voice: string | undefined,
 ): string {
   const reason = typeof payload.reason === "string" ? payload.reason : "";
-  const hint = Object.hasOwn(REASON_MESSAGES, reason)
-    ? REASON_MESSAGES[reason]
-    : `El motor falló con exit ${status}${reason ? ` (${reason})` : ""}.`;
+  const hint =
+    reason === "voice_not_found" && voice === CUSTOM_VOICE
+      ? CUSTOM_NOT_CLONED_MESSAGE
+      : Object.hasOwn(REASON_MESSAGES, reason)
+        ? REASON_MESSAGES[reason]
+        : `El motor falló con exit ${status}${reason ? ` (${reason})` : ""}.`;
   const error = typeof payload.error === "string" ? payload.error : "";
   return error ? `${error}\n${hint}` : hint;
 }

@@ -82,7 +82,7 @@ El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI 
 - **Referencia:** unos 10 s de habla clara (máximo 30 s), desde un archivo WAV o el micrófono. `--denoise` limpia el ruido de fondo de forma opcional.
 - **Activación:** el clonado pre-sintetiza los seis anuncios con la voz nueva y luego indica elegir `custom` en `/config` → `evolutivex-agents.voice`. El plugin nunca activa una voz por su cuenta; el cambio se oye desde el siguiente evento.
 - **Costo de cambiar de voz:** cada voz tiene sus propios anuncios (seis síntesis, una sola vez) y la primera síntesis con otra voz tarda algo más mientras el daemon la carga.
-- **Sin fallback:** si la voz activa no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, `SessionStart` lo avisa y la narración falla con el remedio en `worker.log`, en lugar de sonar otra voz.
+- **Sin fallback:** si la voz activa no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, `SessionStart` lo avisa y la narración falla con el remedio en `worker.log`, en lugar de sonar otra voz. Si la voz no existe, no tiene sus anuncios o su nombre no es válido, el worker te lo notifica además en el escritorio, una vez por problema. Con la voz ausente y el daemon parado, `SessionStart` arranca el daemon precalentando `default` para que puedas clonar o pre-sintetizar; la narración sigue pidiendo la voz elegida.
 - **A demanda:** `narrate-ctl say` y `presynth` aceptan `--voice <voz>`; sin él usan la voz activa del último evento narrado, que `status` muestra.
 
 ### Transcript enriquecido (`/config`)
@@ -177,10 +177,10 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 
   Al superar 512 KiB se renombra a `worker.log.1` (que reemplaza al anterior), y `worker.log.1` se borra tras 14 días sin cambios: como máximo, 2 archivos y 1 MiB.
 
-  El mismo directorio guarda `active-voice` (la voz activa del último evento, que leen `say` y `presynth`), `custom-display-name` (el nombre de presentación de tu voz `custom`) y, mientras dura una operación manual de voz, el bloqueo `voice-operation.lock`.
+  El mismo directorio guarda `active-voice` (la voz activa del último evento, que leen `say` y `presynth`), `custom-display-name` (el nombre de presentación de tu voz `custom`), `voice-problem.json` (el último problema de voz notificado, para no repetir el aviso) y, mientras dura una operación manual de voz, el bloqueo `voice-operation.lock`.
 
-- **`speech_not_found` en `worker.log`:** la voz activa no tiene sus anuncios pre-sintetizados. Ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice <voz>` con el daemon caliente.
-- **`voice_not_found` o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor; con `custom`, todavía no clonaste tu voz. Clónala con `/evolutivex-agents:voice clone` o elige otra (por ejemplo, `default`).
+- **`speech_not_found` en `worker.log` o en una notificación:** la voz activa no tiene sus anuncios pre-sintetizados. Ejecuta `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice <voz>` con el daemon caliente.
+- **`voice_not_found`, notificación o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor; con `custom`, todavía no clonaste tu voz. Clónala con `/evolutivex-agents:voice clone` o elige otra (por ejemplo, `default`).
 - **«Hay otra operación de voz en curso»:** otra operación de `clone`, `remove` o `presynth` tiene el bloqueo. Si no hay ninguna en marcha, borra `voice-operation.lock` del _state dir_.
 
 - **El transcript enriquecido desapareció a mitad de sesión:** se apagó por fallos repetidos (ver la protección en [Transcript enriquecido](#transcript-enriquecido-config)); el toast indica la causa. Vuelve al reiniciar Claude Code o con `/reload-plugins`.

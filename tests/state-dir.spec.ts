@@ -22,6 +22,7 @@ import {
   activeVoicePath,
   voiceOperationLockPath,
   customDisplayNamePath,
+  voiceProblemPath,
 } from "../src/lib/state-dir.js";
 import { fakePlatform, withEnv, makeTempDir, removeDir } from "./helpers.js";
 
@@ -93,6 +94,7 @@ test("las rutas derivadas cuelgan del state dir con sus nombres fijos", () => {
     customDisplayNamePath(),
     join(stateDir(), "custom-display-name"),
   );
+  assert.equal(voiceProblemPath(), join(stateDir(), "voice-problem.json"));
   assert.equal(
     voiceOperationLockPath(),
     join(stateDir(), "voice-operation.lock"),

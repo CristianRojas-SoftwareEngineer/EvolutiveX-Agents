@@ -8,7 +8,7 @@
 // redirigido a un temporal vía env vars del SO anfitrión: con la voz apagada
 // en /config vacía la cola pendiente y no lanza el worker; con la voz activa
 // encola el payload anotado con la voz de /config; en ambos casos escribe la
-// caché de la voz activa.
+// caché de la voz activa. Nunca escribe en stdout.
 import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -119,4 +119,24 @@ test("con la voz apagada escribe igualmente la caché con la voz de /config", ()
     readFileSync(join(pluginStateDir(), "active-voice"), "utf8"),
     "custom\n",
   );
+});
+
+test("no escribe nada en stdout en UserPromptSubmit ni en Stop", () => {
+  // Un worker «vivo» (este proceso) evita lanzar uno real.
+  mkdirSync(pluginStateDir(), { recursive: true });
+  writeFileSync(join(pluginStateDir(), "worker.pid"), String(process.pid));
+
+  for (const payload of [
+    { hook_event_name: "UserPromptSubmit", prompt: "x" },
+    { hook_event_name: "Stop", session_id: "s1" },
+  ]) {
+    const res = spawnSync(process.execPath, [HOOK], {
+      env: hookEnv({ CLAUDE_PLUGIN_OPTION_VOICE: "custom" }),
+      input: JSON.stringify(payload),
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    assert.equal(res.status, 0);
+    assert.equal(res.stdout, "");
+  }
 });

@@ -458,9 +458,20 @@ $PLUGIN_E2E --resume` muestra las mismas horas y duraciones. Al terminar,
      narrate-ctl voice remove custom --yes   # informa las locuciones borradas
      ```
 
-     Abre una sesión nueva. **Comprobación:** `SessionStart` avisa de que
-     `custom` todavía no está clonada y el daemon no se arranca. Vuelve a
-     `default`.
+     Envía dos prompts. **Comprobación:** llega una sola notificación de
+     escritorio con «La voz custom todavía no está clonada; clónala con
+     /evolutivex-agents:voice clone…», no una por prompt.
+
+     Detén el daemon y abre una sesión nueva:
+
+     ```powershell
+     ai-voice-interconnector daemon stop
+     ```
+
+     **Comprobación:** `SessionStart` avisa de que `custom` todavía no está
+     clonada y termina con «El daemon se arrancó precalentando default, sin
+     cambiar la voz de la narración.»; `ai-voice-interconnector daemon status
+--json` muestra el daemon corriendo. Vuelve a `default`.
 
 Esta fase requiere verificación humana (audible) y no se automatiza por completo.
 

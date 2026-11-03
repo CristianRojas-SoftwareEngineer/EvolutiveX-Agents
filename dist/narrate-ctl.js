@@ -371,17 +371,21 @@ function engineJson(stdout) {
   const payload = parseSingleJsonObject(stdout);
   return typeof payload === "object" && payload !== null ? payload : void 0;
 }
-function engineFailure(run) {
+var CUSTOM_NOT_CLONED_MESSAGE = "La voz custom todav\xEDa no est\xE1 clonada; cl\xF3nala con /evolutivex-agents:voice clone.";
+function engineFailure(run, voice) {
   if (run.error || run.status === null)
     return { exitCode: 1, message: NOT_COMPLETED_MESSAGE };
   if (run.status === 0) return void 0;
   const payload = engineJson(run.stdout);
   if (!payload) return { exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE };
-  return { exitCode: run.status, message: failureMessage(run.status, payload) };
+  return {
+    exitCode: run.status,
+    message: failureMessage(run.status, payload, voice)
+  };
 }
-function failureMessage(status, payload) {
+function failureMessage(status, payload, voice) {
   const reason = typeof payload.reason === "string" ? payload.reason : "";
-  const hint = Object.hasOwn(REASON_MESSAGES, reason) ? REASON_MESSAGES[reason] : `El motor fall\xF3 con exit ${status}${reason ? ` (${reason})` : ""}.`;
+  const hint = reason === "voice_not_found" && voice === CUSTOM_VOICE ? CUSTOM_NOT_CLONED_MESSAGE : Object.hasOwn(REASON_MESSAGES, reason) ? REASON_MESSAGES[reason] : `El motor fall\xF3 con exit ${status}${reason ? ` (${reason})` : ""}.`;
   const error = typeof payload.error === "string" ? payload.error : "";
   return error ? `${error}
 ${hint}` : hint;
@@ -428,11 +432,13 @@ function say(text, voice) {
   if (!cli) return 1;
   console.log(`voz: ${describeVoice(voice)}`);
   const args = ["speech", "say", "--text", text, "--voice", voice.voice];
-  const res = runCli(cli, [...args, "--daemon"], {
-    stdio: "inherit",
+  const res = runCli(cli, [...args, "--daemon", "--json"], {
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true
   });
-  return typeof res.status === "number" ? res.status : 1;
+  const failure = engineFailure(res, voice.voice);
+  return failure ? reportFailure(failure) : 0;
 }
 function presynth(voice, force, resynth = force) {
   const cli = requireCli("pre-sintetizar");
@@ -450,13 +456,14 @@ function presynth(voice, force, resynth = force) {
         stdio: ["ignore", "pipe", "inherit"],
         windowsHide: true
       });
-      if (!reportPresynth(eventKey, label, res, resynth)) failed = true;
+      if (!reportPresynth(eventKey, label, voice.voice, res, resynth))
+        failed = true;
     }
     return failed ? 1 : 0;
   });
 }
-function reportPresynth(eventKey, label, res, resynth) {
-  const failure = engineFailure(res);
+function reportPresynth(eventKey, label, voice, res, resynth) {
+  const failure = engineFailure(res, voice);
   if (!failure) {
     console.log(
       `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`

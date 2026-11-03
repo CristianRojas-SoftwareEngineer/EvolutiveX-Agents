@@ -6,7 +6,9 @@
 
 // Worker drenador: verifica que narra los payloads encolados en orden, sin
 // duplicados y con la voz anotada en cada ítem (`--voice`), que sale tras la
-// ventana de inactividad y que rota worker.log por tamaño y antigüedad. Usa
+// ventana de inactividad, que registra en voice-problem.json el problema de voz
+// avisado y lo borra tras una narración correcta, y que rota worker.log por
+// tamaño y antigüedad. Las notificaciones de escritorio se desactivan. Usa
 // dist/narrate-worker.js como subproceso real con un CLI falso y state dir
 // aislado.
 import { test, afterEach } from "node:test";
@@ -25,6 +27,7 @@ import { enqueuePayload, listPending } from "../src/voice/queue.js";
 import {
   ensureStateDir,
   rotatedWorkerLogPath,
+  voiceProblemPath,
   workerLogPath,
   workerPidPath,
 } from "../src/lib/state-dir.js";
@@ -92,9 +95,10 @@ function makeFakeCli(
   return cliPath;
 }
 
+/** Ejecuta el worker real sin notificaciones de escritorio. */
 function runWorker(env: NodeJS.ProcessEnv): { status: number | null } {
   const res = spawnSync(process.execPath, [WORKER], {
-    env,
+    env: { ...env, CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "false" },
     stdio: "ignore",
     windowsHide: true,
   });
@@ -397,6 +401,43 @@ test("worker registra la pista de cada reason de speech say", () => {
   assert.match(lines[0]!, /código 5 \(daemon_unreachable: .*daemon start\)$/);
   assert.match(lines[1]!, /código 3 \(no_output_device: .*\)$/);
   assert.match(lines[2]!, /código 4 \(model_missing: .*setup\)$/);
+});
+
+test("worker registra el voice_not_found de custom en voice-problem.json y una narración correcta lo borra", () => {
+  const dir = makeTempDir("avi-plugin-worker-problem-");
+  restoreDirs.push(dir);
+  const cliDir = makeTempDir("avi-plugin-cli-problem-");
+  restoreDirs.push(cliDir);
+  makeFakeCli(cliDir, [
+    { stdout: '{"error":"e","reason":"voice_not_found"}', exit: 3 },
+    { stdout: "{}", exit: 0 },
+  ]);
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PATH: cliDir + delimiter + process.env.PATH,
+  };
+  const narrateOnce = (session: string) => {
+    enqueuePayload(
+      { session_id: session, hook_event_name: "UserPromptSubmit", prompt: "x" },
+      "custom",
+    );
+    assert.equal(runWorker(env).status, 0);
+  };
+
+  narrateOnce("f1");
+  assert.deepEqual(JSON.parse(readFileSync(voiceProblemPath(), "utf8")), {
+    voice: "custom",
+    reason: "voice_not_found",
+  });
+
+  narrateOnce("f2");
+  assert.equal(existsSync(voiceProblemPath()), false);
 });
 
 // --- Rotación de worker.log ---
