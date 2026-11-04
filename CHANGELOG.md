@@ -13,6 +13,7 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 - `SessionStart` arranca el daemon precalentando la voz activa y avisa si la voz no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, sin caer a `default`. Con la voz ausente o no comprobable y el daemon parado, lo arranca precalentando `default` para que clonar y pre-sintetizar funcionen; la narración sigue pidiendo la voz elegida.
 - Notificación de escritorio de los problemas de voz: si la voz activa no existe, no tiene sus anuncios o su nombre no es válido, el worker lo avisa con el remedio una sola vez por problema (respeta `notificationsEnabled`) y vuelve a avisar si reaparece tras una narración correcta.
 - `narrate-ctl` con `voice list|clone|remove`, `--voice` en `say` y `presynth`, y la voz activa en `status`; las operaciones manuales de voz se excluyen entre sí.
+- La instalación guiada ofrece pre-sintetizar también los anuncios de `ryan` y `vivian` (alrededor de 1 minuto y 1 MB cada una), antes de los de `default` para dejarla caliente en el daemon.
 - `narrate-ctl say` traduce los fallos del motor a un remedio, y con la voz `custom` sin clonar, `say` y `presynth` remiten a `/evolutivex-agents:voice clone`.
 
 ### Corregido

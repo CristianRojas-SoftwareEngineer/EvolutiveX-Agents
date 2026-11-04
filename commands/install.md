@@ -119,7 +119,17 @@ Con el daemon recién levantado (precondición exacta de este paso), pre-sinteti
 node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth
 ```
 
-Interpreta el resultado:
+Antes de ejecutarlo, pregunta al usuario si quiere pre-sintetizar también los anuncios de las voces de fábrica `ryan` y `vivian`, para poder elegirlas luego en `/config` → `evolutivex-agents.voice` sin pasos extra. Cada una tarda alrededor de 1 minuto y ocupa alrededor de 1 MB en el almacén del motor. Si no acepta, ejecuta solo el comando de arriba. Si acepta, ejecuta los tres comandos **en este orden**, cada uno con el timeout de la herramienta de shell en 600000 ms:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice ryan
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth --voice vivian
+node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" presynth
+```
+
+El daemon mantiene cargada solo la última voz con la que sintetizó, por eso `default` va al final: en una instalación nueva queda caliente para la narración. En una reinstalación, los anuncios de `default` ya existen y `presynth` no los re-sintetiza, así que el daemon puede quedarse con otra voz (por ejemplo, `vivian`) y la primera narración con `default` puede tardar unos segundos más mientras la vuelve a cargar.
+
+Interpreta el resultado de cada comando:
 
 - **Exit `0`** → todos los anuncios quedaron pre-sintetizados. El exit `6`
   (`label_exists`) de `speech synthesize` por una etiqueta ya existente cuenta como
