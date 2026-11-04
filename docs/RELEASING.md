@@ -186,9 +186,10 @@ Notas de contrato que el runbook asume (verificado en código fuente):
   con `ai-voice-interconnector daemon status --json`.
 - `narrate-ctl status` **nunca** imprime el valor de ninguna clave: solo muestra
   `gemini key:   configurada|ausente`.
-- `narrate-ctl say` pasa el texto directo a `ai-voice-interconnector speech say --text ... --voice <voz> --daemon`
+- `narrate-ctl say` pasa el texto directo a `ai-voice-interconnector speech say --text ... --voice <voz> --daemon --json`
   (pipeline TTS + daemon), con la voz de `--voice` o la activa del último
-  evento; **no** ejercita la generación de mensaje (`local`/`llm`).
+  evento, y traduce un fallo del motor a su remedio; **no** ejercita la
+  generación de mensaje (`local`/`llm`).
 - `narrate-ctl status` muestra la voz activa según el último evento narrado
   (la caché `active-voice`), no la de `/config`: tras cambiarla, se actualiza
   en el siguiente evento.
