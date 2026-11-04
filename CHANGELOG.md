@@ -24,6 +24,7 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Corregido
 
+- En el modo `llm`, el resumen del turno parafrasea el mensaje del asistente en lugar de relatarlo: dice «Hola, ¿qué tal?» y no «Te he saludado y te he preguntado qué tal», con la misma intención que el original.
 - Transcript enriquecido: si el plugin fallaba al registrar una herramienta antes de ejecutarla, su bloque mostraba un contador «en curso» que no se detenía y el reloj seguía haciendo un tic por segundo.
 
 ## [0.1.0] — 2026-11-03

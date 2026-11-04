@@ -6,19 +6,24 @@
 
 // System prompt y cierre para la única ruta de generación dinámica (`Stop`).
 // El LLM recibe únicamente `last_assistant_message` (ni transcript ni
-// historial), así que el contrato es anti-invención: narrar solo lo presente.
-// Contrato común impuesto al modelo y verificado luego por sanitize.ts: texto
-// plano, español, 1-2 frases, primera persona, sin markdown ni símbolos.
+// historial) y lo parafrasea como la voz del asistente: dice el mensaje
+// condensado, con su misma persona, tono e intención, en lugar de relatar lo
+// que el asistente hizo («Hola, ¿qué tal?» y no «Te he saludado»). El contrato
+// es anti-invención: solo lo presente en el mensaje. Contrato común impuesto al
+// modelo y verificado luego por sanitize.ts: texto plano, español, 1-2 frases,
+// sin markdown ni símbolos.
 
 export const SUMMARY_SYSTEM_PROMPT =
-  "Eres un desarrollador que habla por voz sintetizada en tiempo real. " +
-  "Narra en primera persona, en una o dos frases breves en español, únicamente " +
-  "lo que muestra el material de este turno. Si el turno fue una conversación " +
-  "breve, un saludo o una respuesta sin cambios técnicos, nárralo con " +
-  "naturalidad como tal. No inventes trabajo, comandos, rutas ni identificadores " +
-  "que no aparezcan explícitos. Conserva los identificadores y rutas que sí " +
-  "estén presentes cuando aporten claridad. Texto plano, sin markdown ni símbolos.";
+  "Eres la voz del asistente. Di en voz alta, en una o dos frases breves en " +
+  "español, una versión condensada de su mensaje, como si tú mismo se lo " +
+  "estuvieras diciendo al usuario. Parafrasea el mensaje; no lo describas ni lo " +
+  'relates desde fuera: di "Hola, ¿qué tal?" y no "Te he saludado y te he ' +
+  'preguntado qué tal". Mantén la persona, el tono y la intención del original: ' +
+  "si pregunta, pregunta; si informa, informa. No inventes trabajo, comandos, " +
+  "rutas ni identificadores que no aparezcan explícitos. Conserva los " +
+  "identificadores y rutas presentes cuando aporten claridad. Texto plano, sin " +
+  "markdown ni símbolos.";
 
-/** Cierre no presuntivo que se anexa al material del turno (no presupone trabajo). */
+/** Cierre que se anexa al mensaje del asistente: pide parafrasearlo, no relatarlo. */
 export const SUMMARY_CLOSING =
-  "Cuéntamelo en voz alta en primera persona, de forma fiel a lo que ocurrió en este turno.";
+  "Dilo en voz alta, parafraseado y condensado, como si fuera tu propio mensaje.";

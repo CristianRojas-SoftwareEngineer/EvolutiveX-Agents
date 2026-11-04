@@ -14,7 +14,7 @@ import type { GenerationInput } from "../src/voice/message/provider.js";
 import { SUMMARY_CLOSING } from "../src/voice/message/prompts.js";
 
 const INPUT: GenerationInput = { text: "Terminé la tarea." };
-const EXPECTED_CONTENT = `Material del turno:\n\nTerminé la tarea.\n\n${SUMMARY_CLOSING}`;
+const EXPECTED_CONTENT = `Mensaje del asistente:\n\nTerminé la tarea.\n\n${SUMMARY_CLOSING}`;
 
 const realFetch = globalThis.fetch;
 let lastRequest: { url: string; init: RequestInit } | undefined;

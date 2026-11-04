@@ -227,7 +227,7 @@ test("Stop (llm) envía a Gemini un único mensaje user derivado solo de last_as
         role: "user",
         parts: [
           {
-            text: `Material del turno:\n\nCreé el componente principal.\n\n${SUMMARY_CLOSING}`,
+            text: `Mensaje del asistente:\n\nCreé el componente principal.\n\n${SUMMARY_CLOSING}`,
           },
         ],
       },

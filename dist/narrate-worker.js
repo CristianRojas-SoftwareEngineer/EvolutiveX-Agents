@@ -363,15 +363,15 @@ function codeOrNull(child) {
 }
 
 // src/voice/message/prompts.ts
-var SUMMARY_SYSTEM_PROMPT = "Eres un desarrollador que habla por voz sintetizada en tiempo real. Narra en primera persona, en una o dos frases breves en espa\xF1ol, \xFAnicamente lo que muestra el material de este turno. Si el turno fue una conversaci\xF3n breve, un saludo o una respuesta sin cambios t\xE9cnicos, n\xE1rralo con naturalidad como tal. No inventes trabajo, comandos, rutas ni identificadores que no aparezcan expl\xEDcitos. Conserva los identificadores y rutas que s\xED est\xE9n presentes cuando aporten claridad. Texto plano, sin markdown ni s\xEDmbolos.";
-var SUMMARY_CLOSING = "Cu\xE9ntamelo en voz alta en primera persona, de forma fiel a lo que ocurri\xF3 en este turno.";
+var SUMMARY_SYSTEM_PROMPT = 'Eres la voz del asistente. Di en voz alta, en una o dos frases breves en espa\xF1ol, una versi\xF3n condensada de su mensaje, como si t\xFA mismo se lo estuvieras diciendo al usuario. Parafrasea el mensaje; no lo describas ni lo relates desde fuera: di "Hola, \xBFqu\xE9 tal?" y no "Te he saludado y te he preguntado qu\xE9 tal". Mant\xE9n la persona, el tono y la intenci\xF3n del original: si pregunta, pregunta; si informa, informa. No inventes trabajo, comandos, rutas ni identificadores que no aparezcan expl\xEDcitos. Conserva los identificadores y rutas presentes cuando aporten claridad. Texto plano, sin markdown ni s\xEDmbolos.';
+var SUMMARY_CLOSING = "Dilo en voz alta, parafraseado y condensado, como si fuera tu propio mensaje.";
 
 // src/voice/message/provider.ts
 var REQUEST_TIMEOUT_MS = 8e3;
 var MAX_OUTPUT_TOKENS = 512;
 function buildUserContent(input) {
   const text = (input.text ?? "").trim();
-  return `Material del turno:
+  return `Mensaje del asistente:
 
 ${text}
 

@@ -10,7 +10,7 @@
 import { SUMMARY_CLOSING } from "./prompts.js";
 
 export interface GenerationInput {
-  /** Único material del turno: `last_assistant_message` ya acotado por clampHead. */
+  /** Único mensaje a parafrasear: `last_assistant_message` ya acotado por clampHead. */
   text: string;
 }
 
@@ -20,11 +20,11 @@ export const MAX_OUTPUT_TOKENS = 512;
 
 /**
  * Construye el contenido del ÚNICO mensaje `user` para el proveedor LLM:
- * el material del turno más el cierre no presuntivo. Sin historial ni mapeo
+ * el mensaje del asistente más el cierre que pide parafrasearlo. Sin historial ni mapeo
  * de roles: el LLM nunca recibe nada que no sea el `last_assistant_message`
  * del payload.
  */
 export function buildUserContent(input: GenerationInput): string {
   const text = (input.text ?? "").trim();
-  return `Material del turno:\n\n${text}\n\n${SUMMARY_CLOSING}`;
+  return `Mensaje del asistente:\n\n${text}\n\n${SUMMARY_CLOSING}`;
 }
