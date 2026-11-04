@@ -29,7 +29,7 @@ test("las constantes fijan la voz por defecto, las de fábrica, custom y la vers
   assert.equal(DEFAULT_VOICE, "default");
   assert.deepEqual([...FACTORY_VOICES], ["default", "ryan", "vivian"]);
   assert.equal(CUSTOM_VOICE, "custom");
-  assert.equal(MIN_ENGINE_VERSION, "0.43.0");
+  assert.equal(MIN_ENGINE_VERSION, "0.44.0");
 });
 
 test("las voces seleccionables coinciden con options y default de userConfig.voice", () => {
@@ -94,11 +94,11 @@ test("parseVoiceList devuelve undefined ante cualquier otra forma", () => {
 });
 
 test("meetsMinVersion compara major.minor.patch numéricamente", () => {
-  assert.equal(meetsMinVersion("0.43.0"), true);
-  assert.equal(meetsMinVersion("0.43.1"), true);
+  assert.equal(meetsMinVersion("0.44.0"), true);
+  assert.equal(meetsMinVersion("0.44.1"), true);
   assert.equal(meetsMinVersion("0.100.0"), true);
   assert.equal(meetsMinVersion("1.0.0"), true);
-  assert.equal(meetsMinVersion("0.42.9"), false);
+  assert.equal(meetsMinVersion("0.43.9"), false);
   assert.equal(meetsMinVersion("0.9.99"), false);
 });
 

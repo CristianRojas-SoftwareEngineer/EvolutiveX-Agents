@@ -17,7 +17,7 @@ var SELECTABLE_VOICES = [
   ...FACTORY_VOICES,
   CUSTOM_VOICE
 ];
-var MIN_ENGINE_VERSION = "0.43.0";
+var MIN_ENGINE_VERSION = "0.44.0";
 var MAX_DISPLAY_NAME_LENGTH = 64;
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
@@ -451,6 +451,7 @@ function presynth(voice, force, resynth = force) {
       const args = ["speech", "synthesize", "--text", text, "--label", label];
       args.push("--voice", voice.voice);
       if (force) args.push("--force");
+      else args.push("--skip-existing");
       args.push("--daemon", "--json");
       const res = runCli(cli, args, {
         encoding: "utf8",
@@ -466,16 +467,17 @@ function presynth(voice, force, resynth = force) {
 function reportPresynth(eventKey, label, voice, res, resynth) {
   const failure = engineFailure(res, voice);
   if (!failure) {
-    console.log(
-      `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`
-    );
+    const status = engineJson(res.stdout)?.status;
+    if (status === "skipped") {
+      console.log(`${eventKey}: ya pre-sintetizado (${label})`);
+    } else {
+      console.log(
+        `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`
+      );
+    }
     return true;
   }
   const reason = engineJson(res.stdout)?.reason;
-  if (res.status === 6 && reason === "label_exists") {
-    console.log(`${eventKey}: ya pre-sintetizado (${label})`);
-    return true;
-  }
   const detail = res.status === null ? "no se pudo completar" : `exit ${res.status}${typeof reason === "string" ? `, ${reason}` : ""}`;
   console.error(
     `${eventKey}: fallo (${detail}) (${label}) \u2014 ${failure.message}`

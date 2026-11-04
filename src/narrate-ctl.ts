@@ -131,14 +131,15 @@ function say(text: string, voice: ResolvedVoice): number {
 /**
  * Pre-sintetiza los anuncios del catálogo con la voz indicada, vía
  * `speech synthesize --voice <voz> --daemon --json`, bajo el bloqueo de
- * operaciones manuales. Idempotente por defecto: solo el exit `6` con `reason:
- * label_exists` significa «ya pre-sintetizado» y cuenta como éxito. Con
- * `force`, pasa `--force` al motor para sobrescribir el WAV del label
- * existente: el re-sync manual tras un cambio de frase o un re-clonado.
- * Requiere el daemon caliente (exit `5` si está caído) y el modelo
- * provisionado (exit `4`). `resynth` decide si un éxito se informa como
- * «re-sintetizado» (por defecto, con `force`); tras clonar una voz nueva es
- * «pre-sintetizado». Devuelve 1 si algún anuncio falla.
+ * operaciones manuales. Idempotente por defecto: pasa `--skip-existing` al
+ * motor para que conserve la locución existente sin sintetizar (exit 0,
+ * status "skipped"). Con `force`, pasa `--force` al motor para sobrescribir
+ * el WAV del label existente: el re-sync manual tras un cambio de frase o
+ * un re-clonado. Requiere el daemon caliente (exit `5` si está caído) y el
+ * modelo provisionado (exit `4`), salvo con `--skip-existing` que responde
+ * aunque falten. `resynth` decide si un éxito se informa como «re-sintetizado»
+ * (por defecto, con `force`); tras clonar una voz nueva es «pre-sintetizado».
+ * Devuelve 1 si algún anuncio falla (cualquier código ≠ 0).
  */
 function presynth(
   voice: ResolvedVoice,
@@ -154,6 +155,7 @@ function presynth(
       const args = ["speech", "synthesize", "--text", text, "--label", label];
       args.push("--voice", voice.voice);
       if (force) args.push("--force");
+      else args.push("--skip-existing");
       args.push("--daemon", "--json");
       const res = runCli(cli, args, {
         encoding: "utf8",
@@ -168,8 +170,9 @@ function presynth(
 }
 
 /**
- * Informa el resultado de pre-sintetizar un anuncio. Devuelve false si falló;
- * solo el exit `6` con `label_exists` cuenta como éxito idempotente.
+ * Informa el resultado de pre-sintetizar un anuncio. Devuelve false si falló.
+ * Exit 0 con status "skipped" cuenta como «ya pre-sintetizado». Cualquier
+ * otro código ≠ 0 es fallo.
  */
 function reportPresynth(
   eventKey: string,
@@ -180,16 +183,17 @@ function reportPresynth(
 ): boolean {
   const failure = engineFailure(res, voice);
   if (!failure) {
-    console.log(
-      `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
-    );
+    const status = engineJson(res.stdout)?.status;
+    if (status === "skipped") {
+      console.log(`${eventKey}: ya pre-sintetizado (${label})`);
+    } else {
+      console.log(
+        `${eventKey}: ${resynth ? "re-sintetizado" : "pre-sintetizado"} (${label})`,
+      );
+    }
     return true;
   }
   const reason = engineJson(res.stdout)?.reason;
-  if (res.status === 6 && reason === "label_exists") {
-    console.log(`${eventKey}: ya pre-sintetizado (${label})`);
-    return true;
-  }
   const detail =
     res.status === null
       ? "no se pudo completar"

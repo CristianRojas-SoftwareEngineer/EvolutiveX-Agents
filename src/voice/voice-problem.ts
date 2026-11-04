@@ -17,7 +17,7 @@ import { ensureStateDir, voiceProblemPath } from "../lib/state-dir.js";
 const NOTIFIABLE_REASONS = [
   "voice_not_found",
   "speech_not_found",
-  "invalid_identifier",
+  "invalid_voice_name",
 ];
 
 export type NarrationOutcome = { ok: true } | { ok: false; reason?: string };

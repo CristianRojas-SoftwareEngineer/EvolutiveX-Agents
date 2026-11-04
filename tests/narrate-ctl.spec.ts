@@ -245,6 +245,7 @@ test("presynth pre-sintetiza los seis anuncios con speech synthesize --label --d
       assert.ok(argv.includes("--daemon"));
       assert.ok(argv.includes("--json"));
       assert.equal(argv[argv.indexOf("--voice") + 1], "default");
+      assert.ok(argv.includes("--skip-existing"));
       assert.ok(!argv.includes("--force"));
       return argv[argv.indexOf("--label") + 1];
     });
@@ -266,13 +267,18 @@ test("presynth no da por pre-sintetizado un exit 6 con voice_changed: lo informa
       exit: 6,
       stdout: JSON.stringify({ error: "e", reason: "voice_changed" }),
     };
-    makeFakeCli(dir, [changed, 0, 0, 0, 0, 0]);
+    const { argvLog } = makeFakeCli(dir, [changed, 0, 0, 0, 0, 0]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
     assert.equal(res.status, 1);
     assert.doesNotMatch(res.stdout, /ya pre-sintetizado/);
     assert.equal(res.stdout.match(/: pre-sintetizado /g)?.length, 5);
     assert.match(res.stderr, /exit 6, voice_changed/);
     assert.match(res.stderr, /repite la pre-síntesis/);
+    const argvs = loggedArgvs(argvLog);
+    for (const argv of argvs) {
+      assert.ok(argv.includes("--skip-existing"));
+      assert.ok(!argv.includes("--force"));
+    }
   } finally {
     removeDir(dir);
   }
@@ -292,6 +298,7 @@ test("presynth --force pasa --force al motor y reporta re-sintetizado", () => {
       assert.deepEqual(argv.slice(0, 2), ["speech", "synthesize"]);
       assert.ok(argv.includes("--force"));
       assert.ok(argv.includes("--daemon"));
+      assert.ok(!argv.includes("--skip-existing"));
     }
   } finally {
     removeDir(dir);
@@ -304,14 +311,28 @@ test("presynth con un argumento inválido devuelve 2 con uso", () => {
   assert.match(res.stderr, /Uso: presynth/);
 });
 
-test("presynth es idempotente: exit 6 (label ya existe) cuenta como éxito", () => {
+test("presynth es idempotente: --skip-existing con status skipped cuenta como éxito", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
-    makeFakeCli(dir, [0, 6, 6, 0, 6, 6]);
+    // First 2 succeed, next 2 are skipped, last 2 succeed
+    const skipped = {
+      exit: 0,
+      stdout: JSON.stringify({
+        status: "skipped",
+        audio_path: "/x",
+        voice: "default",
+      }),
+    };
+    const { argvLog } = makeFakeCli(dir, [0, 0, skipped, skipped, 0, 0]);
     const res = runCtl(["presynth"], fakeCliEnv(dir));
     assert.equal(res.status, 0);
-    assert.equal(res.stdout.match(/: ya pre-sintetizado /g)?.length, 4);
-    assert.equal(res.stdout.match(/: pre-sintetizado /g)?.length, 2);
+    assert.equal(res.stdout.match(/: ya pre-sintetizado /g)?.length, 2);
+    assert.equal(res.stdout.match(/: pre-sintetizado /g)?.length, 4);
+    const argvs = loggedArgvs(argvLog);
+    for (const argv of argvs) {
+      assert.ok(argv.includes("--skip-existing"));
+      assert.ok(!argv.includes("--force"));
+    }
   } finally {
     removeDir(dir);
   }
@@ -320,7 +341,7 @@ test("presynth es idempotente: exit 6 (label ya existe) cuenta como éxito", () 
 test("presynth propaga el fallo (exit 5, daemon caído) con código ≠ 0", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
-    makeFakeCli(dir, [
+    const { argvLog } = makeFakeCli(dir, [
       {
         exit: 5,
         stdout: JSON.stringify({ error: "e", reason: "daemon_unreachable" }),
@@ -335,6 +356,11 @@ test("presynth propaga el fallo (exit 5, daemon caído) con código ≠ 0", () =
     assert.equal(res.status, 1);
     assert.match(res.stderr, /exit 5, daemon_unreachable/);
     assert.match(res.stderr, /ai-voice-interconnector daemon start/);
+    const argvs = loggedArgvs(argvLog);
+    for (const argv of argvs) {
+      assert.ok(argv.includes("--skip-existing"));
+      assert.ok(!argv.includes("--force"));
+    }
   } finally {
     removeDir(dir);
   }
@@ -780,6 +806,9 @@ test("voice clone con una pre-síntesis fallida sale ≠ 0, informa la etiqueta 
       assert.match(res.stderr, /presynth --voice custom --force/);
       assert.doesNotMatch(res.stdout, /elige custom en \/config/);
       assert.equal(synthesizeArgvs(argvLog).length, 6);
+      for (const argv of synthesizeArgvs(argvLog)) {
+        assert.ok(argv.includes("--force"));
+      }
     },
   );
 });
@@ -1029,7 +1058,7 @@ for (const version of ["0.42.9", "abc"]) {
       ]) {
         const res = runCtl(args, env);
         assert.equal(res.status, 1);
-        assert.match(res.stderr, /requiere AI Voice-InterConnector 0\.43\.0/);
+        assert.match(res.stderr, /requiere AI Voice-InterConnector 0\.44\.0/);
       }
       assert.ok(argvsOf(argvLog).every((a) => a[0] === "version"));
     });

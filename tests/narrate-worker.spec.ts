@@ -302,7 +302,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
     { stdout: '{"error":"e","reason":"playback_failed"}', exit: 1 },
     { stdout: '{"error":"e","reason":"reason_del_futuro"}', exit: 3 },
     { stdout: "no es json", exit: 3 },
-    { stdout: '{"error":"e","reason":"invalid_identifier"}', exit: 2 },
+    { stdout: '{"error":"e","reason":"invalid_voice_name"}', exit: 2 },
     { stdout: '{"error":"e","reason":"voice_not_found"}', exit: 3 },
   ]);
 
@@ -351,7 +351,7 @@ test("worker registra la pista de cada reason de speech play y degrada el descon
   assert.match(lines[6]!, /speech play salió con código 3$/);
   assert.match(
     lines[7]!,
-    /código 2 \(invalid_identifier: el nombre de voz «default» no es válido; .*\/config.*\)$/,
+    /código 2 \(invalid_voice_name: el nombre de voz «default» no es válido; .*\/config.*\)$/,
   );
   assert.match(
     lines[8]!,

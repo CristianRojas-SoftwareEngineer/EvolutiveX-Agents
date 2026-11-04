@@ -576,7 +576,7 @@ import { readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmS
 var NOTIFIABLE_REASONS = [
   "voice_not_found",
   "speech_not_found",
-  "invalid_identifier"
+  "invalid_voice_name"
 ];
 function readProblem() {
   try {
@@ -647,7 +647,7 @@ var REASON_HINTS = {
   voice_not_found: (voice) => voice === CUSTOM_VOICE ? "la voz custom todav\xEDa no est\xE1 clonada; cl\xF3nala con /evolutivex-agents:voice clone o elige otra en /config \u2192 evolutivex-agents.voice" : `la voz ${voice} no existe en el motor; elige otra en /config \u2192 evolutivex-agents.voice`,
   // `speech play` responde así a un nombre de voz ilegal (las etiquetas del
   // catálogo son fijas y válidas), p. ej. un valor antiguo en settings.json.
-  invalid_identifier: (voice) => `el nombre de voz \xAB${voice}\xBB no es v\xE1lido; elige una voz en /config \u2192 evolutivex-agents.voice`,
+  invalid_voice_name: (voice) => `el nombre de voz \xAB${voice}\xBB no es v\xE1lido; elige una voz en /config \u2192 evolutivex-agents.voice`,
   no_output_device: "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",
   audio_backend_unavailable: "backend de audio del sistema no disponible (en Linux, ALSA/libasound.so.2)",
   playback_failed: "fallo de reproducci\xF3n del audio",

@@ -99,7 +99,7 @@ const REASON_HINTS: Record<string, string | ((voice: string) => string)> = {
       : `la voz ${voice} no existe en el motor; elige otra en /config → evolutivex-agents.voice`,
   // `speech play` responde así a un nombre de voz ilegal (las etiquetas del
   // catálogo son fijas y válidas), p. ej. un valor antiguo en settings.json.
-  invalid_identifier: (voice) =>
+  invalid_voice_name: (voice) =>
     `el nombre de voz «${voice}» no es válido; elige una voz en /config → evolutivex-agents.voice`,
   no_output_device:
     "sin dispositivo de salida de audio predeterminado; revisa ai-voice-interconnector devices",

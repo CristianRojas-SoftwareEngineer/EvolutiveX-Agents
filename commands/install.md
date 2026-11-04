@@ -131,10 +131,9 @@ El daemon mantiene cargada solo la última voz con la que sintetizó, por eso `d
 
 Interpreta el resultado de cada comando:
 
-- **Exit `0`** → todos los anuncios quedaron pre-sintetizados. El exit `6`
-  (`label_exists`) de `speech synthesize` por una etiqueta ya existente cuenta como
-  **éxito** (idempotencia) y se reporta como «ya pre-sintetizado»: es seguro repetir
-  el comando.
+- **Exit `0`** → todos los anuncios quedaron pre-sintetizados. Con `--skip-existing`
+  (por defecto en `presynth` sin `--force`), `speech synthesize` sale con exit `0` y
+  `status: "skipped"` en etiquetas ya existentes: es seguro repetir el comando.
 - **Exit final ≠ `0`** → algún anuncio falló. La salida imprime el código interno del
   motor (`5`, `4`, …) como referencia del motor, **no como diagnóstico del plugin**:
   un código de fallo por sí solo no demuestra que el sidecar esté corrupto.

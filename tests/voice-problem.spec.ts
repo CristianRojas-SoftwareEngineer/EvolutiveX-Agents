@@ -48,7 +48,7 @@ test("otra razón notificable o la misma con otra voz vuelve a avisar", () => {
     true,
   );
   assert.equal(
-    trackVoiceProblem("custom", { ok: false, reason: "invalid_identifier" }),
+    trackVoiceProblem("custom", { ok: false, reason: "invalid_voice_name" }),
     true,
   );
   trackVoiceProblem("custom", notFound);

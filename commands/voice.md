@@ -63,7 +63,7 @@ Argumentos recibidos: `$ARGUMENTS`. Si están vacíos o no encajan con ningún f
    - **Fallo de la pre-síntesis** (la salida nombra la etiqueta del anuncio): la huella ya cambió. Resuelve la causa que indica el mensaje y reintenta `presynth --voice custom --force` con timeout de 600000 ms.
    - **Exit `6` con «Ya tienes una voz custom»**: ofrece reemplazarla con `--force`.
    - **Exit `6` con «otra operación de voz en curso»**: espera a que termine; si no hay ninguna, el mensaje indica el bloqueo que hay que borrar.
-   - **Exit `1` con «requiere AI Voice-InterConnector 0.43.0 o posterior»**: el motor es antiguo; actualízalo con la instalación guiada `/evolutivex-agents:install`.
+   - **Exit `1` con «requiere AI Voice-InterConnector 0.44.0 o posterior»**: el motor es antiguo; actualízalo con la instalación guiada `/evolutivex-agents:install`.
 
 ## Flujo `list`
 
