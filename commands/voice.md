@@ -16,7 +16,7 @@ Argumentos recibidos: `$ARGUMENTS`. Si están vacíos o no encajan con ningún f
 ## Cómo se organizan las voces
 
 - En `/config` → `evolutivex-agents.voice` el usuario elige con un selector entre **`default`**, **`ryan`** y **`vivian`** (de fábrica) y **`custom`** (su propia voz).
-- Hay **una sola voz propia**, que en el motor se llama siempre `custom`. Clonar de nuevo la reemplaza, con `--force`.
+- Hay **una sola voz propia**, que en el motor se llama siempre `custom`. Clonar de nuevo la reemplaza, con `--force`, y el motor borra también las locuciones previas de `custom`, grabadas con la voz anterior; el clonado vuelve a pre-sintetizar los seis anuncios.
 - El usuario puede darle un **nombre de presentación** (por ejemplo, su nombre) con `--display-name`. Solo se muestra en `status`, `voice list` y los mensajes; el selector y el motor siguen diciendo `custom`.
 
 ## Reglas de conducta (obligatorias)
@@ -32,7 +32,7 @@ Argumentos recibidos: `$ARGUMENTS`. Si están vacíos o no encajan con ningún f
 
 - **La referencia** es un audio de la voz a clonar: unos **10 s** de habla clara, sin música ni ruido, con un **máximo de 30 s**. Puede ser un archivo **WAV** o una grabación con el **micrófono**.
 - **Privacidad**: el clonado es local. El motor guarda solo la huella del timbre (`reference.qvoice`), nada sale de la máquina y el plugin no copia ni conserva la referencia.
-- **Una sola voz propia**: si ya hay una voz `custom`, clonar de nuevo la reemplaza (hace falta `--force`).
+- **Una sola voz propia**: si ya hay una voz `custom`, clonar de nuevo la reemplaza (hace falta `--force`) y borra sus locuciones previas.
 - **Locuciones**: cada voz necesita sus propios anuncios pre-sintetizados. `voice clone` los pre-sintetiza al terminar.
 - **Activación**: tras clonar, se elige `custom` en `/config` → `evolutivex-agents.voice`. Cambiar de voz hace que la primera síntesis con la nueva tarde algo más.
 - `--denoise` limpia el ruido de fondo de la referencia; es opcional y, si falla, el clonado no sigue con el audio sin limpiar.
@@ -48,7 +48,7 @@ Argumentos recibidos: `$ARGUMENTS`. Si están vacíos o no encajan con ningún f
      node "<ruta absoluta del plugin>/dist/narrate-ctl.js" voice clone --display-name "<nombre>" --mic
      ```
 
-2. Comprueba con `voice list` si ya existe una voz `custom`. Si existe, pregunta si quiere reemplazarla (`--force`). Pregunta también si quiere limpiar el ruido (`--denoise`).
+2. Comprueba con `voice list` si ya existe una voz `custom`. Si existe, pregunta si quiere reemplazarla (`--force`), avisando de que se borran sus locuciones previas; `narrate-ctl` ya pasa `--yes` al motor, así que esta pregunta es la confirmación. Pregunta también si quiere limpiar el ruido (`--denoise`).
 3. Explica lo de la sección anterior, pide confirmación y ejecuta, con timeout de 600000 ms:
 
    ```bash
@@ -63,7 +63,7 @@ Argumentos recibidos: `$ARGUMENTS`. Si están vacíos o no encajan con ningún f
    - **Fallo de la pre-síntesis** (la salida nombra la etiqueta del anuncio): la huella ya cambió. Resuelve la causa que indica el mensaje y reintenta `presynth --voice custom --force` con timeout de 600000 ms.
    - **Exit `6` con «Ya tienes una voz custom»**: ofrece reemplazarla con `--force`.
    - **Exit `6` con «otra operación de voz en curso»**: espera a que termine; si no hay ninguna, el mensaje indica el bloqueo que hay que borrar.
-   - **Exit `1` con «requiere AI Voice-InterConnector 0.42.0 o posterior»**: el motor es antiguo; actualízalo con la instalación guiada `/evolutivex-agents:install`.
+   - **Exit `1` con «requiere AI Voice-InterConnector 0.43.0 o posterior»**: el motor es antiguo; actualízalo con la instalación guiada `/evolutivex-agents:install`.
 
 ## Flujo `list`
 

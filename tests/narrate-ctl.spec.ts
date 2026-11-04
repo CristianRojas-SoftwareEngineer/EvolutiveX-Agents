@@ -259,6 +259,25 @@ test("presynth pre-sintetiza los seis anuncios con speech synthesize --label --d
   }
 });
 
+test("presynth no da por pre-sintetizado un exit 6 con voice_changed: lo informa como fallo", () => {
+  const dir = makeTempDir("avi-plugin-fakecli-");
+  try {
+    const changed = {
+      exit: 6,
+      stdout: JSON.stringify({ error: "e", reason: "voice_changed" }),
+    };
+    makeFakeCli(dir, [changed, 0, 0, 0, 0, 0]);
+    const res = runCtl(["presynth"], fakeCliEnv(dir));
+    assert.equal(res.status, 1);
+    assert.doesNotMatch(res.stdout, /ya pre-sintetizado/);
+    assert.equal(res.stdout.match(/: pre-sintetizado /g)?.length, 5);
+    assert.match(res.stderr, /exit 6, voice_changed/);
+    assert.match(res.stderr, /repite la pre-síntesis/);
+  } finally {
+    removeDir(dir);
+  }
+});
+
 test("presynth --force pasa --force al motor y reporta re-sintetizado", () => {
   const dir = makeTempDir("avi-plugin-fakecli-");
   try {
@@ -612,7 +631,12 @@ function synthesizeArgvs(argvLog: string): string[][] {
 
 const CLONE_OK: CmdResponse = {
   exit: 0,
-  stdout: JSON.stringify({ name: "custom", speech: "x", precomputed: true }),
+  stdout: JSON.stringify({
+    name: "custom",
+    speech: "x",
+    precomputed: true,
+    removed_speech: [],
+  }),
 };
 
 /** Ejecuta `fn` con un CLI falso de voces en un temporal. */
@@ -689,7 +713,7 @@ test("voice clone desde WAV (ruta con espacios) clona en custom con --daemon --j
   });
 });
 
-test("voice clone --mic --duration 10 transmite --force y --denoise y borra el nombre de presentación anterior", () => {
+test("voice clone --mic --duration 10 transmite --force con --yes y --denoise y borra el nombre de presentación anterior", () => {
   withVoiceCli({ responses: { "voice clone": CLONE_OK } }, (argvLog, env) => {
     seedDisplayName("Voz anterior");
     const res = runCtl(
@@ -707,12 +731,35 @@ test("voice clone --mic --duration 10 transmite --force y --denoise y borra el n
       "--duration",
       "10",
       "--force",
+      "--yes",
       "--denoise",
       "--daemon",
       "--json",
     ]);
     assert.equal(synthesizeArgvs(argvLog).length, 6);
     assert.equal(savedDisplayName(), undefined);
+    // CLONE_OK no borra locuciones: no se anuncia ningún borrado.
+    assert.doesNotMatch(res.stdout, /Locuciones anteriores borradas/);
+  });
+});
+
+test("voice clone --force informa las locuciones anteriores que borró el motor", () => {
+  const recloned: CmdResponse = {
+    exit: 0,
+    stdout: JSON.stringify({
+      name: "custom",
+      speech: "x",
+      precomputed: true,
+      removed_speech: ["voice-stop", "voice-ack"],
+    }),
+  };
+  withVoiceCli({ responses: { "voice clone": recloned } }, (_argvLog, env) => {
+    const res = runCtl(["voice", "clone", "ref.wav", "--force"], env);
+    assert.equal(res.status, 0, res.stderr);
+    assert.match(
+      res.stdout,
+      /Locuciones anteriores borradas: voice-stop, voice-ack\./,
+    );
   });
 });
 
@@ -972,7 +1019,7 @@ test("voice remove de una voz de fábrica: el motor la protege y sale con 2", ()
   );
 });
 
-for (const version of ["0.41.9", "abc"]) {
+for (const version of ["0.42.9", "abc"]) {
   test(`motor con versión ${version}: voice * sale con 1 sin invocar voice`, () => {
     withVoiceCli({ version }, (argvLog, env) => {
       for (const args of [
@@ -982,7 +1029,7 @@ for (const version of ["0.41.9", "abc"]) {
       ]) {
         const res = runCtl(args, env);
         assert.equal(res.status, 1);
-        assert.match(res.stderr, /requiere AI Voice-InterConnector 0\.42\.0/);
+        assert.match(res.stderr, /requiere AI Voice-InterConnector 0\.43\.0/);
       }
       assert.ok(argvsOf(argvLog).every((a) => a[0] === "version"));
     });

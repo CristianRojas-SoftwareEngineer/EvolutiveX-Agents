@@ -69,7 +69,7 @@ La API key (`GEMINI_API_KEY`) se lee **solo del entorno** y nunca se persiste en
 
 ### Voz de la narración y clonado
 
-El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI Voice-InterConnector 0.42.0 o posterior). El comando `/evolutivex-agents:voice` guía el proceso, y la instalación guiada lo ofrece de forma opcional:
+El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI Voice-InterConnector 0.43.0 o posterior). El comando `/evolutivex-agents:voice` guía el proceso, y la instalación guiada lo ofrece de forma opcional:
 
 ```text
 /evolutivex-agents:voice clone [<nombre de presentación>] [<ruta.wav> | --mic [--duration <segs>]]
@@ -77,7 +77,7 @@ El plugin puede narrar con **tu propia voz**, clonada con el motor (requiere AI 
 /evolutivex-agents:voice remove <voz>
 ```
 
-- **Una sola voz propia, `custom`:** `/config` solo ofrece un selector con opciones fijas, así que tu voz se guarda siempre como `custom`. Clonar de nuevo la reemplaza (con `--force`). Puedes darle un **nombre de presentación** (por ejemplo, el tuyo), que se muestra en `status` y `voice list` como `custom «Cristián»`.
+- **Una sola voz propia, `custom`:** `/config` solo ofrece un selector con opciones fijas, así que tu voz se guarda siempre como `custom`. Clonar de nuevo la reemplaza (con `--force`) junto con sus locuciones guardadas, que el motor borra porque se grabaron con la voz anterior; el plugin vuelve a pre-sintetizar los seis anuncios con la voz nueva. Puedes darle un **nombre de presentación** (por ejemplo, el tuyo), que se muestra en `status` y `voice list` como `custom «Cristián»`.
 
 - **Referencia:** unos 10 s de habla clara (máximo 30 s), desde un archivo WAV o el micrófono. `--denoise` limpia el ruido de fondo de forma opcional.
 - **Activación:** el clonado pre-sintetiza los seis anuncios con la voz nueva y luego indica elegir `custom` en `/config` → `evolutivex-agents.voice`. El plugin nunca activa una voz por su cuenta; el cambio se oye desde el siguiente evento.
@@ -236,7 +236,7 @@ CircleCI (`.circleci/config.yml`): `check-dist`, `lint`, `format:check`, `typech
 - [`CHANGELOG.md`](CHANGELOG.md) — cambios por versión.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — direcciones futuras del plugin.
 
-Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.42.0/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.42.0.
+Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.43.0/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.43.0.
 
 ---
 

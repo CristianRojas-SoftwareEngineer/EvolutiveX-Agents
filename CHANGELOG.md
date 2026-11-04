@@ -8,13 +8,18 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Añadido
 
-- Clonado de tu voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`): se guarda como la voz `custom`, con un nombre de presentación opcional (`--display-name`), y pre-sintetiza sus anuncios; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.42.0 o posterior.
+- Clonado de tu voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`): se guarda como la voz `custom`, con un nombre de presentación opcional (`--display-name`), y pre-sintetiza sus anuncios; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.43.0 o posterior.
 - Selector de la voz activa en `/config` → `evolutivex-agents.voice` (`default`, `ryan`, `vivian` o `custom`; `default` por defecto): toda la narración la usa de forma explícita, y un cambio se oye desde el siguiente evento.
 - `SessionStart` arranca el daemon precalentando la voz activa y avisa si la voz no existe (por ejemplo, `custom` sin clonar) o su valor no es una de las opciones, sin caer a `default`. Con la voz ausente o no comprobable y el daemon parado, lo arranca precalentando `default` para que clonar y pre-sintetizar funcionen; la narración sigue pidiendo la voz elegida.
 - Notificación de escritorio de los problemas de voz: si la voz activa no existe, no tiene sus anuncios o su nombre no es válido, el worker lo avisa con el remedio una sola vez por problema (respeta `notificationsEnabled`) y vuelve a avisar si reaparece tras una narración correcta.
 - `narrate-ctl` con `voice list|clone|remove`, `--voice` en `say` y `presynth`, y la voz activa en `status`; las operaciones manuales de voz se excluyen entre sí.
 - La instalación guiada ofrece pre-sintetizar también los anuncios de `ryan` y `vivian` (alrededor de 1 minuto y 1 MB cada una), antes de los de `default` para dejarla caliente en el daemon.
 - `narrate-ctl say` traduce los fallos del motor a un remedio, y con la voz `custom` sin clonar, `say` y `presynth` remiten a `/evolutivex-agents:voice clone`.
+
+### Cambiado
+
+- Sincronizado con AI Voice-InterConnector v0.43.0, que pasa a ser la versión verificada y la mínima de la gestión de voces. Re-clonar `custom` con `--force` reemplaza también sus locuciones guardadas: el motor las borra porque se grabaron con la voz anterior, `voice clone` las nombra y vuelve a pre-sintetizar los seis anuncios, y el daemon recarga la voz re-clonada en lugar de seguir con la anterior. `narrate-ctl` pasa `--yes` junto a `--force`, porque el comando ya confirmó el reemplazo con el usuario.
+- La pre-síntesis trata el exit 6 `voice_changed` (la voz cambió mientras se sintetizaba y el motor no guardó la locución) como un fallo con su remedio, no como un anuncio ya pre-sintetizado.
 
 ### Corregido
 

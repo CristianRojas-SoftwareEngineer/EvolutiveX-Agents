@@ -17,7 +17,7 @@ var SELECTABLE_VOICES = [
   ...FACTORY_VOICES,
   CUSTOM_VOICE
 ];
-var MIN_ENGINE_VERSION = "0.42.0";
+var MIN_ENGINE_VERSION = "0.43.0";
 var MAX_DISPLAY_NAME_LENGTH = 64;
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
@@ -356,6 +356,7 @@ var REASON_MESSAGES = {
   audio_backend_unavailable: DEVICE_HINT,
   transcription_failed: "No se pudo capturar audio: revisa los permisos del micr\xF3fono o usa un WAV.",
   voice_exists: "Ya tienes una voz custom; usa `--force` para reemplazarla.",
+  voice_changed: "La voz cambi\xF3 durante la s\xEDntesis; repite la pre-s\xEDntesis.",
   denoise_busy: "Reintenta al terminar la limpieza en curso.",
   denoise_unsupported: DENOISE_HINT,
   denoise_failed: DENOISE_HINT,
@@ -569,7 +570,7 @@ function cloneArgs(req) {
   if (req.wav !== void 0) args.push("--speech-reference", req.wav);
   else args.push("--mic");
   if (req.duration !== void 0) args.push("--duration", req.duration);
-  if (req.force) args.push("--force");
+  if (req.force) args.push("--force", "--yes");
   if (req.denoise) args.push("--denoise");
   args.push("--daemon", "--json");
   return args;
@@ -603,11 +604,15 @@ function runClone(cli, req) {
   });
   const failure = engineFailure(res);
   if (failure) return reportFailure(failure);
-  if (!engineJson(res.stdout))
+  const payload = engineJson(res.stdout);
+  if (!payload)
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
   if (req.displayName) writeCustomDisplayName(req.displayName);
   else removeCustomDisplayName();
   const name = voiceDisplayName(CUSTOM_VOICE);
+  const removed = payload.removed_speech;
+  if (Array.isArray(removed) && removed.length > 0)
+    console.log(`Locuciones anteriores borradas: ${removed.join(", ")}.`);
   console.log(`Voz ${name} clonada; pre-sintetizando sus anuncios\u2026`);
   if (presynth({ voice: CUSTOM_VOICE, source: "flag" }, true, false) !== 0) {
     console.error(

@@ -1,6 +1,6 @@
 # Especificación de diseño: clonado de voz y voz activa
 
-> **Estado**: implementada en el plugin (pendiente de release) · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.42.0 · **Fecha**: 2026-11-03
+> **Estado**: implementada en el plugin (pendiente de release) · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.43.0 · **Fecha**: 2026-11-04
 
 Este documento fija el diseño y los criterios de aceptación para que el usuario narre la actividad de Claude Code con **su propia voz**, clonada con el motor AI Voice-InterConnector. Es la fuente de verdad funcional de la feature: la implementación, la documentación de usuario y los tests se derivan de él.
 
@@ -69,14 +69,16 @@ El diseño respeta la arquitectura actual:
 - **`narrate-ctl`** (`src/narrate-ctl.ts`): corre desde la herramienta de shell, sin `/config`; por eso conoce la voz activa por la caché (D-03).
 - **Catálogo**: seis anuncios con etiqueta fija (`src/voice/message/static-announcements.ts`).
 - **Invocación del CLI**: `runCli`/`spawnCli` (`src/voice/resolve-cli.ts`) es la única costura; en Windows cita los argumentos para los shims `.cmd`.
-- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.42.0`); los hooks no comprueban la versión en tiempo de ejecución (D-11).
+- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.43.0`); los hooks no comprueban la versión en tiempo de ejecución (D-11).
 
-### Motor (v0.42.0)
+### Motor (v0.43.0)
 
 - `voice list`, `voice clone` y `voice remove` existen; `--voice` está en `speech synthesize`, `speech say` y `speech play` (por defecto `default`), y `--warm-voice` en `daemon start` (por defecto `default`).
 - Las locuciones se guardan por `(voz, etiqueta)` en `<data_dir>/speech/<voz>/<etiqueta>.wav`: cada voz necesita sus propias seis locuciones.
 - El motor valida el nombre de la voz (`invalid_voice_name`), protege las voces de fábrica al borrar (`cannot_remove_default`) y exige confirmación al borrar una voz con locuciones si no hay terminal (`confirmation_required`).
 - El motor **permite** clonar con `--force` sobre una voz de fábrica.
+- Re-clonar con `--force` reemplaza la voz **y sus locuciones**: el motor borra `speech/<voz>/`, grabado con el contenido anterior, y lo informa en `removed_speech`. Si la voz tiene locuciones y no hay terminal, exige `--yes` (`confirmation_required`).
+- El residente del daemon se reutiliza solo con la misma identidad de contenido de la voz, así que una voz re-clonada se recarga en la siguiente síntesis. `speech synthesize` sale con exit 6 `voice_changed` si la voz cambió mientras se sintetizaba, sin guardar la locución.
 - `daemon start --warm-voice <n>` falla al instante con exit 3 `voice_not_found` si la voz no existe.
 - `voice clone` puede tardar varios minutos. Con `--mic` sin `--duration` exige una terminal interactiva (push-to-talk).
 - El residente TTS del daemon es de una sola voz: sintetizar con otra voz lo reemplaza y paga un arranque en frío.
@@ -147,7 +149,7 @@ El diseño respeta la arquitectura actual:
 | **D-03** | Los hooks (launcher y `SessionStart`) escriben la caché `active-voice` en el _state dir_; `narrate-ctl` la lee cuando no recibe `--voice`.                                                                                          | La herramienta de shell no recibe `/config`; sin la caché, `say` y `presynth` sonarían con `default`. La caché se reescribe en cada evento.                                                  |
 | **D-04** | `narrate-ctl` gana la familia `voice` (`list`, `clone`, `remove`) y `--voice` en `presynth` y `say`; el comando `/evolutivex-agents:voice` y la skill son la capa de explicación y confirmación.                                    | Una sola implementación determinista y testeable.                                                                                                                                            |
 | **D-05** | `voice clone` usa siempre el daemon (`--daemon`).                                                                                                                                                                                   | El daemon precalienta la voz nueva y la pre-síntesis siguiente la aprovecha; un único camino que probar.                                                                                     |
-| **D-06** | `voice clone` termina con `presynth --voice custom --force`; solo con seis éxitos indica elegir `custom` en `/config`.                                                                                                              | La voz nueva tiene sus locuciones antes de activarla; `--force` evita locuciones viejas tras un re-clonado.                                                                                  |
+| **D-06** | `voice clone` termina con `presynth --voice custom --force`; solo con seis éxitos indica elegir `custom` en `/config`. Con `--force`, `narrate-ctl` pasa también `--yes` al motor, que borra las locuciones previas de `custom`.    | La voz nueva tiene sus locuciones antes de activarla; el motor ya borró las locuciones viejas al re-clonar y `--force` reescribe cualquiera que quede.                                       |
 | **D-07** | La voz se pasa siempre explícita (`--voice`, `--warm-voice`), también `default`.                                                                                                                                                    | No depender del valor por defecto implícito del motor.                                                                                                                                       |
 | **D-08** | El plugin delega en el motor la validación de la referencia, la protección de fábrica al borrar y la confirmación de borrado; solo fija el nombre `custom` al clonar, exige `--yes` al borrar y da la guía de `--mic` sin terminal. | Evitar reglas duplicadas que puedan divergir del motor; el motor no protege la fábrica al clonar.                                                                                            |
 | **D-09** | Sin fallback automático a `default` en runtime; `SessionStart` avisa. Que `SessionStart` arranque el daemon precalentando `default` ante una voz ausente no cambia la voz narrada: la narración sigue pidiendo la voz elegida.      | Una voz distinta de la elegida sorprende y oculta la causa.                                                                                                                                  |
@@ -205,7 +207,7 @@ export const DEFAULT_VOICE = "default";
 export const FACTORY_VOICES = ["default", "ryan", "vivian"] as const;
 export const CUSTOM_VOICE = "custom";
 export const SELECTABLE_VOICES: readonly string[]; // fábrica + custom = options de plugin.json
-export const MIN_ENGINE_VERSION = "0.42.0";
+export const MIN_ENGINE_VERSION = "0.43.0";
 
 export function normalizeVoiceName(raw: string): string;
 export function isFactoryVoice(name: string): boolean;
@@ -250,7 +252,7 @@ Usuario ──► /evolutivex-agents:voice clone [<nombre de presentación>] [<r
 narrate-ctl voice clone
   1. con --mic sin --duration y sin terminal interactiva: exit 2 con la guía de D-12
   2. versión mínima y bloqueo de operaciones manuales
-  3. voice clone --name custom (--speech-reference … | --mic [--duration …]) [--force] [--denoise] --daemon --json
+  3. voice clone --name custom (--speech-reference … | --mic [--duration …]) [--force --yes] [--denoise] --daemon --json
      (stdin y stderr heredados para el push-to-talk y el progreso; stdout capturado para el JSON)
   4. guarda el nombre de presentación de --display-name (o borra el anterior)
   5. presynth --voice custom --force (reutiliza el bloqueo ya tomado)
@@ -316,7 +318,7 @@ El comando `/evolutivex-agents:voice` muestra antes qué se borrará (la voz y s
 ### 7.9 Versión mínima
 
 - Las operaciones `voice *` de `narrate-ctl` ejecutan `version --json` (timeout de 5 s) y comparan `version` con `MIN_ENGINE_VERSION`.
-- Una versión inferior o ilegible → exit 1 con «La gestión de voces requiere AI Voice-InterConnector 0.42.0 o posterior»; la narración existente no cambia.
+- Una versión inferior o ilegible → exit 1 con «La gestión de voces requiere AI Voice-InterConnector 0.43.0 o posterior»; la narración existente no cambia.
 
 ### 7.10 `SessionStart`
 
@@ -399,7 +401,7 @@ Ejecuta `narrate-ctl` con la herramienta de shell con un timeout de 10 minutos p
 | Condición                                         | Origen                                                     | Exit | Mensaje orientativo                                                                                                                                                                                                                                 |
 | ------------------------------------------------- | ---------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CLI no encontrado                                 | Plugin                                                     | 1    | «AI Voice-InterConnector no está en el PATH.»                                                                                                                                                                                                       |
-| Motor anterior a la versión mínima                | Plugin                                                     | 1    | «La gestión de voces requiere AI Voice-InterConnector 0.42.0 o posterior.»                                                                                                                                                                          |
+| Motor anterior a la versión mínima                | Plugin                                                     | 1    | «La gestión de voces requiere AI Voice-InterConnector 0.43.0 o posterior.»                                                                                                                                                                          |
 | Otra operación de voz en curso                    | Plugin                                                     | 6    | «Hay otra operación de voz en curso; si no es así, borra `<state dir>/voice-operation.lock`.»                                                                                                                                                       |
 | Nombre de presentación inválido                   | Plugin                                                     | 2    | Uso de `voice clone` y «El nombre de presentación tiene de 1 a 64 caracteres, sin saltos de línea.»                                                                                                                                                 |
 | `--mic` sin `--duration` y sin terminal           | Plugin                                                     | 2    | «Usa `--duration <segs>` (se sugieren 10) o ejecuta el comando en tu terminal para el push-to-talk.»                                                                                                                                                |
@@ -488,7 +490,7 @@ Con el motor real y una sesión de Claude Code: clonar la voz por micrófono con
 | **AC-19** | `voice remove` sin `--yes`                                      | Se ejecuta                                                          | Exit 2 sin invocar al motor.                                                                                                                                                                                                          |
 | **AC-20** | `--mic` sin `--duration` y sin terminal interactiva             | `voice clone`                                                       | Exit 2 con la guía de D-12; no se inicia la captura.                                                                                                                                                                                  |
 | **AC-21** | `--denoise`                                                     | Se clona                                                            | Se transmite; ausencia de modelo, saturación o fallo se informan sin clonar audio sin limpiar.                                                                                                                                        |
-| **AC-22** | Motor anterior a 0.42.0 o versión ilegible                      | Cualquier `voice *`                                                 | Exit 1 con el mensaje de versión; la narración sigue con `default`.                                                                                                                                                                   |
+| **AC-22** | Motor anterior a 0.43.0 o versión ilegible                      | Cualquier `voice *`                                                 | Exit 1 con el mensaje de versión; la narración sigue con `default`.                                                                                                                                                                   |
 | **AC-23** | Otra operación manual con el bloqueo y dueño vivo               | `voice clone`, `voice remove` o `presynth`                          | Exit 6 sin modificar nada.                                                                                                                                                                                                            |
 | **AC-24** | Bloqueo con dueño muerto                                        | Se inicia una operación manual                                      | Se retira el bloqueo y la operación sigue.                                                                                                                                                                                            |
 | **AC-25** | Una operación manual en curso                                   | Se dispara un hook                                                  | El hook y el worker narran sin esperar al bloqueo.                                                                                                                                                                                    |

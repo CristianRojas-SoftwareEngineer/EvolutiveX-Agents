@@ -31,6 +31,7 @@ const CASES: Array<[string, number, RegExp]> = [
   ["audio_backend_unavailable", 3, /backend de audio/],
   ["transcription_failed", 10, /permisos del micrófono/],
   ["voice_exists", 6, /--force/],
+  ["voice_changed", 6, /repite la pre-síntesis/],
   ["denoise_busy", 6, /limpieza en curso/],
   ["denoise_unsupported", 1, /modelo de limpieza/],
   ["denoise_failed", 1, /modelo de limpieza/],

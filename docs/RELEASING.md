@@ -445,6 +445,8 @@ $PLUGIN_E2E --resume` muestra las mismas horas y duraciones. Al terminar,
   narrate-ctl voice clone --display-name "Smoke" "<ruta al WAV>"
   # Exit 0: seis anuncios pre-sintetizados y la indicación de elegir custom en /config → evolutivex-agents.voice.
   narrate-ctl voice list   # custom «Smoke» (tu voz); default, ryan y vivian marcadas como fábrica
+  narrate-ctl voice clone --display-name "Smoke" "<otro WAV>" --force
+  # Exit 0: «Locuciones anteriores borradas: …» nombra los seis anuncios de la voz anterior y se re-sintetizan con la nueva.
   ```
 
   1. En el selector de `/config` → `evolutivex-agents.voice`, elige `custom` y

@@ -23,7 +23,8 @@
 //   voice clone [--display-name "<nombre>"] <ruta.wav> [--force] [--denoise]
 //   voice clone [--display-name "<nombre>"] --mic [--duration <segs>] [--force] [--denoise]
 //                                           clona tu voz en `custom` y pre-sintetiza sus anuncios
-//                                           (--force reemplaza la voz custom existente)
+//                                           (--force reemplaza la voz custom existente
+//                                           y sus locuciones; el motor recibe --yes)
 //   voice remove <nombre> --yes             borra una voz de usuario y sus locuciones
 //
 // Las operaciones `voice *` exigen la versión mínima del motor; `voice clone`,
@@ -315,13 +316,19 @@ function parseClone(rest: string[]): CloneRequest | undefined {
   };
 }
 
-/** Argumentos de `voice clone` del motor, siempre con `--daemon --json`. */
+/**
+ * Argumentos de `voice clone` del motor, siempre con `--daemon --json`. Con
+ * `--force`, el motor borra también las locuciones de la voz sobrescrita y,
+ * sin terminal, exige `--yes`: el comando `/evolutivex-agents:voice` ya
+ * confirmó el reemplazo con el usuario, así que se pasa siempre junto a
+ * `--force`.
+ */
 function cloneArgs(req: CloneRequest): string[] {
   const args = ["voice", "clone", "--name", CUSTOM_VOICE];
   if (req.wav !== undefined) args.push("--speech-reference", req.wav);
   else args.push("--mic");
   if (req.duration !== undefined) args.push("--duration", req.duration);
-  if (req.force) args.push("--force");
+  if (req.force) args.push("--force", "--yes");
   if (req.denoise) args.push("--denoise");
   args.push("--daemon", "--json");
   return args;
@@ -370,11 +377,16 @@ function runClone(cli: string, req: CloneRequest): number {
   });
   const failure = engineFailure(res);
   if (failure) return reportFailure(failure);
-  if (!engineJson(res.stdout))
+  const payload = engineJson(res.stdout);
+  if (!payload)
     return reportFailure({ exitCode: 1, message: UNEXPECTED_RESPONSE_MESSAGE });
   if (req.displayName) writeCustomDisplayName(req.displayName);
   else removeCustomDisplayName();
   const name = voiceDisplayName(CUSTOM_VOICE);
+  // Al re-clonar, el motor borra las locuciones grabadas con la voz anterior.
+  const removed = payload.removed_speech;
+  if (Array.isArray(removed) && removed.length > 0)
+    console.log(`Locuciones anteriores borradas: ${removed.join(", ")}.`);
   console.log(`Voz ${name} clonada; pre-sintetizando sus anuncios…`);
   if (presynth({ voice: CUSTOM_VOICE, source: "flag" }, true, false) !== 0) {
     console.error(

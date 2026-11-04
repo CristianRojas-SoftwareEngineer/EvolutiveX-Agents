@@ -21,7 +21,7 @@ export const SELECTABLE_VOICES: readonly string[] = [
   ...FACTORY_VOICES,
   CUSTOM_VOICE,
 ];
-export const MIN_ENGINE_VERSION = "0.42.0";
+export const MIN_ENGINE_VERSION = "0.43.0";
 
 const MAX_DISPLAY_NAME_LENGTH = 64;
 

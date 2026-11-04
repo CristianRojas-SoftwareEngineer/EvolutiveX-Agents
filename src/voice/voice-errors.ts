@@ -34,6 +34,7 @@ const REASON_MESSAGES: Record<string, string> = {
   transcription_failed:
     "No se pudo capturar audio: revisa los permisos del micrófono o usa un WAV.",
   voice_exists: "Ya tienes una voz custom; usa `--force` para reemplazarla.",
+  voice_changed: "La voz cambió durante la síntesis; repite la pre-síntesis.",
   denoise_busy: "Reintenta al terminar la limpieza en curso.",
   denoise_unsupported: DENOISE_HINT,
   denoise_failed: DENOISE_HINT,
