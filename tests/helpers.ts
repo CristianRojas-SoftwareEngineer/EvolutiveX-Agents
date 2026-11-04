@@ -50,16 +50,32 @@ export function makeTempDir(prefix = "avi-plugin-test-"): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
+// Reintentos de removeDir: hasta ~6 s en total.
+const REMOVE_RETRIES = 40;
+const REMOVE_RETRY_DELAY_MS = 150;
+const RETRYABLE_REMOVE_CODES = new Set(["EPERM", "EBUSY", "ENOTEMPTY"]);
+
 export function removeDir(dir: string): void {
-  // maxRetries: en Windows, un hijo desanclado o un nieto sobreviviente de un
-  // spawnSync con timeout (p. ej. el shim que demora en doctor) puede retener
-  // handles del temporal y rmSync lanza EPERM mientras termina.
-  rmSync(dir, {
-    recursive: true,
-    force: true,
-    maxRetries: 20,
-    retryDelay: 150,
-  });
+  // En Windows, un hijo desanclado o un nieto sobreviviente de un spawnSync
+  // con timeout (p. ej. el shim que demora en doctor) puede retener handles
+  // del temporal, y rmSync lanza EPERM mientras termina. El reintento es
+  // propio porque el rmSync nativo de Node 24 ignora maxRetries ante EPERM.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      rmSync(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? "";
+      if (attempt >= REMOVE_RETRIES || !RETRYABLE_REMOVE_CODES.has(code))
+        throw err;
+      Atomics.wait(
+        new Int32Array(new SharedArrayBuffer(4)),
+        0,
+        0,
+        REMOVE_RETRY_DELAY_MS,
+      );
+    }
+  }
 }
 
 /**
