@@ -7204,6 +7204,28 @@ var require_commander = __commonJS({
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 import { basename as basename2, resolve } from "node:path";
 
+// src/lib/rotating-log.ts
+import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
+function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
+  try {
+    try {
+      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
+        rmSync(rotatedPath, { force: true });
+    } catch {
+    }
+    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
+  } catch {
+  }
+  try {
+    appendFileSync(
+      path,
+      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
+`
+    );
+  } catch {
+  }
+}
+
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -7236,30 +7258,12 @@ function rotatedNotificationLogPath() {
   return join(stateDir(), "notification.log.1");
 }
 
-// src/lib/rotating-log.ts
-import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
-function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
-  try {
-    try {
-      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
-        rmSync(rotatedPath, { force: true });
-    } catch {
-    }
-    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
-  } catch {
-  }
-  try {
-    appendFileSync(
-      path,
-      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
-`
-    );
-  } catch {
-  }
-}
-
 // src/notifications/delivery.ts
 function appendNotificationLog(message) {
+  try {
+    ensureStateDir();
+  } catch {
+  }
   appendRotatingLog(
     {
       path: notificationLogPath(),
@@ -8035,10 +8039,6 @@ function createDeliveryDeps() {
 
 // src/notifications/deliver-entry.ts
 async function main2() {
-  try {
-    ensureStateDir();
-  } catch {
-  }
   const request = parseDeliveryRequest(process.argv[2]);
   if (!request) {
     appendNotificationLog("invalid_request: argumento JSON ausente o inv\xE1lido");

@@ -11,7 +11,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { basename } from "node:path";
 import { DetachedNotificationDispatcher } from "../src/notifications/dispatcher.js";
-import { parseDeliveryRequest } from "../src/notifications/delivery.js";
+import {
+  appendNotificationLog,
+  parseDeliveryRequest,
+} from "../src/notifications/delivery.js";
+import { notificationLogPath } from "../src/lib/state-dir.js";
+import { existsSync, readFileSync } from "node:fs";
+import { isolateStateDir, removeDir } from "./helpers.js";
 
 const PAYLOAD = {
   title: "Stop",
@@ -71,4 +77,31 @@ test("un spawn que lanza también registra dispatch_failed y no propaga el error
   });
   assert.doesNotThrow(() => dispatcher.notify(PAYLOAD));
   assert.match(logs[0] ?? "", /dispatch_failed.*EAGAIN/);
+});
+
+test("appendNotificationLog crea el directorio de estado si aún no existe", () => {
+  const state = isolateStateDir();
+  try {
+    removeDir(state.dir);
+    assert.equal(existsSync(state.dir), false);
+    appendNotificationLog("event=Stop result=dispatch_failed");
+    assert.match(
+      readFileSync(notificationLogPath(), "utf8"),
+      /event=Stop result=dispatch_failed\n$/,
+    );
+  } finally {
+    state.restore();
+  }
+});
+
+test("el motivo de dispatch_failed se registra en una sola línea", () => {
+  const logs: string[] = [];
+  new DetachedNotificationDispatcher("Stop", {
+    spawn: () => {
+      throw new Error('falló\ncon "comillas"\r\ny saltos');
+    },
+    log: (message) => logs.push(message),
+  }).notify(PAYLOAD);
+  assert.equal(logs.length, 1);
+  assert.doesNotMatch(logs[0] ?? "", /[\r\n]/);
 });

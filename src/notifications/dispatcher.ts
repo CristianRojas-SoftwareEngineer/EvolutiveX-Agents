@@ -60,7 +60,9 @@ export class DetachedNotificationDispatcher implements NotificationService {
       reason = (err as Error).message;
     }
     if (pid === undefined) {
-      this.log(`event=${this.event} result=dispatch_failed error="${reason}"`);
+      this.log(
+        `event=${this.event} result=dispatch_failed error="${reason.replace(/\s+/g, " ").trim().slice(0, 300)}"`,
+      );
     }
   }
 }

@@ -19,8 +19,10 @@ export interface RotatingLogOptions {
 
 /**
  * Rota si hace falta y añade `<ISO> <message>`. Nunca lanza: el logging no
- * debe tumbar a quien lo usa. Sin bloqueo entre procesos: cada log tiene un
- * escritor serializado por su proceso o por un lock del llamante.
+ * debe tumbar a quien lo usa. Sin bloqueo entre procesos: worker.log
+ * tiene un único escritor bajo el lock del worker; notification.log lo escriben
+ * procesos desanclados concurrentes, y una carrera al rotar solo puede dejar
+ * una línea en el archivo recién rotado (el rename fallido se ignora).
  */
 export function appendRotatingLog(
   { path, rotatedPath, maxBytes, rotatedMaxAgeMs }: RotatingLogOptions,

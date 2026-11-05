@@ -7239,6 +7239,28 @@ function readStdin() {
   });
 }
 
+// src/lib/rotating-log.ts
+import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
+function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
+  try {
+    try {
+      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
+        rmSync(rotatedPath, { force: true });
+    } catch {
+    }
+    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
+  } catch {
+  }
+  try {
+    appendFileSync(
+      path,
+      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
+`
+    );
+  } catch {
+  }
+}
+
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
@@ -7271,30 +7293,12 @@ function rotatedNotificationLogPath() {
   return join(stateDir(), "notification.log.1");
 }
 
-// src/lib/rotating-log.ts
-import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
-function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
-  try {
-    try {
-      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
-        rmSync(rotatedPath, { force: true });
-    } catch {
-    }
-    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
-  } catch {
-  }
-  try {
-    appendFileSync(
-      path,
-      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
-`
-    );
-  } catch {
-  }
-}
-
 // src/notifications/delivery.ts
 function appendNotificationLog(message) {
+  try {
+    ensureStateDir();
+  } catch {
+  }
   appendRotatingLog(
     {
       path: notificationLogPath(),
@@ -8472,10 +8476,6 @@ async function main2() {
     process.stderr.write(`${built.error}
 `);
     return 1;
-  }
-  try {
-    ensureStateDir();
-  } catch {
   }
   const result = await deliver(
     { event: resolveEventKey(options, stdinPayload) ?? "cli", payload: built },

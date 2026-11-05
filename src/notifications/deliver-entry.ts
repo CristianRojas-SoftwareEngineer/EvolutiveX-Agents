@@ -9,7 +9,6 @@
 // desanclada el despachador (hook y aviso de voz); no es la CLI pública.
 import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
-import { ensureStateDir } from "../lib/state-dir.js";
 import {
   appendNotificationLog,
   deliver,
@@ -18,11 +17,6 @@ import {
 import { createDeliveryDeps } from "./delivery-runtime.js";
 
 async function main(): Promise<number> {
-  try {
-    ensureStateDir();
-  } catch {
-    // Sin directorio de estado el log no escribe, pero la entrega sigue.
-  }
   const request = parseDeliveryRequest(process.argv[2]);
   if (!request) {
     appendNotificationLog("invalid_request: argumento JSON ausente o inválido");

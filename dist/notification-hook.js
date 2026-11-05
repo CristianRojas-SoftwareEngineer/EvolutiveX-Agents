@@ -108,6 +108,7 @@ function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, mes
 // src/lib/state-dir.ts
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { mkdirSync } from "node:fs";
 var APP_DIR = "evolutivex-agents";
 function stateDir() {
   const home = homedir();
@@ -124,6 +125,11 @@ function stateDir() {
     }
   }
 }
+function ensureStateDir() {
+  const dir = stateDir();
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
 function notificationLogPath() {
   return join(stateDir(), "notification.log");
 }
@@ -133,6 +139,10 @@ function rotatedNotificationLogPath() {
 
 // src/notifications/delivery.ts
 function appendNotificationLog(message) {
+  try {
+    ensureStateDir();
+  } catch {
+  }
   appendRotatingLog(
     {
       path: notificationLogPath(),
@@ -174,7 +184,9 @@ var DetachedNotificationDispatcher = class {
       reason = err.message;
     }
     if (pid === void 0) {
-      this.log(`event=${this.event} result=dispatch_failed error="${reason}"`);
+      this.log(
+        `event=${this.event} result=dispatch_failed error="${reason.replace(/\s+/g, " ").trim().slice(0, 300)}"`
+      );
     }
   }
 };

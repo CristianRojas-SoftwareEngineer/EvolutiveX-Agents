@@ -598,6 +598,10 @@ import { fileURLToPath } from "node:url";
 
 // src/notifications/delivery.ts
 function appendNotificationLog(message) {
+  try {
+    ensureStateDir();
+  } catch {
+  }
   appendRotatingLog(
     {
       path: notificationLogPath(),
@@ -639,7 +643,9 @@ var DetachedNotificationDispatcher = class {
       reason = err.message;
     }
     if (pid === void 0) {
-      this.log(`event=${this.event} result=dispatch_failed error="${reason}"`);
+      this.log(
+        `event=${this.event} result=dispatch_failed error="${reason.replace(/\s+/g, " ").trim().slice(0, 300)}"`
+      );
     }
   }
 };

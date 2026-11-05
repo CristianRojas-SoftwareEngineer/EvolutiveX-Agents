@@ -13,6 +13,7 @@
 // bundle del hook.
 import { appendRotatingLog } from "../lib/rotating-log.js";
 import {
+  ensureStateDir,
   notificationLogPath,
   rotatedNotificationLogPath,
 } from "../lib/state-dir.js";
@@ -46,6 +47,12 @@ export interface DeliveryDeps {
 
 /** Añade una línea a notification.log (rotación compartida con worker.log). */
 export function appendNotificationLog(message: string): void {
+  try {
+    // El hook puede despachar antes de que exista el directorio de estado.
+    ensureStateDir();
+  } catch {
+    // Sin directorio no hay log; el logging nunca lanza.
+  }
   appendRotatingLog(
     {
       path: notificationLogPath(),

@@ -4,7 +4,7 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Reglas puras sobre las voces del motor, sin I/O: la voz por defecto, las
+// Reglas puras sobre las voces del motor, sin I/O: las
 // voces de fábrica, la voz personalizada, la lista de voces que se pueden
 // elegir en /config, el nombre de presentación de la voz personalizada, el
 // parseo de `voice list --json` y la versión mínima del motor para gestionar

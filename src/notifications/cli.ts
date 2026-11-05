@@ -10,7 +10,6 @@ import { Command, Option } from "commander";
 import { fileURLToPath } from "node:url";
 import { resolve as resolvePath, basename } from "node:path";
 import { readStdin } from "../lib/hook-payload.js";
-import { ensureStateDir } from "../lib/state-dir.js";
 import { deliver } from "./delivery.js";
 import { createDeliveryDeps } from "./delivery-runtime.js";
 import {
@@ -103,11 +102,6 @@ async function main(): Promise<number> {
     return 1;
   }
 
-  try {
-    ensureStateDir();
-  } catch {
-    // Sin directorio de estado el log no escribe, pero la entrega sigue.
-  }
   const result = await deliver(
     { event: resolveEventKey(options, stdinPayload) ?? "cli", payload: built },
     createDeliveryDeps(),
