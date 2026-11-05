@@ -12,7 +12,7 @@
 // reescribe desde /config en el siguiente evento.
 import { readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { activeVoicePath, ensureStateDir } from "../lib/state-dir.js";
-import { DEFAULT_VOICE } from "./voice.js";
+import { DEFAULT_VOICE } from "../lib/voice-name.js";
 
 export interface ActiveVoice {
   voice: string;

@@ -3772,11 +3772,21 @@ function getIconPngPath() {
 function buildIconLocation(icoPath) {
   return `${icoPath},1`;
 }
-async function checkInstallState(aumid, iconIcoPath, iconUriPath) {
-  const registry = await registryProvider.readRegistry(aumid);
+async function readRegistrationState() {
+  const iconIcoPath = getIconIcoPath();
+  const iconUriPath = getIconPngPath();
+  let registry;
+  let registryReadError;
+  try {
+    registry = await registryProvider.readRegistry(AUMID);
+  } catch (err) {
+    registry = { exists: false };
+    registryReadError = err.message;
+  }
   const lnkPath = getLnkPath();
+  const lnkExists = existsSync3(lnkPath);
   let lnkIconOk = false;
-  if (existsSync3(lnkPath)) {
+  if (lnkExists) {
     try {
       lnkIconOk = parseIconLocation(readFileSync2(lnkPath)) === buildIconLocation(iconIcoPath);
     } catch {
@@ -3785,28 +3795,29 @@ async function checkInstallState(aumid, iconIcoPath, iconUriPath) {
   }
   const lnkOk = lnkIconOk && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST;
   const registryOk = registry.exists && registry.displayName === DISPLAY_NAME && registry.icon === iconIcoPath && registry.iconUri === iconUriPath && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST;
-  return { lnkOk, registryOk };
+  const status = !lnkExists && !registry.exists ? "absent" : registryOk && lnkOk ? "registered" : "partial";
+  return {
+    status,
+    lnkExists,
+    lnkOk,
+    registryOk,
+    registry,
+    ...registryReadError !== void 0 ? { registryReadError } : {}
+  };
 }
-async function installAction() {
-  const lnkPath = getLnkPath();
+async function ensureRegistered() {
   const iconIcoPath = getIconIcoPath();
   const iconUriPath = getIconPngPath();
   if (!existsSync3(iconIcoPath)) {
-    process.stderr.write(`Icono no encontrado en ${iconIcoPath}. Aborta.
-`);
-    return 1;
+    return {
+      ok: false,
+      step: "icon",
+      error: `Icono no encontrado en ${iconIcoPath}`
+    };
   }
-  const state = await checkInstallState(AUMID, iconIcoPath, iconUriPath);
-  const needsRegistry = !state.registryOk;
-  const needsLnk = !state.lnkOk;
-  if (!needsRegistry && !needsLnk) {
-    process.stdout.write(
-      `AUMID ya registrado (AppUserModelID="${AUMID}"): registro OK + .lnk OK. No-op.
-`
-    );
-    return 0;
-  }
-  if (needsRegistry) {
+  const state = await readRegistrationState();
+  if (state.registryOk && state.lnkOk) return { ok: true, changed: false };
+  if (!state.registryOk) {
     try {
       await registryProvider.writeRegistry(
         AUMID,
@@ -3815,33 +3826,50 @@ async function installAction() {
         iconUriPath
       );
     } catch (err) {
-      process.stderr.write(
-        `Error escribiendo registro: ${err.message}
-`
-      );
-      return 1;
+      return { ok: false, step: "registry", error: err.message };
     }
   }
-  if (needsLnk) {
+  if (!state.lnkOk) {
     try {
-      const snoreToast = snoreToastProvider.getSnoreToastPath();
       await snoreToastProvider.installSnoreToastShortcut(
         LNK_FILENAME,
-        snoreToast,
+        snoreToastProvider.getSnoreToastPath(),
         AUMID,
-        lnkPath,
+        getLnkPath(),
         buildIconLocation(iconIcoPath)
       );
     } catch (err) {
-      process.stderr.write(
-        `Error creando .lnk con SnoreToast (registro s\xED se escribi\xF3): ${err.message}
-`
-      );
-      return 1;
+      return { ok: false, step: "lnk", error: err.message };
     }
   }
+  return { ok: true, changed: true };
+}
+async function installAction() {
+  const result = await ensureRegistered();
+  if (!result.ok) {
+    if (result.step === "icon") {
+      process.stderr.write(`${result.error}. Aborta.
+`);
+    } else if (result.step === "registry") {
+      process.stderr.write(`Error escribiendo registro: ${result.error}
+`);
+    } else {
+      process.stderr.write(
+        `Error creando .lnk con SnoreToast (registro s\xED se escribi\xF3): ${result.error}
+`
+      );
+    }
+    return 1;
+  }
+  if (!result.changed) {
+    process.stdout.write(
+      `AUMID ya registrado (AppUserModelID="${AUMID}"): registro OK + .lnk OK. No-op.
+`
+    );
+    return 0;
+  }
   process.stdout.write(
-    `Registrado: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${lnkPath}, icono=${iconIcoPath}).
+    `Registrado: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${getLnkPath()}, icono=${getIconIcoPath()}).
 `
   );
   return 0;
@@ -3879,22 +3907,19 @@ async function uninstallAction() {
   return 0;
 }
 async function statusAction() {
-  const lnkPath = getLnkPath();
-  const iconIcoPath = getIconIcoPath();
-  const lnkExists = existsSync3(lnkPath);
-  let registry;
-  try {
-    registry = await registryProvider.readRegistry(AUMID);
-  } catch (err) {
-    process.stderr.write(`Error leyendo registro: ${err.message}
-`);
-    registry = { exists: false };
+  const state = await readRegistrationState();
+  if (state.registryReadError !== void 0) {
+    process.stderr.write(
+      `Error leyendo registro: ${state.registryReadError}
+`
+    );
   }
-  if (!lnkExists && !registry.exists) {
+  const { registry } = state;
+  if (state.status === "absent") {
     process.stdout.write(
       "not registered. Ejecuta `node dist/notification-register.js --install` para habilitar el branding en Windows\n"
     );
-  } else if (registry.exists && registry.displayName === DISPLAY_NAME && registry.icon === iconIcoPath && registry.iconUri === getIconPngPath() && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST && lnkExists && parseIconLocation(readFileSync2(lnkPath)) === buildIconLocation(iconIcoPath)) {
+  } else if (state.status === "registered") {
     process.stdout.write(
       `registered: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)
 `
@@ -3904,7 +3929,7 @@ async function statusAction() {
     parts.push(
       registry.exists ? `registro: DisplayName="${registry.displayName}" Icon="${registry.icon}" IconUri="${registry.iconUri ?? "(ausente)"}" ShortcutEngine="${registry.shortcutEngine ?? "(ausente)"}"` : "registro: no presente"
     );
-    parts.push(lnkExists ? ".lnk: presente" : ".lnk: no presente");
+    parts.push(state.lnkExists ? ".lnk: presente" : ".lnk: no presente");
     process.stdout.write(
       `partially registered (${parts.join("; ")}). Ejecuta --install para reparar.
 `
@@ -3958,10 +3983,12 @@ export {
   AUMID,
   DISPLAY_NAME,
   dispatch,
+  ensureRegistered,
   getIconIcoPath,
   getIconPngPath,
   getLnkPath,
   installAction,
+  readRegistrationState,
   registryProvider,
   snoreToastProvider,
   statusAction,

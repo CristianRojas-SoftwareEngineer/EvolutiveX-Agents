@@ -176,6 +176,8 @@ La voz se guarda como `custom`, la única voz propia; `--display-name` (opcional
    node "${CLAUDE_PLUGIN_ROOT}/dist/notification-register.js" --status
    ```
 
+   El plugin además reconcilia este registro automáticamente en cada `SessionStart` en Windows (por ejemplo, tras actualizar el plugin), así que este paso manual solo hace falta para repararlo a mano o comprobar su estado.
+
    En Linux y macOS este paso no es necesario (el notificador nativo aplica el icono directamente).
 
 3. **Modo de mensajes de voz** (pregunta al usuario su preferencia):

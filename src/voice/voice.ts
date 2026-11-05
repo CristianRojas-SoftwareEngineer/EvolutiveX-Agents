@@ -12,7 +12,6 @@
 // plugin.json (`options`), así que la voz del usuario vive siempre en el motor
 // con el nombre fijo `custom`; su nombre propio es solo de presentación.
 
-export const DEFAULT_VOICE = "default";
 export const FACTORY_VOICES = ["default", "ryan", "vivian"] as const;
 /** Nombre fijo de la voz clonada por el usuario, en el motor y en /config. */
 export const CUSTOM_VOICE = "custom";
@@ -24,11 +23,6 @@ export const SELECTABLE_VOICES: readonly string[] = [
 export const MIN_ENGINE_VERSION = "0.44.0";
 
 const MAX_DISPLAY_NAME_LENGTH = 64;
-
-/** Recorta y pasa a minúsculas, como normaliza el motor. */
-export function normalizeVoiceName(raw: string): string {
-  return raw.trim().toLowerCase();
-}
 
 /** ¿Es una voz de fábrica del motor (no se clona encima ni se borra)? */
 export function isFactoryVoice(name: string): boolean {

@@ -15,7 +15,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ensureStateDir, voiceOperationLockPath } from "../lib/state-dir.js";
-import { isAlive } from "./spawn.js";
+import { isAlive } from "../lib/process.js";
 
 /** Exit de narrate-ctl cuando otra operación de voz tiene el bloqueo. */
 export const LOCK_BUSY_EXIT = 6;

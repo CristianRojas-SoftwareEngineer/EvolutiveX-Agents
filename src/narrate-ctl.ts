@@ -31,7 +31,7 @@
 // `voice remove` y `presynth` se excluyen entre sí con voice-operation.lock.
 import { parseArgs } from "node:util";
 import { loadConfig } from "./lib/config.js";
-import { stateDir } from "./lib/state-dir.js";
+import { notificationLogPath, stateDir } from "./lib/state-dir.js";
 import { resolveCli, runCli } from "./voice/resolve-cli.js";
 import { ANNOUNCEMENTS } from "./voice/message/static-announcements.js";
 import { readActiveVoice } from "./voice/active-voice.js";
@@ -47,9 +47,10 @@ import {
   isFactoryVoice,
   meetsMinVersion,
   normalizeDisplayName,
-  normalizeVoiceName,
   parseVoiceList,
 } from "./voice/voice.js";
+import { normalizeVoiceName } from "./lib/voice-name.js";
+import { diagnoseNotifier } from "./notifications/notifier-diagnostic.js";
 import {
   UNEXPECTED_RESPONSE_MESSAGE,
   engineFailure,
@@ -87,13 +88,16 @@ function describeVoice({ voice, source }: ResolvedVoice): string {
   return `${voiceDisplayName(voice)} (${SOURCE_LABELS[source]})`;
 }
 
-function printStatus(): void {
+async function printStatus(): Promise<void> {
   const cfg = loadConfig();
+  const notifier = await diagnoseNotifier();
   const lines = [
     `preferencias:   /config → evolutivex-agents.*`,
     `voz activa:     ${describeVoice(readActiveVoice())}`,
     `gemini key:     ${cfg.geminiApiKey ? "configurada" : "ausente"}`,
     `state dir:      ${stateDir()}`,
+    `notificador:    ${notifier.available ? "disponible" : "no disponible"} (${notifier.detail})`,
+    `notification log: ${notificationLogPath()}`,
   ];
   console.log(lines.join("\n"));
 }
@@ -550,12 +554,12 @@ function runPresynth(rest: string[]): number {
   return presynth(voice, parsed.values.force === true);
 }
 
-function main(): number {
+async function main(): Promise<number> {
   const [cmd, ...rest] = process.argv.slice(2);
   switch (cmd) {
     case "status":
     case undefined:
-      printStatus();
+      await printStatus();
       return 0;
     case "say":
       return runSay(rest);
@@ -572,7 +576,7 @@ function main(): number {
 // Nunca un stack trace: un error inesperado sale con 1 y un mensaje genérico.
 let exitCode: number;
 try {
-  exitCode = main();
+  exitCode = await main();
 } catch {
   console.error("No se pudo completar la operación.");
   exitCode = 1;

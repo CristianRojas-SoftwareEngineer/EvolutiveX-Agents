@@ -137,6 +137,8 @@ propios en
 afinar el nivel de detalle del daemon puede configurarse `RUST_LOG`; no se promete
 ningún `status.path.log`, que no forma parte del contrato.
 
+**Notificaciones de escritorio.** Cada entrega de un toast queda en `notification.log` (y `.1`) del mismo _state dir_, con evento, resultado, duración y error, y los despachos fallidos como `dispatch_failed`. Si un toast no aparece, `narrate-ctl status` informa en la línea `notificador:` si falta el notificador del sistema (SnoreToast o terminal-notifier en `vendor/`, o `notify-send` en el `PATH` de Linux) y, en Windows, el estado del registro AUMID, que el plugin reconcilia en cada `SessionStart`.
+
 **Locuciones corruptas.** Tras un diagnóstico manual, el remedio seguro es quitar
 la locución con `speech remove --label <etiqueta> [--voice <voz>]` y re-sintetizarla
 con `narrate-ctl presynth --voice <voz>`. No se recomienda `cleanup --all` ni ningún

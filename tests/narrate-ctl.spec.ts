@@ -27,6 +27,8 @@ import {
 } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { ENGINE_VERSION, makeTempDir, removeDir } from "./helpers.js";
+import { diagnoseNotifier } from "../src/notifications/notifier-diagnostic.js";
+import type { NotifierDiagnosticDeps } from "../src/notifications/notifier-diagnostic.js";
 import { ANNOUNCEMENTS } from "../src/voice/message/static-announcements.js";
 
 const CTL = join(process.cwd(), "dist", "narrate-ctl.js");
@@ -101,6 +103,56 @@ test("status no muestra preferencias: solo remite a /config", () => {
   assert.equal(res.status, 0);
   assert.doesNotMatch(res.stdout, /voice|notifications|messageMode|llm/);
   assert.match(res.stdout, /\/config/);
+});
+
+test("status añade el notificador y la ruta de notification.log sin alterar las líneas existentes", () => {
+  const res = runCtl(["status"]);
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /notificador: {4}(disponible|no disponible) \(/);
+  assert.match(res.stdout, /notification log: .*notification\.log\r?$/m);
+  assert.match(res.stdout, /state dir: {6}/);
+});
+
+test("diagnoseNotifier comprueba en cada plataforma lo que la entrega necesita", async () => {
+  const base: NotifierDiagnosticDeps = {
+    pluginRoot: () => join("raiz", "plugin"),
+    fileExists: () => true,
+    findOnPath: () => undefined,
+    readRegistrationState: async () => ({ status: "registered" }),
+    arch: "x64",
+  };
+  const win = await diagnoseNotifier("win32", base);
+  assert.equal(win.available, true);
+  assert.match(win.detail, /registro AUMID al día/);
+  const winPartial = await diagnoseNotifier("win32", {
+    ...base,
+    readRegistrationState: async () => ({ status: "partial" }),
+  });
+  assert.equal(winPartial.available, true);
+  assert.match(winPartial.detail, /partial/);
+  const winMissing = await diagnoseNotifier("win32", {
+    ...base,
+    fileExists: () => false,
+  });
+  assert.equal(winMissing.available, false);
+  assert.match(winMissing.detail, /snoretoast-x64\.exe/);
+
+  assert.equal((await diagnoseNotifier("darwin", base)).available, true);
+  const macMissing = await diagnoseNotifier("darwin", {
+    ...base,
+    fileExists: () => false,
+  });
+  assert.equal(macMissing.available, false);
+  assert.match(macMissing.detail, /terminal-notifier/);
+
+  const linuxMissing = await diagnoseNotifier("linux", base);
+  assert.equal(linuxMissing.available, false);
+  assert.match(linuxMissing.detail, /notify-send/);
+  const linuxOk = await diagnoseNotifier("linux", {
+    ...base,
+    findOnPath: (c) => `/usr/bin/${c}`,
+  });
+  assert.equal(linuxOk.available, true);
 });
 
 test("sin comando equivale a status", () => {

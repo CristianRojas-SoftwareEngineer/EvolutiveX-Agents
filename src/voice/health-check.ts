@@ -33,10 +33,10 @@ import {
   parseSingleJsonObject,
   decideHealthAction,
 } from "./health-decision.js";
+import { DEFAULT_VOICE } from "../lib/voice-name.js";
 import { writeActiveVoice } from "./active-voice.js";
 import {
   CUSTOM_VOICE,
-  DEFAULT_VOICE,
   SELECTABLE_VOICES,
   isSelectableVoice,
   parseVoiceList,

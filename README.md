@@ -2,7 +2,7 @@
 
 Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) y emite **notificaciones de escritorio nativas** (toasts silenciosos con icono por evento). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto y recibes un aviso visual independiente del motor de voz. Opcionalmente, el **transcript enriquecido** muestra en cada bloque del transcript su hora de inicio, su duración y contadores en vivo.
 
-> **Beta 0.1.0, solo en español.** Verificado en Windows 11; Linux y macOS son experimentales. Si algo falla, repórtalo con la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md).
+> **Beta 0.2.0, solo en español.** Verificado en Windows 11; Linux y macOS son experimentales. Si algo falla, repórtalo con la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md).
 
 - **Automático**: disparado por hooks; sin intervención del modelo ni tuya.
 - **No intrusivo**: nunca bloquea ni retrasa el turno; los canales de voz y
@@ -106,7 +106,12 @@ Una funcionalidad es **opt-out** (activa por defecto) solo si no altera ni inter
 
 El canal visual se ejecuta desde `dist/notification-hook.js` para los eventos `UserPromptSubmit`, `PreToolUse` (`AskUserQuestion`), `PostToolUse` (`TaskUpdate` con `status: "in_progress"` → `TaskInProgress`), `SubagentStart`, `SubagentStop`, `Stop`, `StopFailure`, `SessionStart`, `SessionEnd`, `PermissionRequest`, `TaskCreated` y `TaskCompleted`. Por defecto los hooks emiten toasts **silenciosos** con el icono específico del evento bajo `assets/notifications/events/` y el AUMID `EvolutiveX.Agents`.
 
-- **Avisos de problemas de voz:** el worker de narración emite además, con `dist/notification-cli.js`, una notificación con el remedio cuando la voz activa no existe, no tiene sus anuncios o su nombre no es válido, una sola vez por problema.
+- **Despacho desanclado:** el hook solo decide qué notificación corresponde y la despacha a `dist/notification-deliver.js`, un proceso desanclado que entrega el toast. Así el hook termina en milisegundos aunque el backend del sistema tarde (SnoreToast espera a que el toast expire), y `SessionEnd` no se cancela con `Hook cancelled`.
+- **`notification.log`:** cada entrega deja una línea (evento, resultado, duración y error) en el _state dir_, con la misma rotación que `worker.log`; un despacho fallido queda registrado como `dispatch_failed`. `narrate-ctl status` muestra su ruta y la disponibilidad del notificador.
+- **Linux:** el notificador es el `notify-send` del sistema (`libnotify-bin` en Debian/Ubuntu, `libnotify` en Fedora/Arch); el plugin no lo trae. En Windows y macOS los binarios van en `vendor/`.
+- **Registro AUMID en Windows:** el plugin lo reconcilia solo en cada `SessionStart`, antes de mostrar el toast, para que siga apuntando a la carpeta de la versión instalada tras actualizar; `notification-register.js --install` sigue disponible como paso manual.
+
+- **Avisos de problemas de voz:** el worker de narración emite además, por el mismo despachador, una notificación con el remedio cuando la voz activa no existe, no tiene sus anuncios o su nombre no es válido, una sola vez por problema.
 - **Control del canal:** `/config` → `evolutivex-agents.notificationsEnabled`.
 - **CLI manual (`dist/notification-cli.js`):** conserva todas las opciones (`--event-type`, `--message`, `--title`, `--sound`, `--silent`, `--stdin-json`, `--app-id`, `--icon`):
   ```bash
@@ -175,6 +180,8 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
   | Windows | `%LOCALAPPDATA%\evolutivex-agents\worker.log`                    |
   | Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` |
   | macOS   | `~/Library/Application Support/evolutivex-agents/worker.log`     |
+
+  Las entregas de notificaciones de escritorio se registran en `notification.log` (mismo directorio), con la misma rotación. `narrate-ctl status` muestra su ruta y la línea `notificador:`.
 
   Al superar 512 KiB se renombra a `worker.log.1` (que reemplaza al anterior), y `worker.log.1` se borra tras 14 días sin cambios: como máximo, 2 archivos y 1 MiB.
 

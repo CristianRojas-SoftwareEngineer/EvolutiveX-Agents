@@ -49,12 +49,61 @@ const ENTRY_POINTS = {
   "health-check": "src/voice/health-check.ts",
   "narrate-ctl": "src/narrate-ctl.ts",
   "notification-hook": "src/notifications/notification-hook.ts",
+  "notification-deliver": "src/notifications/deliver-entry.ts",
   "notification-cli": "src/notifications/cli.ts",
   "notification-register": "src/notifications/register.ts",
 };
 
+// Reglas de arquitectura verificadas contra el grafo real de cada bundle
+// (metafile de esbuild): el hook solo decide y despacha, así que no contiene
+// código de entrega; y los bundles del canal de notificaciones no contienen
+// el canal de voz.
+const HOOK_FORBIDDEN = [
+  "node_modules/node-notifier/",
+  "node_modules/commander/",
+  "src/notifications/desktop-notification-adapter.ts",
+];
+const VOICE_FREE_BUNDLES = [
+  "notification-hook",
+  "notification-deliver",
+  "notification-cli",
+  "notification-register",
+];
+
+/** Violaciones de las reglas de dependencia; cada una nombra bundle y módulo. */
+function architectureViolations(metafile) {
+  const violations = [];
+  const inputsOf = (bundle) =>
+    Object.entries(metafile.outputs)
+      .filter(
+        ([out]) =>
+          relative(distDir, join(root, out)).replaceAll("\\", "/") ===
+          `${bundle}.js`,
+      )
+      .flatMap(([, meta]) => Object.keys(meta.inputs));
+  for (const input of inputsOf("notification-hook")) {
+    const forbidden = HOOK_FORBIDDEN.find((f) => input.includes(f));
+    if (forbidden) {
+      violations.push(
+        `notification-hook incluye ${input}: el hook solo decide y despacha, no puede contener código de entrega`,
+      );
+    }
+  }
+  for (const bundle of VOICE_FREE_BUNDLES) {
+    for (const input of inputsOf(bundle)) {
+      if (input.startsWith("src/voice/")) {
+        violations.push(
+          `${bundle} incluye ${input}: los bundles de notificaciones no pueden contener src/voice/`,
+        );
+      }
+    }
+  }
+  return violations;
+}
+
 /** @type {import("esbuild").BuildOptions} */
 const baseOptions = {
+  metafile: true,
   entryPoints: Object.fromEntries(
     Object.entries(ENTRY_POINTS).map(([name, path]) => [
       name,
@@ -105,6 +154,11 @@ if (isCheck) {
     build({ ...transcriptOptions, write: false }),
   ]);
   let drift = false;
+  const violations = architectureViolations(results[0].metafile);
+  for (const violation of violations) {
+    drift = true;
+    console.error(`regla de arquitectura violada: ${violation}`);
+  }
   for (const out of results.flatMap((result) => result.outputFiles)) {
     const rel = relative(distDir, out.path);
     let current = "";

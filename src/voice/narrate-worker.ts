@@ -11,16 +11,8 @@
 // van a worker.log; si la voz falta, no tiene sus anuncios o su nombre es
 // ilegal, además emite una notificación de escritorio con el remedio, una sola
 // vez por problema (voice-problem.ts), sin pasar por el stdout de ningún hook.
-import {
-  appendFileSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendRotatingLog } from "../lib/rotating-log.js";
 import { loadConfig } from "../lib/config.js";
 import { parseSingleJsonObject } from "./health-decision.js";
 import {
@@ -32,50 +24,28 @@ import {
 import { claimNext, clearQueue, pruneQueue } from "./queue.js";
 import type { QueueItem } from "./queue.js";
 import { resolveCli, runCliWithTimeout } from "./resolve-cli.js";
-import { isAlive, spawnDetached } from "./spawn.js";
+import { isAlive } from "../lib/process.js";
 import { buildMessage } from "./message/build-message.js";
 import { sayTimeoutMs } from "./say-timeout.js";
 import { CUSTOM_VOICE } from "./voice.js";
+import { DetachedNotificationDispatcher } from "../notifications/dispatcher.js";
+import { NOTIFICATION_BRAND_TITLE } from "../notifications/event-notification-profile.js";
+import { buildNotificationPayload } from "../notifications/notification-payload.js";
 import { trackVoiceProblem } from "./voice-problem.js";
 import type { NarrationOutcome } from "./voice-problem.js";
 
-// Cota de worker.log: al superar WORKER_LOG_MAX_BYTES se renombra a
-// worker.log.1 (que reemplaza al anterior), y worker.log.1 se borra tras
-// WORKER_LOG_ROTATED_MAX_AGE_MS sin modificarse. Como máximo, 2 archivos y
-// 1 MiB en disco.
-const WORKER_LOG_MAX_BYTES = 512 * 1024;
-const WORKER_LOG_ROTATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-
-/**
- * Rota worker.log antes de escribir. log() es su único escritor y corre bajo
- * el lock del worker, así que no hay carreras entre procesos.
- */
-function rotateWorkerLog(): void {
-  try {
-    const rotated = rotatedWorkerLogPath();
-    try {
-      if (
-        Date.now() - statSync(rotated).mtimeMs >
-        WORKER_LOG_ROTATED_MAX_AGE_MS
-      )
-        rmSync(rotated, { force: true });
-    } catch {
-      // Sin worker.log.1: nada que caducar.
-    }
-    if (statSync(workerLogPath()).size > WORKER_LOG_MAX_BYTES)
-      renameSync(workerLogPath(), rotated);
-  } catch {
-    // Sin worker.log o fallo al rotar: se escribe igual sobre el actual.
-  }
-}
-
+// Cota de worker.log: 512 KiB por archivo, el rotado caduca a los 14 días;
+// como máximo, 2 archivos y 1 MiB en disco.
 function log(msg: string): void {
-  rotateWorkerLog();
-  try {
-    appendFileSync(workerLogPath(), `${new Date().toISOString()} ${msg}\n`);
-  } catch {
-    // El logging nunca debe tumbar al worker.
-  }
+  appendRotatingLog(
+    {
+      path: workerLogPath(),
+      rotatedPath: rotatedWorkerLogPath(),
+      maxBytes: 512 * 1024,
+      rotatedMaxAgeMs: 14 * 24 * 60 * 60 * 1000,
+    },
+    msg,
+  );
 }
 
 // Timeout de invocación CLI de `speech play`; el de `speech say` depende del
@@ -134,27 +104,26 @@ function failureDetail(reason: string | undefined, voice: string): string {
 }
 
 /**
- * Lanza desanclada una notificación de escritorio silenciosa con la pista,
- * vía dist/notification-cli.js (junto a este bundle). El CLI exige un
- * `--event-type`; `VoiceProblem` no está en su catálogo, así que usa el icono
- * genérico, y el título se fija con la marca.
+ * Despacha una notificación de escritorio silenciosa con la pista, vía el
+ * despachador desanclado (dist/notification-deliver.js, junto a este bundle).
+ * `VoiceProblem` no está en el catálogo de eventos, así que usa el icono
+ * genérico; el título se fija con la marca. `voice` solo usa el despachador de
+ * `notifications`, nunca al revés.
  */
 function notifyVoiceProblem(hint: string): void {
-  const cliPath = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "notification-cli.js",
-  );
-  const message = hint.charAt(0).toUpperCase() + hint.slice(1);
-  spawnDetached(process.execPath, [
-    cliPath,
-    "--event-type",
-    "VoiceProblem",
-    "--title",
-    "EvolutiveX Agents",
-    "--message",
-    message,
-    "--silent",
-  ]);
+  const built = buildNotificationPayload({
+    eventType: "VoiceProblem",
+    title: NOTIFICATION_BRAND_TITLE,
+    message: hint.charAt(0).toUpperCase() + hint.slice(1),
+    sound: false,
+    silent: true,
+    stdinJson: false,
+  });
+  if ("error" in built) {
+    log(`aviso de voz no construido: ${built.error}`);
+    return;
+  }
+  new DetachedNotificationDispatcher("VoiceProblem").notify(built);
 }
 
 // Pausa de respiración entre narraciones: evita que dos locuciones suenen pegadas.

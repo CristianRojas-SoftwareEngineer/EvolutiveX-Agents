@@ -13,7 +13,7 @@
 // voz activa se normaliza pero no se valida: un valor fuera de las opciones de
 // /config (p. ej. uno antiguo que quedó en settings.json) se conserva para que
 // SessionStart lo avise, en lugar de narrar con otra voz en silencio.
-import { DEFAULT_VOICE, normalizeVoiceName } from "../voice/voice.js";
+import { DEFAULT_VOICE, normalizeVoiceName } from "./voice-name.js";
 
 export type MessageMode = "llm" | "local";
 

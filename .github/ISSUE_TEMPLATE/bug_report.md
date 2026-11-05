@@ -24,16 +24,22 @@ Ejecuta `ai-voice-interconnector doctor --json` y pega la salida aquí:
 
 Ruta del state dir según tu SO:
 
-| SO      | Ruta                                                                    |
-| ------- | ----------------------------------------------------------------------- |
-| Windows | `%LOCALAPPDATA%\evolutivex-agents\worker.log` y `.1`                    |
-| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` y `.1` |
-| macOS   | `~/Library/Application Support/evolutivex-agents/worker.log` y `.1`     |
+| SO      | Ruta                                                                                                  |
+| ------- | ----------------------------------------------------------------------------------------------------- |
+| Windows | `%LOCALAPPDATA%\evolutivex-agents\worker.log` y `.1` (y `notification.log` y `.1`)                    |
+| Linux   | `${XDG_STATE_HOME:-~/.local/state}/evolutivex-agents/worker.log` y `.1` (y `notification.log` y `.1`) |
+| macOS   | `~/Library/Application Support/evolutivex-agents/worker.log` y `.1` (y `notification.log` y `.1`)     |
 
 Pega las **últimas 30 líneas relevantes** de `worker.log` y, si existe, de `worker.log.1`:
 
 ```
 <pegar líneas de worker.log>
+```
+
+Si el problema es que no aparece un toast, pega también las últimas líneas de `notification.log` (y `.1`) y la salida de `node "${CLAUDE_PLUGIN_ROOT}/dist/narrate-ctl.js" status`:
+
+```
+<pegar líneas de notification.log>
 ```
 
 ## Toast del transcript enriquecido (si apareció)

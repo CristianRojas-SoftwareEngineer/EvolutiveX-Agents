@@ -17,7 +17,7 @@ import { dirname, join } from "node:path";
 import { loadConfig } from "../lib/config.js";
 import { workerPidPath } from "../lib/state-dir.js";
 import { clearQueue, enqueuePayload } from "./queue.js";
-import { isAlive, spawnDetached } from "./spawn.js";
+import { isAlive, spawnDetached } from "../lib/process.js";
 import { writeActiveVoice } from "./active-voice.js";
 import { readStdin, parsePayload } from "../lib/hook-payload.js";
 

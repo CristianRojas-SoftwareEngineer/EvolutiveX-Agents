@@ -7,25 +7,32 @@ const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
 // src/voice/narrate-worker.ts
-import {
-  appendFileSync,
-  readFileSync as readFileSync3,
-  renameSync as renameSync3,
-  rmSync as rmSync3,
-  statSync as statSync3,
-  writeFileSync as writeFileSync3
-} from "node:fs";
-import { dirname, join as join4 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync as readFileSync3, rmSync as rmSync4, writeFileSync as writeFileSync3 } from "node:fs";
 
-// src/voice/voice.ts
+// src/lib/rotating-log.ts
+import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
+function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
+  try {
+    try {
+      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
+        rmSync(rotatedPath, { force: true });
+    } catch {
+    }
+    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
+  } catch {
+  }
+  try {
+    appendFileSync(
+      path,
+      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
+`
+    );
+  } catch {
+  }
+}
+
+// src/lib/voice-name.ts
 var DEFAULT_VOICE = "default";
-var FACTORY_VOICES = ["default", "ryan", "vivian"];
-var CUSTOM_VOICE = "custom";
-var SELECTABLE_VOICES = [
-  ...FACTORY_VOICES,
-  CUSTOM_VOICE
-];
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
 }
@@ -134,6 +141,12 @@ function workerLogPath() {
 function rotatedWorkerLogPath() {
   return join(stateDir(), "worker.log.1");
 }
+function notificationLogPath() {
+  return join(stateDir(), "notification.log");
+}
+function rotatedNotificationLogPath() {
+  return join(stateDir(), "notification.log.1");
+}
 function voiceProblemPath() {
   return join(stateDir(), "voice-problem.json");
 }
@@ -143,9 +156,9 @@ import {
   mkdirSync as mkdirSync2,
   readFileSync,
   readdirSync,
-  renameSync,
-  rmSync,
-  statSync,
+  renameSync as renameSync2,
+  rmSync as rmSync2,
+  statSync as statSync2,
   writeFileSync
 } from "node:fs";
 import { join as join2 } from "node:path";
@@ -169,7 +182,7 @@ function claimNext() {
       raw = void 0;
     }
     try {
-      rmSync(file, { force: true });
+      rmSync2(file, { force: true });
     } catch {
     }
     const item = raw === void 0 ? void 0 : parseQueueItem(raw);
@@ -201,9 +214,9 @@ function pruneQueue(options) {
   for (const name of pending) {
     const file = join2(queueDir(), name);
     try {
-      const mt = statSync(file).mtimeMs;
+      const mt = statSync2(file).mtimeMs;
       if (now - mt >= maxAgeMs) {
-        rmSync(file, { force: true });
+        rmSync2(file, { force: true });
       }
     } catch {
     }
@@ -213,7 +226,7 @@ function pruneQueue(options) {
   if (excess > 0) {
     for (let i = 0; i < excess; i++) {
       try {
-        rmSync(join2(queueDir(), remaining[i]), { force: true });
+        rmSync2(join2(queueDir(), remaining[i]), { force: true });
       } catch {
       }
     }
@@ -222,7 +235,7 @@ function pruneQueue(options) {
 function clearQueue() {
   try {
     for (const name of listPending()) {
-      rmSync(join2(queueDir(), name), { force: true });
+      rmSync2(join2(queueDir(), name), { force: true });
     }
   } catch {
   }
@@ -233,10 +246,10 @@ import {
   spawn as spawn2,
   spawnSync as spawnSync2
 } from "node:child_process";
-import { existsSync, statSync as statSync2 } from "node:fs";
+import { existsSync, statSync as statSync3 } from "node:fs";
 import { delimiter, join as join3 } from "node:path";
 
-// src/voice/spawn.ts
+// src/lib/process.ts
 import { spawn, spawnSync } from "node:child_process";
 function spawnDetached(cmd, args) {
   const child = spawn(cmd, args, {
@@ -293,7 +306,7 @@ function resolveCli() {
     for (const name of names) {
       const full = join3(dir, name);
       try {
-        if (existsSync(full) && statSync2(full).isFile()) return full;
+        if (existsSync(full) && statSync3(full).isFile()) return full;
       } catch {
       }
     }
@@ -571,8 +584,464 @@ function sayTimeoutMs(text) {
   return SAY_BASE_MS + text.length * SAY_PER_CHAR_MS;
 }
 
+// src/voice/voice.ts
+var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var CUSTOM_VOICE = "custom";
+var SELECTABLE_VOICES = [
+  ...FACTORY_VOICES,
+  CUSTOM_VOICE
+];
+
+// src/notifications/dispatcher.ts
+import { dirname, join as join4 } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// src/notifications/delivery.ts
+function appendNotificationLog(message) {
+  appendRotatingLog(
+    {
+      path: notificationLogPath(),
+      rotatedPath: rotatedNotificationLogPath(),
+      maxBytes: 512 * 1024,
+      rotatedMaxAgeMs: 14 * 24 * 60 * 60 * 1e3
+    },
+    message
+  );
+}
+function serializeDeliveryRequest(request) {
+  return JSON.stringify(request);
+}
+
+// src/notifications/dispatcher.ts
+function deliverEntryPath() {
+  return join4(
+    dirname(fileURLToPath(import.meta.url)),
+    "notification-deliver.js"
+  );
+}
+var DetachedNotificationDispatcher = class {
+  constructor(event, options = {}) {
+    this.event = event;
+    this.spawn = options.spawn ?? spawnDetached;
+    this.log = options.log ?? appendNotificationLog;
+  }
+  spawn;
+  log;
+  notify(payload) {
+    let pid;
+    let reason = "sin PID";
+    try {
+      pid = this.spawn(process.execPath, [
+        deliverEntryPath(),
+        serializeDeliveryRequest({ event: this.event, payload })
+      ]);
+    } catch (err) {
+      reason = err.message;
+    }
+    if (pid === void 0) {
+      this.log(`event=${this.event} result=dispatch_failed error="${reason}"`);
+    }
+  }
+};
+
+// src/notifications/event-notification-profile.ts
+var NOTIFICATION_BRAND_TITLE = "EvolutiveX Agents";
+var EVENT_NOTIFICATION_PROFILES = {
+  UserPromptSubmit: {
+    message: "Procesando tu solicitud...",
+    image: "user-prompt-submit.png",
+    level: "message",
+    sound: { win32: "Reminder", darwin: "Submarine", linux: true }
+  },
+  PreToolUse: {
+    message: "Pregunta pendiente \u2014 Responde en la ventana del cliente.",
+    image: "pre-tool-use-ask.png",
+    level: "attention",
+    sound: { win32: "SMS", darwin: "Hero", linux: true }
+  },
+  SubagentStart: {
+    message: "Subagente iniciado",
+    image: "subagent-start.png",
+    level: "activity",
+    sound: { win32: "IM", darwin: "Ping", linux: true }
+  },
+  SubagentStop: {
+    message: "Subagente terminado",
+    image: "subagent-stop.png",
+    level: "neutral",
+    sound: { win32: "Default", darwin: "Tink", linux: true }
+  },
+  Stop: {
+    message: "Tu turno \u2014 El asistente termin\xF3. Escribe tu siguiente mensaje.",
+    image: "stop.png",
+    level: "activity",
+    sound: { win32: "IM", darwin: "Ping", linux: true }
+  },
+  StopFailure: {
+    message: "Error de API \u2014 No se complet\xF3 la respuesta.",
+    image: "stop-failure.png",
+    level: "alarm",
+    sound: { win32: "LoopingAlarm7", darwin: "Basso", linux: true }
+  },
+  SessionStart: {
+    message: "Sesi\xF3n iniciada",
+    image: "session-start.png",
+    level: "neutral",
+    sound: { win32: "Default", darwin: "Tink", linux: true }
+  },
+  SessionEnd: {
+    message: "Sesi\xF3n finalizada",
+    image: "session-end.png",
+    level: "neutral",
+    sound: { win32: "Default", darwin: "Tink", linux: true }
+  },
+  PermissionRequest: {
+    message: "Permiso requerido \u2014 Confirma la herramienta en el cliente.",
+    image: "permission-request.png",
+    level: "attention",
+    sound: { win32: "SMS", darwin: "Hero", linux: true }
+  },
+  TaskCreated: {
+    message: "Tarea creada",
+    image: "task-created.png",
+    level: "message",
+    sound: { win32: "Reminder", darwin: "Submarine", linux: true }
+  },
+  TaskCompleted: {
+    message: "Tarea completada",
+    image: "task-completed.png",
+    level: "neutral",
+    sound: { win32: "Default", darwin: "Tink", linux: true }
+  },
+  TaskInProgress: {
+    message: "Tarea iniciada",
+    image: "task-in-progress.png",
+    level: "activity",
+    sound: { win32: "IM", darwin: "Ping", linux: true }
+  }
+};
+var NOTIFICATION_EVENT_KEYS = Object.keys(EVENT_NOTIFICATION_PROFILES);
+function getProfileForEvent(eventKey) {
+  return EVENT_NOTIFICATION_PROFILES[eventKey];
+}
+
+// src/notifications/notification-payload.ts
+import { existsSync as existsSync3 } from "node:fs";
+import { join as join6 } from "node:path";
+
+// src/notifications/event-image-paths.ts
+import { existsSync as existsSync2 } from "node:fs";
+import { dirname as dirname2, join as join5, resolve as resolvePath } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+function resolvePluginRoot(metaUrl = import.meta.url) {
+  let dir = dirname2(fileURLToPath2(metaUrl));
+  for (let i = 0; i < 4; i++) {
+    if (existsSync2(join5(dir, "assets", "notifications"))) {
+      return dir;
+    }
+    const parent = resolvePath(dir, "..");
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return resolvePath(dirname2(fileURLToPath2(metaUrl)), "..");
+}
+var eventIconsDirProvider = {
+  get() {
+    return join5(resolvePluginRoot(), "assets", "notifications", "events");
+  }
+};
+function getEventIconsDir() {
+  return eventIconsDirProvider.get();
+}
+function resolveEventImagePath(filename) {
+  const iconPath = join5(getEventIconsDir(), filename);
+  return existsSync2(iconPath) ? iconPath : void 0;
+}
+
+// src/notifications/hook-payload-notification-message.ts
+var MAX_ASSISTANT_MESSAGE_LEN = 140;
+var MAX_TOOL_INPUT_PREVIEW_LEN = 120;
+var STOP_FAILURE_ERROR_MAP = {
+  rate_limit: "L\xEDmite de tasa (API)",
+  authentication_failed: "Error de autenticaci\xF3n",
+  billing_error: "Error de facturaci\xF3n o cuota",
+  invalid_request: "Solicitud inv\xE1lida",
+  server_error: "Error del servidor",
+  max_output_tokens: "L\xEDmite de tokens de salida",
+  unknown: "Error de API desconocido"
+};
+var MOJIBAKE_SIGNATURE = /[Â-ß][\x80-¿]|[à-ï][\x80-¿]{2}/;
+function repairMojibake(text) {
+  if (!MOJIBAKE_SIGNATURE.test(text)) return text;
+  const repaired = Buffer.from(text, "latin1").toString("utf8");
+  if (repaired.includes("\uFFFD")) return text;
+  return repaired;
+}
+function truncate(text, maxLen) {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + "\u2026";
+}
+function normalizeWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function readStringField(payload, key) {
+  const value = payload[key];
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+  return void 0;
+}
+function formatStopFailureMessage(payload) {
+  const err = readStringField(payload, "error") ?? "unknown";
+  let line1 = STOP_FAILURE_ERROR_MAP[err];
+  if (!line1) line1 = `Error de API (${err})`;
+  const detail = readStringField(payload, "last_assistant_message");
+  if (detail) {
+    return `${line1}
+${truncate(detail, MAX_ASSISTANT_MESSAGE_LEN)}`;
+  }
+  return line1;
+}
+function extractToolInputPreview(toolInput) {
+  if (toolInput == null) return "";
+  if (typeof toolInput === "string") {
+    return toolInput;
+  }
+  if (typeof toolInput === "object") {
+    const obj = toolInput;
+    if (typeof obj.command === "string") return obj.command;
+    if (typeof obj.file_path === "string") return obj.file_path;
+    try {
+      return JSON.stringify(toolInput);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+function formatPermissionRequestMessage(payload) {
+  const tool = readStringField(payload, "tool_name") ?? "Herramienta";
+  let preview = extractToolInputPreview(payload.tool_input);
+  if (preview) {
+    preview = truncate(
+      normalizeWhitespace(preview),
+      MAX_TOOL_INPUT_PREVIEW_LEN
+    );
+    return `Permiso para: ${tool}
+${preview}`;
+  }
+  return `Permiso para: ${tool}`;
+}
+function formatPreToolUseAskMessage(payload) {
+  const toolInput = payload.tool_input;
+  if (toolInput == null || typeof toolInput !== "object") return null;
+  const ti = toolInput;
+  const questions = ti.questions;
+  if (!questions?.length) return null;
+  const n = questions.length;
+  const line1 = n === 1 ? "1 pregunta pendiente" : `${n} preguntas pendientes`;
+  const first = questions[0];
+  let preview = "";
+  if (first?.question?.trim()) {
+    preview = first.question.trim();
+  } else if (first?.header?.trim()) {
+    preview = first.header.trim();
+  }
+  if (preview) {
+    preview = truncate(
+      normalizeWhitespace(preview),
+      MAX_TOOL_INPUT_PREVIEW_LEN
+    );
+    return `${line1}
+${preview}`;
+  }
+  return line1;
+}
+function formatUserPromptSubmitMessage(payload) {
+  const prompt = readStringField(payload, "prompt");
+  if (!prompt) return null;
+  return truncate(normalizeWhitespace(prompt), MAX_TOOL_INPUT_PREVIEW_LEN);
+}
+function formatStopMessage(payload) {
+  const detail = readStringField(payload, "last_assistant_message");
+  if (!detail) return null;
+  return truncate(detail, MAX_ASSISTANT_MESSAGE_LEN);
+}
+function formatTaskInProgressMessage(payload) {
+  const toolInput = payload.tool_input;
+  const subject = toolInput != null && typeof toolInput === "object" ? readStringField(toolInput, "subject") : void 0;
+  if (!subject) return null;
+  return `Tarea iniciada: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}`;
+}
+function formatTaskMessage(payload, prefix) {
+  const subject = readStringField(payload, "task_subject");
+  return subject ? `${prefix}: ${truncate(normalizeWhitespace(subject), MAX_TOOL_INPUT_PREVIEW_LEN)}` : null;
+}
+var HOOK_PAYLOAD_MESSAGE_FORMATTERS = {
+  StopFailure: formatStopFailureMessage,
+  PermissionRequest: formatPermissionRequestMessage,
+  PreToolUse: formatPreToolUseAskMessage,
+  UserPromptSubmit: formatUserPromptSubmitMessage,
+  Stop: formatStopMessage,
+  TaskInProgress: formatTaskInProgressMessage,
+  TaskCreated: (payload) => formatTaskMessage(payload, "Tarea creada"),
+  TaskCompleted: (payload) => formatTaskMessage(payload, "Tarea completada")
+};
+function resolveHookNotificationMessage(eventKey, payload) {
+  const formatter = HOOK_PAYLOAD_MESSAGE_FORMATTERS[eventKey];
+  if (!formatter) return null;
+  const result = formatter(payload);
+  if (result == null || result.trim() === "") return null;
+  return repairMojibake(result);
+}
+
+// src/notifications/resolve-notification-sound.ts
+var WIN32_NOTIFICATION_SOUND = {
+  Default: "Notification.Default",
+  IM: "Notification.IM",
+  Reminder: "Notification.Reminder",
+  SMS: "Notification.SMS",
+  LoopingAlarm7: "Notification.Looping.Alarm7"
+};
+function toWin32NotificationSound(token) {
+  if (token.startsWith("Notification.")) {
+    return token;
+  }
+  return WIN32_NOTIFICATION_SOUND[token] ?? "Notification.Default";
+}
+function resolveNotificationSound(profile, platform2) {
+  if (!profile) {
+    return false;
+  }
+  if (platform2 === "win32") {
+    const token = profile.win32;
+    if (token === false || token === void 0) {
+      return false;
+    }
+    return toWin32NotificationSound(token);
+  }
+  if (platform2 === "darwin") {
+    const name = profile.darwin;
+    if (name === false || name === void 0) {
+      return false;
+    }
+    return name;
+  }
+  if (platform2 === "linux") {
+    return profile.linux === true;
+  }
+  return false;
+}
+
+// src/notifications/notification-payload.ts
+var DEFAULT_APP_ID = "EvolutiveX.Agents";
+var globalFallbackIconProvider = {
+  get() {
+    return join6(
+      resolvePluginRoot(),
+      "assets",
+      "notifications",
+      "ai-assistant.png"
+    );
+  }
+};
+function resolveGlobalFallbackIconPath() {
+  const p = globalFallbackIconProvider.get();
+  return existsSync3(p) ? p : void 0;
+}
+function resolveEventKey(options, stdinPayload) {
+  if (options.eventType) {
+    return options.eventType;
+  }
+  if (options.stdinJson && stdinPayload) {
+    const name = stdinPayload["hook_event_name"];
+    if (typeof name === "string" && name.length > 0) {
+      return name;
+    }
+  }
+  return void 0;
+}
+function resolveBranding(options, eventKey) {
+  const appId = options.appId ?? DEFAULT_APP_ID;
+  if (options.icon !== void 0) {
+    return { appId, icon: options.icon };
+  }
+  const key = eventKey ?? options.eventType;
+  if (key) {
+    const profile = getProfileForEvent(key);
+    if (profile) {
+      const eventIcon = resolveEventImagePath(profile.image);
+      if (eventIcon) {
+        return { appId, icon: eventIcon };
+      }
+    }
+  }
+  const fallback = resolveGlobalFallbackIconPath();
+  if (fallback) {
+    return { appId, icon: fallback };
+  }
+  return { appId };
+}
+function resolveEventSound(options, eventKey, platform2 = process.platform) {
+  if (options.silent) {
+    return false;
+  }
+  if (options.sound) {
+    return true;
+  }
+  const profile = eventKey ? getProfileForEvent(eventKey) : void 0;
+  return resolveNotificationSound(profile?.sound, platform2);
+}
+function resolveNotificationTitle(options, eventKey) {
+  if (options.title !== void 0 && options.title !== "") {
+    return options.title;
+  }
+  if (eventKey) {
+    return eventKey;
+  }
+  return NOTIFICATION_BRAND_TITLE;
+}
+function resolveNotificationMessage(options, eventKey, stdinPayload) {
+  if (options.message !== void 0 && options.message !== "") {
+    return options.message;
+  }
+  if (options.stdinJson && stdinPayload && eventKey) {
+    const dynamic = resolveHookNotificationMessage(eventKey, stdinPayload);
+    if (dynamic) return dynamic;
+  }
+  if (eventKey) {
+    return getProfileForEvent(eventKey)?.message;
+  }
+  return void 0;
+}
+function buildNotificationPayload(options, stdinPayload, platform2 = process.platform) {
+  if (options.stdinJson && !stdinPayload) {
+    return { error: "No se recibi\xF3 payload por stdin con --stdin-json" };
+  }
+  const eventKey = resolveEventKey(options, stdinPayload);
+  if (!options.stdinJson && !options.eventType) {
+    return { error: "Falta --event-type (o usa --stdin-json con payload)" };
+  }
+  const title = resolveNotificationTitle(options, eventKey);
+  const message = resolveNotificationMessage(options, eventKey, stdinPayload);
+  if (message === void 0 || message === "") {
+    return {
+      error: "Falta mensaje: usa --message, --event-type con perfil en cat\xE1logo, o --stdin-json con formatter aplicable"
+    };
+  }
+  const branding = resolveBranding(options, eventKey);
+  return {
+    title,
+    message,
+    sound: resolveEventSound(options, eventKey, platform2),
+    silent: options.silent,
+    appId: branding.appId,
+    ...branding.icon !== void 0 ? { icon: branding.icon } : {}
+  };
+}
+
 // src/voice/voice-problem.ts
-import { readFileSync as readFileSync2, renameSync as renameSync2, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { readFileSync as readFileSync2, renameSync as renameSync3, rmSync as rmSync3, writeFileSync as writeFileSync2 } from "node:fs";
 var NOTIFIABLE_REASONS = [
   "voice_not_found",
   "speech_not_found",
@@ -596,12 +1065,12 @@ function writeProblem(problem) {
   const tmpPath = `${path}.${process.pid}.tmp`;
   writeFileSync2(tmpPath, `${JSON.stringify(problem)}
 `, "utf8");
-  renameSync2(tmpPath, path);
+  renameSync3(tmpPath, path);
 }
 function trackVoiceProblem(voice, outcome) {
   try {
     if (outcome.ok) {
-      rmSync2(voiceProblemPath(), { force: true });
+      rmSync3(voiceProblemPath(), { force: true });
       return false;
     }
     const { reason } = outcome;
@@ -617,28 +1086,16 @@ function trackVoiceProblem(voice, outcome) {
 }
 
 // src/voice/narrate-worker.ts
-var WORKER_LOG_MAX_BYTES = 512 * 1024;
-var WORKER_LOG_ROTATED_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1e3;
-function rotateWorkerLog() {
-  try {
-    const rotated = rotatedWorkerLogPath();
-    try {
-      if (Date.now() - statSync3(rotated).mtimeMs > WORKER_LOG_ROTATED_MAX_AGE_MS)
-        rmSync3(rotated, { force: true });
-    } catch {
-    }
-    if (statSync3(workerLogPath()).size > WORKER_LOG_MAX_BYTES)
-      renameSync3(workerLogPath(), rotated);
-  } catch {
-  }
-}
 function log(msg) {
-  rotateWorkerLog();
-  try {
-    appendFileSync(workerLogPath(), `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
-`);
-  } catch {
-  }
+  appendRotatingLog(
+    {
+      path: workerLogPath(),
+      rotatedPath: rotatedWorkerLogPath(),
+      maxBytes: 512 * 1024,
+      rotatedMaxAgeMs: 14 * 24 * 60 * 60 * 1e3
+    },
+    msg
+  );
 }
 var PLAY_TIMEOUT_MS = 1e4;
 var KILL_GRACE_MS = 2e3;
@@ -670,21 +1127,19 @@ function failureDetail(reason, voice) {
   return hint === void 0 ? "" : ` (${reason}: ${hint})`;
 }
 function notifyVoiceProblem(hint) {
-  const cliPath = join4(
-    dirname(fileURLToPath(import.meta.url)),
-    "notification-cli.js"
-  );
-  const message = hint.charAt(0).toUpperCase() + hint.slice(1);
-  spawnDetached(process.execPath, [
-    cliPath,
-    "--event-type",
-    "VoiceProblem",
-    "--title",
-    "EvolutiveX Agents",
-    "--message",
-    message,
-    "--silent"
-  ]);
+  const built = buildNotificationPayload({
+    eventType: "VoiceProblem",
+    title: NOTIFICATION_BRAND_TITLE,
+    message: hint.charAt(0).toUpperCase() + hint.slice(1),
+    sound: false,
+    silent: true,
+    stdinJson: false
+  });
+  if ("error" in built) {
+    log(`aviso de voz no construido: ${built.error}`);
+    return;
+  }
+  new DetachedNotificationDispatcher("VoiceProblem").notify(built);
 }
 var NARRATION_GAP_MS = 1e3;
 var IDLE_MS = 5e3;
@@ -704,7 +1159,7 @@ function acquireLock() {
     try {
       const owner = Number.parseInt(readFileSync3(pidPath, "utf8").trim(), 10);
       if (Number.isInteger(owner) && isAlive(owner)) return false;
-      rmSync3(pidPath, { force: true });
+      rmSync4(pidPath, { force: true });
       writeFileSync3(pidPath, String(process.pid), {
         encoding: "utf8",
         flag: "wx"
@@ -721,7 +1176,7 @@ function releaseLock() {
       readFileSync3(workerPidPath(), "utf8").trim(),
       10
     );
-    if (owner === process.pid) rmSync3(workerPidPath(), { force: true });
+    if (owner === process.pid) rmSync4(workerPidPath(), { force: true });
   } catch {
   }
 }

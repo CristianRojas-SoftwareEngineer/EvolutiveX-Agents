@@ -17,7 +17,7 @@ import {
 } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
-import { killProcessTree } from "./spawn.js";
+import { killProcessTree } from "../lib/process.js";
 
 const BASE = "ai-voice-interconnector";
 

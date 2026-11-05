@@ -10,8 +10,11 @@ import type { NotificationPayload } from "./types.js";
 
 /**
  * Contrato mínimo del servicio: un único método `notify`.
- * La implementación concreta (`DesktopNotificationAdapter`) delega en
- * `node-notifier`; este puerto permanece agnóstico del canal.
+ * Hay dos implementaciones: la entrega en el mismo proceso
+ * (`DesktopNotificationAdapter`, delega en `node-notifier` y espera al
+ * backend) y el despacho desanclado (`DetachedNotificationDispatcher`, lanza
+ * `notification-deliver.js` sin esperar). Este puerto permanece agnóstico del
+ * canal.
  */
 export interface NotificationService {
   notify(payload: NotificationPayload): Promise<void> | void;

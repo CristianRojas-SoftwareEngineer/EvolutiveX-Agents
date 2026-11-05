@@ -60,6 +60,16 @@ export function rotatedWorkerLogPath(): string {
   return join(stateDir(), "worker.log.1");
 }
 
+/** Registro de entregas de notificaciones de escritorio. */
+export function notificationLogPath(): string {
+  return join(stateDir(), "notification.log");
+}
+
+/** Generación anterior de notification.log, tras su rotación por tamaño. */
+export function rotatedNotificationLogPath(): string {
+  return join(stateDir(), "notification.log.1");
+}
+
 /** Caché de la voz activa: derivada de /config, no es una preferencia. */
 export function activeVoicePath(): string {
   return join(stateDir(), "active-voice");

@@ -7218,9 +7218,8 @@ var {
 } = import_index.default;
 
 // src/notifications/cli.ts
-import { existsSync as existsSync2 } from "node:fs";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-import { resolve as resolvePath2, basename, join as join2 } from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { resolve as resolvePath3, basename as basename2 } from "node:path";
 
 // src/lib/hook-payload.ts
 function readStdin() {
@@ -7238,6 +7237,111 @@ function readStdin() {
     stdin.on("error", done);
     stdin.on("close", done);
   });
+}
+
+// src/lib/state-dir.ts
+import { homedir, platform } from "node:os";
+import { join } from "node:path";
+import { mkdirSync } from "node:fs";
+var APP_DIR = "evolutivex-agents";
+function stateDir() {
+  const home = homedir();
+  switch (platform()) {
+    case "win32": {
+      const base = process.env.LOCALAPPDATA ?? join(home, "AppData", "Local");
+      return join(base, APP_DIR);
+    }
+    case "darwin":
+      return join(home, "Library", "Application Support", APP_DIR);
+    default: {
+      const base = process.env.XDG_STATE_HOME ?? join(home, ".local", "state");
+      return join(base, APP_DIR);
+    }
+  }
+}
+function ensureStateDir() {
+  const dir = stateDir();
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+function notificationLogPath() {
+  return join(stateDir(), "notification.log");
+}
+function rotatedNotificationLogPath() {
+  return join(stateDir(), "notification.log.1");
+}
+
+// src/lib/rotating-log.ts
+import { appendFileSync, renameSync, rmSync, statSync } from "node:fs";
+function appendRotatingLog({ path, rotatedPath, maxBytes, rotatedMaxAgeMs }, message) {
+  try {
+    try {
+      if (Date.now() - statSync(rotatedPath).mtimeMs > rotatedMaxAgeMs)
+        rmSync(rotatedPath, { force: true });
+    } catch {
+    }
+    if (statSync(path).size > maxBytes) renameSync(path, rotatedPath);
+  } catch {
+  }
+  try {
+    appendFileSync(
+      path,
+      `${(/* @__PURE__ */ new Date()).toISOString()} ${message}
+`
+    );
+  } catch {
+  }
+}
+
+// src/notifications/delivery.ts
+function appendNotificationLog(message) {
+  appendRotatingLog(
+    {
+      path: notificationLogPath(),
+      rotatedPath: rotatedNotificationLogPath(),
+      maxBytes: 512 * 1024,
+      rotatedMaxAgeMs: 14 * 24 * 60 * 60 * 1e3
+    },
+    message
+  );
+}
+function oneLine(text) {
+  return text.replace(/\s+/g, " ").trim().slice(0, 300);
+}
+async function deliver(request, deps) {
+  const startedAt = deps.now();
+  try {
+    if (deps.platform === "win32" && request.event === "SessionStart") {
+      try {
+        const reg = await deps.ensureRegistered();
+        if (!reg.ok) {
+          deps.log(
+            `aumid_reconcile_failed step=${reg.step} error="${oneLine(reg.error)}"`
+          );
+        } else if (reg.changed) {
+          deps.log("aumid_reconciled");
+        }
+      } catch (err) {
+        deps.log(
+          `aumid_reconcile_failed error="${oneLine(err.message)}"`
+        );
+      }
+    }
+    await deps.notifier.notify(request.payload);
+    const durationMs = deps.now() - startedAt;
+    deps.log(`event=${request.event} result=ok durationMs=${durationMs}`);
+    return { ok: true, durationMs };
+  } catch (err) {
+    const durationMs = deps.now() - startedAt;
+    const error = err instanceof Error ? err.message : String(err);
+    try {
+      deps.log(
+        `event=${request.event} result=error durationMs=${durationMs} error="${oneLine(error)}"`
+      );
+    } catch {
+    }
+    return { ok: false, error, durationMs };
+  }
 }
 
 // src/notifications/desktop-notification-adapter.ts
@@ -7273,6 +7377,666 @@ var DesktopNotificationAdapter = class {
     });
   }
 };
+
+// src/notifications/register.ts
+import { existsSync as existsSync3, readFileSync as readFileSync2, unlinkSync as unlinkSync2 } from "node:fs";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { basename, join as join4, resolve as resolvePath2 } from "node:path";
+
+// src/notifications/event-image-paths.ts
+import { existsSync } from "node:fs";
+import { dirname, join as join2, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
+function resolvePluginRoot(metaUrl = import.meta.url) {
+  let dir = dirname(fileURLToPath(metaUrl));
+  for (let i = 0; i < 4; i++) {
+    if (existsSync(join2(dir, "assets", "notifications"))) {
+      return dir;
+    }
+    const parent = resolvePath(dir, "..");
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return resolvePath(dirname(fileURLToPath(metaUrl)), "..");
+}
+var eventIconsDirProvider = {
+  get() {
+    return join2(resolvePluginRoot(), "assets", "notifications", "events");
+  }
+};
+function getEventIconsDir() {
+  return eventIconsDirProvider.get();
+}
+function resolveEventImagePath(filename) {
+  const iconPath = join2(getEventIconsDir(), filename);
+  return existsSync(iconPath) ? iconPath : void 0;
+}
+
+// src/notifications/registry.ts
+import { execFile } from "node:child_process";
+var REG_KEY_BASE = "HKCU\\Software\\Classes\\AppUserModelId";
+var EXEC_OPTS = { windowsHide: true };
+var REG_NOT_FOUND_EXIT_CODE = 1;
+var regExecProvider = {
+  execFile: (cmd, args, opts, cb) => {
+    execFile(cmd, args, opts, (err, stdout, stderr) => {
+      cb(err, stdout, stderr);
+    });
+  }
+};
+function buildKey(aumid) {
+  return `${REG_KEY_BASE}\\${aumid}`;
+}
+function execReg(args) {
+  return new Promise((resolve, reject) => {
+    regExecProvider.execFile("reg", args, EXEC_OPTS, (err, stdout, stderr) => {
+      const out = typeof stdout === "string" ? stdout : stdout.toString("utf8");
+      const errOut = typeof stderr === "string" ? stderr : stderr.toString("utf8");
+      if (err) {
+        reject(Object.assign(err, { stdout: out, stderr: errOut }));
+        return;
+      }
+      resolve({ stdout: out, stderr: errOut });
+    });
+  });
+}
+var REG_SHORTCUT_ENGINE = "ShortcutEngine";
+async function readRegistry(aumid) {
+  try {
+    const { stdout } = await execReg(["query", buildKey(aumid)]);
+    return parseRegistryQuery(stdout);
+  } catch (err) {
+    if (isKeyNotFound(err)) return { exists: false };
+    throw err;
+  }
+}
+function parseRegistryQuery(stdout) {
+  const result = { exists: true };
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = /^\s+(DisplayName|Icon|IconUri|ShortcutEngine)\s+REG_(?:SZ|EXPAND_SZ|DWORD)\s+(.*?)\s*$/i.exec(
+      line
+    );
+    if (match) {
+      const name = String(match[1]).toLowerCase();
+      const value = String(match[2]);
+      if (name === "displayname") result.displayName = value;
+      if (name === "icon") result.icon = value;
+      if (name === "iconuri") result.iconUri = value;
+      if (name === "shortcutengine") result.shortcutEngine = value;
+    }
+  }
+  return result;
+}
+function isKeyNotFound(err) {
+  const code = err.code;
+  if (code === REG_NOT_FOUND_EXIT_CODE || code === String(REG_NOT_FOUND_EXIT_CODE)) {
+    return true;
+  }
+  const stderr = err.stderr ?? "";
+  return /unable to find/i.test(stderr);
+}
+async function writeRegistry(aumid, displayName, iconIcoPath, iconUriPath) {
+  const key = buildKey(aumid);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    "DisplayName",
+    "/t",
+    "REG_SZ",
+    "/d",
+    displayName,
+    "/f"
+  ]);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    "Icon",
+    "/t",
+    "REG_EXPAND_SZ",
+    "/d",
+    iconIcoPath,
+    "/f"
+  ]);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    "IconUri",
+    "/t",
+    "REG_SZ",
+    "/d",
+    iconUriPath,
+    "/f"
+  ]);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    "IconBackgroundColor",
+    "/t",
+    "REG_SZ",
+    "/d",
+    "0",
+    "/f"
+  ]);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    "ShowInSettings",
+    "/t",
+    "REG_DWORD",
+    "/d",
+    "0",
+    "/f"
+  ]);
+  await execReg([
+    "add",
+    key,
+    "/v",
+    REG_SHORTCUT_ENGINE,
+    "/t",
+    "REG_SZ",
+    "/d",
+    "snoretoast",
+    "/f"
+  ]);
+}
+async function deleteRegistry(aumid) {
+  try {
+    await execReg(["delete", buildKey(aumid), "/f"]);
+  } catch (err) {
+    const code = err.code;
+    if (code === REG_NOT_FOUND_EXIT_CODE || code === String(REG_NOT_FOUND_EXIT_CODE)) {
+      return;
+    }
+    const stderr = err.stderr ?? "";
+    if (/unable to find/i.test(stderr)) {
+      return;
+    }
+    throw err;
+  }
+}
+
+// src/notifications/lnk-format.ts
+var HEADER_SIZE = 76;
+var LINK_CLSID_BYTES = Buffer.from([
+  1,
+  20,
+  2,
+  0,
+  0,
+  0,
+  0,
+  0,
+  192,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  70
+]);
+function encodeUtf16Le(s) {
+  const buf = Buffer.alloc(s.length * 2);
+  for (let i = 0; i < s.length; i++) {
+    buf.writeUInt16LE(s.charCodeAt(i), i * 2);
+  }
+  return buf;
+}
+function buildCountedUnicodeString(s) {
+  const count = s.length + 1;
+  const countBuf = Buffer.alloc(2);
+  countBuf.writeUInt16LE(count, 0);
+  const strBuf = encodeUtf16Le(s);
+  const nullBuf = Buffer.from([0, 0]);
+  return Buffer.concat([countBuf, strBuf, nullBuf]);
+}
+function parseLinkFlags(lnk) {
+  return lnk.readUInt32LE(20);
+}
+function skipLinkTargetIdList(lnk, offset) {
+  while (offset < lnk.length) {
+    const cb = lnk.readUInt16LE(offset);
+    if (cb === 0) {
+      return offset + 2;
+    }
+    offset += cb;
+  }
+  throw new Error(".lnk truncado dentro de LinkTargetIDList");
+}
+function skipLinkInfo(lnk, offset) {
+  const size = lnk.readUInt32LE(offset);
+  if (size < 28 || offset + size > lnk.length) {
+    throw new Error("LinkInfo inv\xE1lido o truncado");
+  }
+  return offset + size;
+}
+function readCountedString(lnk, offset, isUnicode) {
+  const count = lnk.readUInt16LE(offset);
+  const bytes = count * (isUnicode ? 2 : 1);
+  if (offset + 2 + bytes > lnk.length) {
+    throw new Error("StringData truncado");
+  }
+  let value = "";
+  if (isUnicode) {
+    for (let i = 0; i < count - 1; i++) {
+      value += String.fromCharCode(lnk.readUInt16LE(offset + 2 + i * 2));
+    }
+  } else {
+    value = lnk.toString("latin1", offset + 2, offset + 2 + count - 1);
+  }
+  return { value, nextOffset: offset + 2 + bytes };
+}
+function skipCountedString(lnk, offset, isUnicode) {
+  return readCountedString(lnk, offset, isUnicode).nextOffset;
+}
+function parseIconLocation(lnk) {
+  if (lnk.length < HEADER_SIZE) return void 0;
+  if (lnk.readUInt32LE(0) !== HEADER_SIZE) return void 0;
+  if (!lnk.slice(4, 20).equals(LINK_CLSID_BYTES)) return void 0;
+  const flags = parseLinkFlags(lnk);
+  if ((flags & 64) === 0) return void 0;
+  let offset = HEADER_SIZE;
+  if ((flags & 1) !== 0) {
+    offset = skipLinkTargetIdList(lnk, offset);
+  }
+  if ((flags & 2) !== 0) {
+    offset = skipLinkInfo(lnk, offset);
+  }
+  const isUnicode = (flags & 128) !== 0;
+  try {
+    if ((flags & 4) !== 0) {
+      offset = skipCountedString(lnk, offset, isUnicode);
+    }
+    for (const bit of [8, 16, 32]) {
+      if ((flags & bit) !== 0) {
+        offset = skipCountedString(lnk, offset, isUnicode);
+      }
+    }
+    if ((flags & 64) !== 0) {
+      return readCountedString(lnk, offset, isUnicode).value;
+    }
+  } catch {
+    return void 0;
+  }
+  return void 0;
+}
+function patchIconLocation(lnk, iconLocation) {
+  if (lnk.length < HEADER_SIZE) {
+    throw new Error(".lnk demasiado corto");
+  }
+  if (lnk.readUInt32LE(0) !== HEADER_SIZE) {
+    throw new Error("HeaderSize inv\xE1lido");
+  }
+  if (!lnk.slice(4, 20).equals(LINK_CLSID_BYTES)) {
+    throw new Error("LinkCLSID inv\xE1lido");
+  }
+  const flags = parseLinkFlags(lnk);
+  const isUnicode = (flags & 128) !== 0;
+  if (!isUnicode) {
+    throw new Error("Solo se soporta parche de IconLocation en .lnk Unicode");
+  }
+  let offset = HEADER_SIZE;
+  if ((flags & 1) !== 0) {
+    offset = skipLinkTargetIdList(lnk, offset);
+  }
+  if ((flags & 2) !== 0) {
+    offset = skipLinkInfo(lnk, offset);
+  }
+  const stringFlagBits = [4, 8, 16, 32, 64];
+  let insertAt = offset;
+  for (const bit of stringFlagBits) {
+    if ((flags & bit) === 0) {
+      if (bit === 64) {
+        insertAt = offset;
+        break;
+      }
+      continue;
+    }
+    if (bit === 64) {
+      const count = lnk.readUInt16LE(offset);
+      const oldTotal = 2 + count * 2;
+      const patched2 = Buffer.from(lnk);
+      patched2.writeUInt32LE(flags, 20);
+      const newIcon2 = buildCountedUnicodeString(iconLocation);
+      const before2 = patched2.subarray(0, offset);
+      const after2 = patched2.subarray(offset + oldTotal);
+      return Buffer.concat([before2, newIcon2, after2]);
+    }
+    offset = skipCountedString(lnk, offset, isUnicode);
+    insertAt = offset;
+  }
+  const patched = Buffer.from(lnk);
+  patched.writeUInt32LE(flags | 64, 20);
+  const newIcon = buildCountedUnicodeString(iconLocation);
+  const before = patched.subarray(0, insertAt);
+  const after = patched.subarray(insertAt);
+  return Buffer.concat([before, newIcon, after]);
+}
+
+// src/notifications/snoretoast-shortcut.ts
+import { execFile as execFile2 } from "node:child_process";
+import { existsSync as existsSync2, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { join as join3 } from "node:path";
+var SHORTCUT_ENGINE_SNORETOAST = "snoretoast";
+function getSnoreToastPath() {
+  const root = resolvePluginRoot();
+  const suffix = process.arch === "x64" ? "64" : "86";
+  const vendored = join3(
+    root,
+    "vendor",
+    "snoreToast",
+    `snoretoast-x${suffix}.exe`
+  );
+  if (existsSync2(vendored)) {
+    return vendored;
+  }
+  const fromNodeModules = join3(
+    root,
+    "node_modules",
+    "node-notifier",
+    "vendor",
+    "snoreToast",
+    `snoretoast-x${suffix}.exe`
+  );
+  if (existsSync2(fromNodeModules)) {
+    return fromNodeModules;
+  }
+  throw new Error(`SnoreToast no encontrado en ${vendored}`);
+}
+function execSnoreToast(args) {
+  const snoreToast = getSnoreToastPath();
+  return new Promise((resolve, reject) => {
+    execFile2(snoreToast, args, { windowsHide: true }, (err, stdout, stderr) => {
+      const out = stdout == null ? "" : String(stdout);
+      const errOut = stderr == null ? "" : String(stderr);
+      if (err) {
+        reject(Object.assign(err, { stdout: out, stderr: errOut }));
+        return;
+      }
+      resolve();
+    });
+  });
+}
+async function installSnoreToastShortcut(lnkFileName, targetExe, aumid, lnkAbsolutePath, iconLocation) {
+  if (existsSync2(lnkAbsolutePath)) {
+    unlinkSync(lnkAbsolutePath);
+  }
+  await execSnoreToast(["-install", lnkFileName, targetExe, aumid]);
+  const lnk = readFileSync(lnkAbsolutePath);
+  const patched = patchIconLocation(lnk, iconLocation);
+  writeFileSync(lnkAbsolutePath, patched);
+}
+
+// src/notifications/register.ts
+var AUMID = "EvolutiveX.Agents";
+var DISPLAY_NAME = "EvolutiveX Agents";
+var LNK_FILENAME = "EvolutiveX-Agents.lnk";
+var registryProvider = {
+  readRegistry,
+  writeRegistry,
+  deleteRegistry
+};
+var snoreToastProvider = {
+  getSnoreToastPath,
+  installSnoreToastShortcut
+};
+function getLnkPath() {
+  const appData = process.env["APPDATA"] ?? "";
+  return join4(
+    appData,
+    "Microsoft",
+    "Windows",
+    "Start Menu",
+    "Programs",
+    LNK_FILENAME
+  );
+}
+function getIconIcoPath() {
+  return join4(
+    resolvePluginRoot(),
+    "assets",
+    "notifications",
+    "ai-assistant.ico"
+  );
+}
+function getIconPngPath() {
+  return join4(
+    resolvePluginRoot(),
+    "assets",
+    "notifications",
+    "ai-assistant.png"
+  );
+}
+function buildIconLocation(icoPath) {
+  return `${icoPath},1`;
+}
+async function readRegistrationState() {
+  const iconIcoPath = getIconIcoPath();
+  const iconUriPath = getIconPngPath();
+  let registry;
+  let registryReadError;
+  try {
+    registry = await registryProvider.readRegistry(AUMID);
+  } catch (err) {
+    registry = { exists: false };
+    registryReadError = err.message;
+  }
+  const lnkPath = getLnkPath();
+  const lnkExists = existsSync3(lnkPath);
+  let lnkIconOk = false;
+  if (lnkExists) {
+    try {
+      lnkIconOk = parseIconLocation(readFileSync2(lnkPath)) === buildIconLocation(iconIcoPath);
+    } catch {
+      lnkIconOk = false;
+    }
+  }
+  const lnkOk = lnkIconOk && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST;
+  const registryOk = registry.exists && registry.displayName === DISPLAY_NAME && registry.icon === iconIcoPath && registry.iconUri === iconUriPath && registry.shortcutEngine === SHORTCUT_ENGINE_SNORETOAST;
+  const status = !lnkExists && !registry.exists ? "absent" : registryOk && lnkOk ? "registered" : "partial";
+  return {
+    status,
+    lnkExists,
+    lnkOk,
+    registryOk,
+    registry,
+    ...registryReadError !== void 0 ? { registryReadError } : {}
+  };
+}
+async function ensureRegistered() {
+  const iconIcoPath = getIconIcoPath();
+  const iconUriPath = getIconPngPath();
+  if (!existsSync3(iconIcoPath)) {
+    return {
+      ok: false,
+      step: "icon",
+      error: `Icono no encontrado en ${iconIcoPath}`
+    };
+  }
+  const state = await readRegistrationState();
+  if (state.registryOk && state.lnkOk) return { ok: true, changed: false };
+  if (!state.registryOk) {
+    try {
+      await registryProvider.writeRegistry(
+        AUMID,
+        DISPLAY_NAME,
+        iconIcoPath,
+        iconUriPath
+      );
+    } catch (err) {
+      return { ok: false, step: "registry", error: err.message };
+    }
+  }
+  if (!state.lnkOk) {
+    try {
+      await snoreToastProvider.installSnoreToastShortcut(
+        LNK_FILENAME,
+        snoreToastProvider.getSnoreToastPath(),
+        AUMID,
+        getLnkPath(),
+        buildIconLocation(iconIcoPath)
+      );
+    } catch (err) {
+      return { ok: false, step: "lnk", error: err.message };
+    }
+  }
+  return { ok: true, changed: true };
+}
+async function installAction() {
+  const result = await ensureRegistered();
+  if (!result.ok) {
+    if (result.step === "icon") {
+      process.stderr.write(`${result.error}. Aborta.
+`);
+    } else if (result.step === "registry") {
+      process.stderr.write(`Error escribiendo registro: ${result.error}
+`);
+    } else {
+      process.stderr.write(
+        `Error creando .lnk con SnoreToast (registro s\xED se escribi\xF3): ${result.error}
+`
+      );
+    }
+    return 1;
+  }
+  if (!result.changed) {
+    process.stdout.write(
+      `AUMID ya registrado (AppUserModelID="${AUMID}"): registro OK + .lnk OK. No-op.
+`
+    );
+    return 0;
+  }
+  process.stdout.write(
+    `Registrado: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast=${getLnkPath()}, icono=${getIconIcoPath()}).
+`
+  );
+  return 0;
+}
+async function uninstallAction() {
+  const lnkPath = getLnkPath();
+  try {
+    unlinkSync2(lnkPath);
+    process.stdout.write(`Eliminado .lnk: ${lnkPath}
+`);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      process.stderr.write(
+        `Error eliminando .lnk: ${err.message}
+`
+      );
+      return 1;
+    }
+  }
+  try {
+    await registryProvider.deleteRegistry(AUMID);
+    process.stdout.write(`Eliminado registro: ${AUMID}
+`);
+  } catch (err) {
+    process.stderr.write(
+      `Error eliminando registro: ${err.message}
+`
+    );
+    return 1;
+  }
+  process.stdout.write(
+    `Reversi\xF3n completa. SnoreToast volver\xE1 a firmar como "SnoreToast" hasta el pr\xF3ximo --install.
+`
+  );
+  return 0;
+}
+async function statusAction() {
+  const state = await readRegistrationState();
+  if (state.registryReadError !== void 0) {
+    process.stderr.write(
+      `Error leyendo registro: ${state.registryReadError}
+`
+    );
+  }
+  const { registry } = state;
+  if (state.status === "absent") {
+    process.stdout.write(
+      "not registered. Ejecuta `node dist/notification-register.js --install` para habilitar el branding en Windows\n"
+    );
+  } else if (state.status === "registered") {
+    process.stdout.write(
+      `registered: AppUserModelID="${AUMID}" DisplayName="${DISPLAY_NAME}" (registro + .lnk SnoreToast OK)
+`
+    );
+  } else {
+    const parts = [];
+    parts.push(
+      registry.exists ? `registro: DisplayName="${registry.displayName}" Icon="${registry.icon}" IconUri="${registry.iconUri ?? "(ausente)"}" ShortcutEngine="${registry.shortcutEngine ?? "(ausente)"}"` : "registro: no presente"
+    );
+    parts.push(state.lnkExists ? ".lnk: presente" : ".lnk: no presente");
+    process.stdout.write(
+      `partially registered (${parts.join("; ")}). Ejecuta --install para reparar.
+`
+    );
+  }
+  return 0;
+}
+async function main() {
+  const program2 = new Command();
+  program2.name("notification-register").description(
+    "Registra, desregistra o consulta el AUMID de EvolutiveX Agents en Windows (idempotente, opt-in)."
+  ).allowExcessArguments(false).option(
+    "--install",
+    "Crea o actualiza el .lnk en el Men\xFA Inicio y la clave de registro del AUMID"
+  ).option("--uninstall", "Elimina el .lnk y la clave de registro del AUMID").option(
+    "--status",
+    "Muestra el estado actual del registro (registro + .lnk)"
+  ).parse(process.argv);
+  const opts = program2.opts();
+  return dispatch(opts);
+}
+async function dispatch(opts, platform2 = process.platform) {
+  if (platform2 !== "win32") {
+    process.stdout.write(
+      "AUMID setup is Windows-only. En macOS/Linux el branding se aplica via `appName` en node-notifier (sin registro).\n"
+    );
+    return 0;
+  }
+  if (opts.install) return installAction();
+  if (opts.uninstall) return uninstallAction();
+  if (opts.status) return statusAction();
+  process.stderr.write("Especifica uno de: --install, --uninstall, --status\n");
+  return 1;
+}
+var isEntryPoint = typeof process.argv[1] === "string" && ["notification-register.js", "register.ts"].includes(
+  basename(process.argv[1])
+) && fileURLToPath2(import.meta.url) === resolvePath2(process.argv[1]);
+if (isEntryPoint) {
+  main().then(
+    (code) => {
+      process.exit(code);
+    },
+    (err) => {
+      process.stderr.write(`Error inesperado: ${err.message}
+`);
+      process.exit(1);
+    }
+  );
+}
+
+// src/notifications/delivery-runtime.ts
+function createDeliveryDeps() {
+  return {
+    notifier: new DesktopNotificationAdapter(),
+    ensureRegistered,
+    now: () => Date.now(),
+    platform: process.platform,
+    log: appendNotificationLog
+  };
+}
+
+// src/notifications/notification-payload.ts
+import { existsSync as existsSync4 } from "node:fs";
+import { join as join5 } from "node:path";
 
 // src/notifications/event-notification-profile.ts
 var NOTIFICATION_BRAND_TITLE = "EvolutiveX Agents";
@@ -7353,35 +8117,6 @@ var EVENT_NOTIFICATION_PROFILES = {
 var NOTIFICATION_EVENT_KEYS = Object.keys(EVENT_NOTIFICATION_PROFILES);
 function getProfileForEvent(eventKey) {
   return EVENT_NOTIFICATION_PROFILES[eventKey];
-}
-
-// src/notifications/event-image-paths.ts
-import { existsSync } from "node:fs";
-import { dirname, join, resolve as resolvePath } from "node:path";
-import { fileURLToPath } from "node:url";
-function resolvePluginRoot(metaUrl = import.meta.url) {
-  let dir = dirname(fileURLToPath(metaUrl));
-  for (let i = 0; i < 4; i++) {
-    if (existsSync(join(dir, "assets", "notifications"))) {
-      return dir;
-    }
-    const parent = resolvePath(dir, "..");
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return resolvePath(dirname(fileURLToPath(metaUrl)), "..");
-}
-var eventIconsDirProvider = {
-  get() {
-    return join(resolvePluginRoot(), "assets", "notifications", "events");
-  }
-};
-function getEventIconsDir() {
-  return eventIconsDirProvider.get();
-}
-function resolveEventImagePath(filename) {
-  const iconPath = join(getEventIconsDir(), filename);
-  return existsSync(iconPath) ? iconPath : void 0;
 }
 
 // src/notifications/hook-payload-notification-message.ts
@@ -7535,40 +8270,35 @@ function toWin32NotificationSound(token) {
   }
   return WIN32_NOTIFICATION_SOUND[token] ?? "Notification.Default";
 }
-function resolveNotificationSound(profile, platform) {
+function resolveNotificationSound(profile, platform2) {
   if (!profile) {
     return false;
   }
-  if (platform === "win32") {
+  if (platform2 === "win32") {
     const token = profile.win32;
     if (token === false || token === void 0) {
       return false;
     }
     return toWin32NotificationSound(token);
   }
-  if (platform === "darwin") {
+  if (platform2 === "darwin") {
     const name = profile.darwin;
     if (name === false || name === void 0) {
       return false;
     }
     return name;
   }
-  if (platform === "linux") {
+  if (platform2 === "linux") {
     return profile.linux === true;
   }
   return false;
 }
 
-// src/notifications/cli.ts
-var SOUND_FLAG = "sound";
-var SILENT_FLAG = "silent";
-var STDIN_JSON_FLAG = "stdin-json";
-var APP_ID_FLAG = "app-id";
-var ICON_FLAG = "icon";
+// src/notifications/notification-payload.ts
 var DEFAULT_APP_ID = "EvolutiveX.Agents";
 var globalFallbackIconProvider = {
   get() {
-    return join2(
+    return join5(
       resolvePluginRoot(),
       "assets",
       "notifications",
@@ -7578,7 +8308,7 @@ var globalFallbackIconProvider = {
 };
 function resolveGlobalFallbackIconPath() {
   const p = globalFallbackIconProvider.get();
-  return existsSync2(p) ? p : void 0;
+  return existsSync4(p) ? p : void 0;
 }
 function normalizeStdinJsonText(raw) {
   return raw.replace(/^\uFEFF/, "").trim();
@@ -7616,7 +8346,7 @@ function resolveBranding(options, eventKey) {
   }
   return { appId };
 }
-function resolveEventSound(options, eventKey, platform = process.platform) {
+function resolveEventSound(options, eventKey, platform2 = process.platform) {
   if (options.silent) {
     return false;
   }
@@ -7624,7 +8354,7 @@ function resolveEventSound(options, eventKey, platform = process.platform) {
     return true;
   }
   const profile = eventKey ? getProfileForEvent(eventKey) : void 0;
-  return resolveNotificationSound(profile?.sound, platform);
+  return resolveNotificationSound(profile?.sound, platform2);
 }
 function resolveNotificationTitle(options, eventKey) {
   if (options.title !== void 0 && options.title !== "") {
@@ -7648,7 +8378,7 @@ function resolveNotificationMessage(options, eventKey, stdinPayload) {
   }
   return void 0;
 }
-function buildNotificationPayload(options, stdinPayload, platform = process.platform) {
+function buildNotificationPayload(options, stdinPayload, platform2 = process.platform) {
   if (options.stdinJson && !stdinPayload) {
     return { error: "No se recibi\xF3 payload por stdin con --stdin-json" };
   }
@@ -7667,13 +8397,20 @@ function buildNotificationPayload(options, stdinPayload, platform = process.plat
   return {
     title,
     message,
-    sound: resolveEventSound(options, eventKey, platform),
+    sound: resolveEventSound(options, eventKey, platform2),
     silent: options.silent,
     appId: branding.appId,
     ...branding.icon !== void 0 ? { icon: branding.icon } : {}
   };
 }
-async function main() {
+
+// src/notifications/cli.ts
+var SOUND_FLAG = "sound";
+var SILENT_FLAG = "silent";
+var STDIN_JSON_FLAG = "stdin-json";
+var APP_ID_FLAG = "app-id";
+var ICON_FLAG = "icon";
+async function main2() {
   const program2 = new Command();
   program2.name("notification-cli").description("Emite un toast nativo del SO desde un hook de Claude Code").option("--event-type <type>", "Tipo de evento del lifecycle (p. ej. Stop)").option(
     "--message <msg>",
@@ -7736,21 +8473,24 @@ async function main() {
 `);
     return 1;
   }
-  const adapter = new DesktopNotificationAdapter();
   try {
-    await adapter.notify(built);
-    return 0;
-  } catch (err) {
-    process.stderr.write(
-      `Error emitiendo notificaci\xF3n: ${err.message}
-`
-    );
+    ensureStateDir();
+  } catch {
+  }
+  const result = await deliver(
+    { event: resolveEventKey(options, stdinPayload) ?? "cli", payload: built },
+    createDeliveryDeps()
+  );
+  if (!result.ok) {
+    process.stderr.write(`Error emitiendo notificaci\xF3n: ${result.error}
+`);
     return 1;
   }
+  return 0;
 }
-var isEntryPoint = typeof process.argv[1] === "string" && ["notification-cli.js", "cli.ts"].includes(basename(process.argv[1])) && fileURLToPath2(import.meta.url) === resolvePath2(process.argv[1]);
-if (isEntryPoint) {
-  main().then(
+var isEntryPoint2 = typeof process.argv[1] === "string" && ["notification-cli.js", "cli.ts"].includes(basename2(process.argv[1])) && fileURLToPath3(import.meta.url) === resolvePath3(process.argv[1]);
+if (isEntryPoint2) {
+  main2().then(
     (code) => {
       process.exit(code);
     },
@@ -7761,15 +8501,3 @@ if (isEntryPoint) {
     }
   );
 }
-export {
-  DEFAULT_APP_ID,
-  buildNotificationPayload,
-  globalFallbackIconProvider,
-  normalizeStdinJsonText,
-  resolveBranding,
-  resolveEventKey,
-  resolveEventSound,
-  resolveGlobalFallbackIconPath,
-  resolveNotificationMessage,
-  resolveNotificationTitle
-};

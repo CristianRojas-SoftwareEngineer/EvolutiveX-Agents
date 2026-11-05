@@ -13,7 +13,6 @@ import assert from "node:assert/strict";
 import manifest from "../.claude-plugin/plugin.json" with { type: "json" };
 import {
   CUSTOM_VOICE,
-  DEFAULT_VOICE,
   FACTORY_VOICES,
   MIN_ENGINE_VERSION,
   SELECTABLE_VOICES,
@@ -21,9 +20,9 @@ import {
   isSelectableVoice,
   meetsMinVersion,
   normalizeDisplayName,
-  normalizeVoiceName,
   parseVoiceList,
 } from "../src/voice/voice.js";
+import { DEFAULT_VOICE, normalizeVoiceName } from "../src/lib/voice-name.js";
 
 test("las constantes fijan la voz por defecto, las de fábrica, custom y la versión mínima", () => {
   assert.equal(DEFAULT_VOICE, "default");

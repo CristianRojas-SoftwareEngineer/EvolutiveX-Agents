@@ -6,33 +6,10 @@ const require = __createRequire(import.meta.url);
 const __filename = __fileURLToPath(import.meta.url);
 const __dirname = __pathDirname(__filename);
 
-// src/voice/voice.ts
+// src/lib/voice-name.ts
 var DEFAULT_VOICE = "default";
-var FACTORY_VOICES = ["default", "ryan", "vivian"];
-var CUSTOM_VOICE = "custom";
-var SELECTABLE_VOICES = [
-  ...FACTORY_VOICES,
-  CUSTOM_VOICE
-];
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
-}
-function isSelectableVoice(name) {
-  return SELECTABLE_VOICES.includes(name);
-}
-function parseVoiceList(stdout) {
-  let parsed;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    return void 0;
-  }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
-    return void 0;
-  const voices = parsed.voices;
-  if (!Array.isArray(voices) || !voices.every((v) => typeof v === "string"))
-    return void 0;
-  return voices;
 }
 
 // src/lib/config.ts
@@ -354,6 +331,31 @@ function readOrUndefined(path) {
   } catch {
     return void 0;
   }
+}
+
+// src/voice/voice.ts
+var FACTORY_VOICES = ["default", "ryan", "vivian"];
+var CUSTOM_VOICE = "custom";
+var SELECTABLE_VOICES = [
+  ...FACTORY_VOICES,
+  CUSTOM_VOICE
+];
+function isSelectableVoice(name) {
+  return SELECTABLE_VOICES.includes(name);
+}
+function parseVoiceList(stdout) {
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return void 0;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+    return void 0;
+  const voices = parsed.voices;
+  if (!Array.isArray(voices) || !voices.every((v) => typeof v === "string"))
+    return void 0;
+  return voices;
 }
 
 // src/voice/health-check.ts

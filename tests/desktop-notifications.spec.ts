@@ -10,7 +10,7 @@
 // helper de registro AUMID e independencia entre canales de voz y escritorio.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
   DesktopNotificationAdapter,
@@ -48,7 +48,7 @@ import {
   resolveNotificationMessage,
   resolveNotificationTitle,
   type CliOptions,
-} from "../src/notifications/cli.js";
+} from "../src/notifications/notification-payload.js";
 import {
   parseIconLocation,
   patchIconLocation,
@@ -71,7 +71,11 @@ import {
   snoreToastProvider,
   statusAction,
   uninstallAction,
+  readRegistrationState,
+  ensureRegistered,
 } from "../src/notifications/register.js";
+import { DetachedNotificationDispatcher } from "../src/notifications/dispatcher.js";
+import { parseDeliveryRequest } from "../src/notifications/delivery.js";
 import {
   notificationEventKey,
   runNotificationHookFromRaw,
@@ -494,6 +498,29 @@ test("register: installAction, statusAction, uninstallAction y dispatch multipla
     assert.equal(snoreInstalls, 1);
     assert.equal(await statusAction(), 0);
 
+    // readRegistrationState: registered / partial / absent.
+    assert.equal((await readRegistrationState()).status, "registered");
+    registryProvider.readRegistry = async () => ({
+      exists: true,
+      displayName: DISPLAY_NAME,
+      icon: "C:\\otra\\ai-assistant.ico",
+      iconUri: getIconPngPath(),
+      shortcutEngine: "snoretoast",
+    });
+    const partial = await readRegistrationState();
+    assert.equal(partial.status, "partial");
+    assert.equal(partial.registryOk, false);
+    assert.equal(partial.lnkExists, true);
+    // ensureRegistered repara solo el registro y es idempotente tras repararlo.
+    const writesBefore = regWrites;
+    assert.deepEqual(await ensureRegistered(), { ok: true, changed: true });
+    assert.equal(regWrites, writesBefore + 1);
+    registryProvider.readRegistry = async () => ({ exists: false });
+    rmSync(lnkPath);
+    const absent = await readRegistrationState();
+    assert.equal(absent.status, "absent");
+    assert.equal(absent.lnkExists, false);
+
     assert.equal(await uninstallAction(), 0);
     assert.equal(existsSync(lnkPath), false);
     assert.equal(await dispatch({ install: true }, "linux"), 0);
@@ -503,6 +530,40 @@ test("register: installAction, statusAction, uninstallAction y dispatch multipla
     Object.assign(registryProvider, prevReg);
     Object.assign(snoreToastProvider, prevSnore);
     removeDir(tmpAppData);
+  }
+});
+
+// --- El hook decide y despacha: no espera a la entrega ---
+
+test("notification-hook: despacha a notification-deliver.js sin esperar la entrega", async () => {
+  const state = isolateStateDir();
+  const restoreOptions = withEnv({
+    CLAUDE_PLUGIN_OPTION_NOTIFICATIONSENABLED: "true",
+  });
+  try {
+    const spawned: Array<{ cmd: string; args: string[] }> = [];
+    const dispatcher = new DetachedNotificationDispatcher("SessionEnd", {
+      spawn: (cmd, args) => {
+        spawned.push({ cmd, args });
+        return 4242;
+      },
+    });
+    const started = Date.now();
+    const emitted = await runNotificationHookFromRaw(
+      JSON.stringify({ hook_event_name: "SessionEnd" }),
+      dispatcher,
+    );
+    assert.equal(emitted, true);
+    assert.ok(Date.now() - started < 500);
+    assert.equal(spawned.length, 1);
+    assert.equal(spawned[0]?.cmd, process.execPath);
+    assert.match(spawned[0]?.args[0] ?? "", /notification-deliver\.js$/);
+    const request = parseDeliveryRequest(spawned[0]?.args[1]);
+    assert.equal(request?.event, "SessionEnd");
+    assert.equal(request?.payload.title, "SessionEnd");
+  } finally {
+    restoreOptions();
+    state.restore();
   }
 });
 

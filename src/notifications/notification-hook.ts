@@ -5,15 +5,20 @@
 // SPDX-License-Identifier: MPL-2.0
 
 // Hook de notificaciones de escritorio del plugin. Independiente del canal de
-// narración por voz, del daemon y del gateway. Emite toasts silenciosos por
-// defecto usando el icono específico del evento y el AUMID EvolutiveX.Agents.
+// narración por voz, del daemon y del gateway. Decide qué notificación
+// corresponde al evento y la despacha a `notification-deliver.js` sin esperar
+// la entrega (ver dispatcher.ts); toasts silenciosos con el icono del evento
+// y el AUMID EvolutiveX.Agents.
 import { loadConfig } from "../lib/config.js";
 import { readStdin } from "../lib/hook-payload.js";
 import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
-import { DesktopNotificationAdapter } from "./desktop-notification-adapter.js";
+import { DetachedNotificationDispatcher } from "./dispatcher.js";
 import type { NotificationService } from "./notification-service.js";
-import { buildNotificationPayload, normalizeStdinJsonText } from "./cli.js";
+import {
+  buildNotificationPayload,
+  normalizeStdinJsonText,
+} from "./notification-payload.js";
 
 const DIRECT_NOTIFICATION_EVENTS = new Set([
   "UserPromptSubmit",
@@ -51,7 +56,7 @@ export function notificationEventKey(
 
 export async function runNotificationHookFromRaw(
   raw: string,
-  adapter: NotificationService = new DesktopNotificationAdapter(),
+  service?: NotificationService,
 ): Promise<boolean> {
   if (!loadConfig().notificationsEnabled) return false;
   const normalized = normalizeStdinJsonText(raw);
@@ -90,7 +95,8 @@ export async function runNotificationHookFromRaw(
     payload,
   );
   if ("error" in built) return false;
-  await adapter.notify(built);
+  // El hook solo decide y despacha: la entrega ocurre en un proceso desanclado.
+  await (service ?? new DetachedNotificationDispatcher(event)).notify(built);
   return true;
 }
 

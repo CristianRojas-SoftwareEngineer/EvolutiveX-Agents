@@ -6,8 +6,14 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+## [0.2.0] — 2026-11-05
+
 ### Añadido
 
+- `notification.log` en el _state dir_: cada entrega de un toast deja una línea con el evento, el resultado, la duración y el error, y un despacho fallido queda como `dispatch_failed`. Comparte la rotación con `worker.log` (512 KiB, 14 días, como máximo dos archivos).
+- Diagnóstico del notificador en `narrate-ctl status`: las líneas `notificador:` (SnoreToast y registro AUMID en Windows, `terminal-notifier` en macOS, `notify-send` en Linux) y `notification log:` con su ruta.
+- Reconciliación automática del registro AUMID en Windows en cada `SessionStart`, antes de mostrar el toast, para que apunte a la carpeta de la versión instalada tras `claude plugin update`.
+- Nueva entrada interna `dist/notification-deliver.js` y reglas de arquitectura verificadas por `npm run check-dist`: el bundle del hook no contiene `node-notifier`, `commander` ni el adaptador, y los bundles de notificaciones no contienen `src/voice/`.
 - Sincronización con **AI Voice-InterConnector v0.44.0**: `presynth` usa `--skip-existing` para la idempotencia explícita (exit 0, status "skipped") y trata cualquier código ≠ 0 como fallo; `invalid_voice_name` sustituye a `invalid_identifier` como reason de voz ilegal en `narrate-worker.ts` y `voice-problem.ts`. La versión mínima y la verificada pasan a 0.44.0.
 - Clonado de tu voz desde un WAV o el micrófono con el comando `/evolutivex-agents:voice` (`clone`, `list` y `remove`): se guarda como la voz `custom`, con un nombre de presentación opcional (`--display-name`), y pre-sintetiza sus anuncios; la instalación guiada lo ofrece de forma opcional. Requiere AI Voice-InterConnector 0.44.0 o posterior.
 - Selector de la voz activa en `/config` → `evolutivex-agents.voice` (`default`, `ryan`, `vivian` o `custom`; `default` por defecto): toda la narración la usa de forma explícita, y un cambio se oye desde el siguiente evento.
@@ -19,11 +25,13 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ### Cambiado
 
+- Toda entrega de toasts pasa por un único núcleo (`notification-deliver`), también la CLI pública y el aviso de problemas de voz. Las utilidades de proceso y las primitivas de nombre de voz pasan a `src/lib/`, que ya no depende de `src/voice/`. La CLI `notification-cli.js` conserva sus flags, salida y códigos de salida.
 - Sincronizado con AI Voice-InterConnector v0.44.0, que pasa a ser la versión verificada y la mínima de la gestión de voces. Re-clonar `custom` con `--force` reemplaza también sus locuciones guardadas: el motor las borra porque se grabaron con la voz anterior, `voice clone` las nombra y vuelve a pre-sintetizar los seis anuncios, y el daemon recarga la voz re-clonada en lugar de seguir con la anterior. `narrate-ctl` pasa `--yes` junto a `--force`, porque el comando ya confirmó el reemplazo con el usuario.
 - La pre-síntesis trata el exit 6 `voice_changed` (la voz cambió mientras se sintetizaba y el motor no guardó la locución) como un fallo con su remedio, no como un anuncio ya pre-sintetizado.
 
 ### Corregido
 
+- Al cerrar una sesión aparecía `SessionEnd hook [...] failed: Hook cancelled`: el hook de notificaciones esperaba a que terminara el backend del sistema (SnoreToast, hasta 12,5 s) y `SessionEnd` es síncrono con un límite de 3 s. Ahora el hook solo decide y despacha la entrega a un proceso desanclado, y termina en milisegundos.
 - En el modo `llm`, el resumen del turno parafrasea el mensaje del asistente en lugar de relatarlo: dice «Hola, ¿qué tal?» y no «Te he saludado y te he preguntado qué tal», con la misma intención que el original.
 - Transcript enriquecido: si el plugin fallaba al registrar una herramienta antes de ejecutarla, su bloque mostraba un contador «en curso» que no se detenía y el reloj seguía haciendo un tic por segundo.
 
@@ -51,5 +59,6 @@ Primera beta pública, solo en español. Verificado contra **AI Voice-InterConne
 - Plantilla de reporte de errores en `.github/ISSUE_TEMPLATE/bug_report.md`.
 - Licencia MPL-2.0.
 
-[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.1.0...HEAD
+[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/releases/tag/v0.1.0

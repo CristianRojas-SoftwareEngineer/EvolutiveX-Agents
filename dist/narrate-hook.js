@@ -11,14 +11,8 @@ import { readFileSync as readFileSync3 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join as join3 } from "node:path";
 
-// src/voice/voice.ts
+// src/lib/voice-name.ts
 var DEFAULT_VOICE = "default";
-var FACTORY_VOICES = ["default", "ryan", "vivian"];
-var CUSTOM_VOICE = "custom";
-var SELECTABLE_VOICES = [
-  ...FACTORY_VOICES,
-  CUSTOM_VOICE
-];
 function normalizeVoiceName(raw) {
   return raw.trim().toLowerCase();
 }
@@ -152,7 +146,7 @@ function clearQueue() {
   }
 }
 
-// src/voice/spawn.ts
+// src/lib/process.ts
 import { spawn, spawnSync } from "node:child_process";
 function spawnDetached(cmd, args) {
   const child = spawn(cmd, args, {
