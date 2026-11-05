@@ -202,7 +202,7 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 npm install        # dependencias de dev (typescript, esbuild)
 npm run typecheck  # verificación de tipos
 npm run build      # compila src/ → dist/ (commitear dist/)
-npm run check-dist # verifica dist/ sincronizado con src/
+npm run check-dist # verifica dist/ sincronizado con src/ y las reglas de arquitectura (el hook no contiene código de entrega; las notificaciones no contienen src/voice/)
 npm test           # suite de Node (tests/*.spec.ts con node --test, sin framework externo)
 npm run test:transcript  # tests del transcript enriquecido (src/transcript/*.test.ts, kit oficial)
 npx tsc -p src/transcript  # tipos del transcript enriquecido (sandbox de function hooks)

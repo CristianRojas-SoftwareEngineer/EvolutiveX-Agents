@@ -91,8 +91,12 @@ En orden; cada paso asume el anterior.
      clave) y con `Stop` en modo `llm` (con `GEMINI_API_KEY` definida); no
      basta con `Stop` — una superficie no probada puede liberarse con un bug;
    - emisión de toasts silenciosos del canal de notificaciones de escritorio
-     (`dist/notification-hook.js`) y registro idempotente del AUMID en Windows
-     (`dist/notification-register.js --install` y `--status`);
+     (`dist/notification-hook.js`, que despacha a `dist/notification-deliver.js`)
+     y registro idempotente del AUMID en Windows (`dist/notification-register.js
+--install` y `--status`), que `SessionStart` reconcilia solo tras actualizar
+     el plugin; cada entrega deja su línea en `notification.log`, y el hook de
+     `SessionEnd` termina en menos de 500 ms (un `/exit` real no muestra
+     `Hook cancelled`);
    - las preferencias en `/config` → `evolutivex-agents.*`: apagar
      `voiceEnabled` o `notificationsEnabled` silencia su canal desde el
      evento siguiente, sin reiniciar;
@@ -193,6 +197,9 @@ Notas de contrato que el runbook asume (verificado en código fuente):
 - `narrate-ctl status` muestra la voz activa según el último evento narrado
   (la caché `active-voice`), no la de `/config`: tras cambiarla, se actualiza
   en el siguiente evento.
+- `notification.log` (en `$STATE_DIR`) registra **cada entrega** de un toast
+  (evento, resultado, duración y error) y los despachos fallidos; comparte la
+  rotación de `worker.log`.
 - `worker.log` (en `$STATE_DIR`) registra **solo errores** de narración, no qué
   proveedor se usó; la distinción `local` vs `llm` se verifica **por audible**.
   El CI verifica en cada push que `dist/` es la compilación de `src/`

@@ -18,6 +18,8 @@ import {
   rotatedNotificationLogPath,
 } from "../lib/state-dir.js";
 import type { NotificationService } from "./notification-service.js";
+// Solo tipo: se borra al compilar y no arrastra register.ts al bundle del hook.
+import type { EnsureRegisteredResult } from "./register.js";
 import type { NotificationPayload } from "./types.js";
 
 /** Solicitud de entrega: evento que la originó y notificación ya resuelta. */
@@ -33,13 +35,9 @@ export interface DeliveryResult {
   durationMs: number;
 }
 
-/** Resultado de asegurar el registro AUMID (ver register.ts). */
-export type EnsureRegisteredOutcome =
-  { ok: true; changed: boolean } | { ok: false; step: string; error: string };
-
 export interface DeliveryDeps {
   notifier: NotificationService;
-  ensureRegistered: () => Promise<EnsureRegisteredOutcome>;
+  ensureRegistered: () => Promise<EnsureRegisteredResult>;
   now: () => number;
   platform: NodeJS.Platform;
   log: (message: string) => void;

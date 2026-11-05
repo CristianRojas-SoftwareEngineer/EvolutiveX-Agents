@@ -125,7 +125,7 @@ El comando `/evolutivex-agents:install` del plugin guía ambos pasos.
 
 Si el CLI no está en el `PATH`, el modelo no está en caché, o el daemon no responde, el plugin **degrada en silencio**: no reproduce audio, no bloquea ni retrasa el turno de Claude Code, y (solo en `SessionStart`) emite un aviso informativo. La ausencia del motor nunca es un error para el usuario de Claude Code. Los problemas de la voz activa (`voice_not_found`, `speech_not_found`, `invalid_voice_name`) no degradan en silencio: además de `worker.log`, el worker los notifica en el escritorio una vez por problema, si `notificationsEnabled` está activo.
 
-El canal de **notificaciones de escritorio** (`dist/notification-hook.js`, `dist/notification-cli.js` y `dist/notification-register.js`) es completamente independiente del motor `ai-voice-interconnector` y de su daemon: se controla por separado con `notificationsEnabled` en `/config` (frente a `voiceEnabled` en `/config`) y funciona aunque el motor de voz no esté instalado o esté detenido.
+El canal de **notificaciones de escritorio** (`dist/notification-hook.js`, `dist/notification-deliver.js`, `dist/notification-cli.js` y `dist/notification-register.js`) es completamente independiente del motor `ai-voice-interconnector` y de su daemon: se controla por separado con `notificationsEnabled` en `/config` (frente a `voiceEnabled` en `/config`) y funciona aunque el motor de voz no esté instalado o esté detenido.
 
 ## Troubleshooting
 
