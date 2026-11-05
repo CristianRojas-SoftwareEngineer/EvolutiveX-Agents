@@ -1,7 +1,7 @@
 {
   "name": "evolutivex-agents",
   "description": "Narra por voz la actividad de la sesión de Claude Code usando AI Voice-InterConnector, emite notificaciones de escritorio nativas y, de forma opt-in, enriquece el transcript con la hora de inicio, la duración y contadores en vivo de cada bloque. Genera un mensaje conversacional corto por turno (Gemini free tier con degradación local) y lo sintetiza vía el CLI ai-voice-interconnector. Multiplataforma, costo cero y no intrusivo por defecto. Beta en español; Windows 11 verificado, Linux y macOS experimentales.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": {
     "name": "Cristián Rojas Arredondo"
   },

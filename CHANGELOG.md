@@ -6,6 +6,13 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+## [0.2.1] — 2026-11-05
+
+### Corregido
+
+- Un despacho de notificación fallido (`dispatch_failed`) ya no se pierde si el directorio de estado todavía no existe: `notification.log` lo crea. El motivo del fallo se registra siempre en una sola línea.
+- Documentación alineada con el despacho desanclado (`INTEGRATION`, `VOICE_CLONING` y `RELEASING`).
+
 ## [0.2.0] — 2026-11-05
 
 ### Añadido
@@ -59,6 +66,7 @@ Primera beta pública, solo en español. Verificado contra **AI Voice-InterConne
 - Plantilla de reporte de errores en `.github/ISSUE_TEMPLATE/bug_report.md`.
 - Licencia MPL-2.0.
 
-[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.2.0...HEAD
+[No publicado]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/releases/tag/v0.1.0
