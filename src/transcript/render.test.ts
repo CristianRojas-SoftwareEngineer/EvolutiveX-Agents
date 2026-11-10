@@ -126,6 +126,40 @@ describe("withTimestamp", () => {
     },
   );
 
+  test(
+    "ToolGroup vacío o con algún ID ausente delega al engine",
+    ENABLED,
+    async ($, on) => {
+      memStore(on, {
+        [dayKey(BASE)]: {
+          ...STORED[dayKey(BASE)],
+          "r:undefined": { h: at(0), d: 90_000 },
+        },
+      });
+      engineRender(on);
+      const cases = [
+        [],
+        [{}],
+        [{ tool_use_id: "t1" }, {}],
+        [{}, { tool_use_id: "t1" }],
+        [{ tool_use_id: "" }],
+      ];
+      for (const [i, calls] of cases.entries()) {
+        for (const isActive of [false, true]) {
+          const ui = await draw($, "ToolGroup", `invalid-${i}-${isActive}`, {
+            calls,
+            isActive,
+          });
+          expect(await ui.drawn()).toMatchObject({
+            type: "Text",
+            children: [ENGINE_TEXT],
+          });
+          await ui.unmount();
+        }
+      }
+    },
+  );
+
   test("CommandOutput: 🔧 y sin margen propio", ENABLED, async ($, on) => {
     memStore(on, STORED);
     engineRender(on);

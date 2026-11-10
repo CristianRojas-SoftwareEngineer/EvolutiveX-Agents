@@ -82,6 +82,8 @@
 //   espera, así que se deja sin envolver; y el engine rechaza `position`
 //   alrededor del diálogo, así que este lleva solo el header, en flujo y sin
 //   recuadro ni footer (su espera la mide el 👤 del ToolResult).
+//   También se delegan al engine los ToolGroup vacíos o con alguna llamada sin
+//   identificador, para no atribuirles tiempos de otro grupo.
 //
 //   NOTA: No se usa la prop `width` en el Box — el render engine rechaza
 //   "engine node under a Box with prop width", cayendo al rendering original

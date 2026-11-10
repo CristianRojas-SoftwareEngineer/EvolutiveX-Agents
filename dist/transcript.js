@@ -564,6 +564,8 @@ function awaitsAnotherCall(calls) {
   return [...lastCall.values()].some((id) => ids.has(id));
 }
 function group(calls, isActive) {
+  if (!calls.length || calls.some((call) => !call.tool_use_id))
+    return { unwrapped: true };
   const blockKey = `g:${calls[0].tool_use_id}`;
   const now = Date.now();
   const rs = calls.map((c) => blocks.get(`r:${c.tool_use_id}`));

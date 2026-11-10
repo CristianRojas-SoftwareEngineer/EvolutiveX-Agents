@@ -85,6 +85,24 @@ async function collectStep($: Engine, turnId: string): Promise<unknown[]> {
 
 describe("apagado", () => {
   test(
+    "grupos vacíos consecutivos no apagan el transcript",
+    ENABLED,
+    async ($, on) => {
+      const { toasts, clock } = setup(on);
+      for (const id of ["a", "b", "c", "d"]) {
+        const ui = await draw($, "ToolGroup", id, {
+          calls: [],
+          isActive: false,
+        });
+        expect(await ui.drawn()).toMatchObject({ children: [ENGINE_TEXT] });
+        await ui.unmount();
+      }
+      await clock.settle();
+      expect(toasts).toEqual([]);
+      expect(await isWrapping($)).toBe(true);
+    },
+  );
+  test(
     "tres fallos propios seguidos apagan el transcript con un único toast",
     ENABLED,
     async ($, on) => {

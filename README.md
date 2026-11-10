@@ -2,7 +2,7 @@
 
 Plugin de [Claude Code](https://code.claude.com) que **narra por voz** la actividad de la sesión usando [AI Voice-InterConnector](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector) y emite **notificaciones de escritorio nativas** (toasts silenciosos con icono por evento). Al final de cada turno (y en anuncios relevantes) escuchas un mensaje conversacional corto y recibes un aviso visual independiente del motor de voz. Opcionalmente, el **transcript enriquecido** muestra en cada bloque del transcript su hora de inicio, su duración y contadores en vivo.
 
-> **Beta 0.2.0, solo en español.** Verificado en Windows 11; Linux y macOS son experimentales. Si algo falla, repórtalo con la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md).
+> **Beta 0.2.1, solo en español.** Verificado en Windows 11; Linux y macOS son experimentales. Si algo falla, repórtalo con la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md).
 
 - **Automático**: disparado por hooks; sin intervención del modelo ni tuya.
 - **No intrusivo**: nunca bloquea ni retrasa el turno; los canales de voz y
@@ -47,7 +47,7 @@ Todas las rutas narran con la **voz activa** de `/config` (`default` si no está
 
 El modo `local` (por defecto) es 100 % offline y determinista. El modo `llm` (opt-in con `GEMINI_API_KEY`) parafrasea el último mensaje del asistente vía Gemini.
 
-El **transcript enriquecido** es la tercera funcionalidad y no usa el motor de voz: es un módulo de _function hooks_ (`dist/transcript.js`, declarado en `modules` de `hooks/hooks.json`) que Claude Code ejecuta en su propio sandbox, sin Node ni sistema de archivos. Envuelve cada bloque del transcript (`UserMessage`, `AssistantMessage`, `ToolUse`, `ToolResult`, `ToolGroup`, `CommandOutput` y `AskUserQuestion`) en un recuadro con su hora de inicio y, al pie, la duración del trabajo y quién lo hizo (🧠 modelo, 🔧 herramienta o comando, 👤 usuario, 🔌 hooks); añade la hora al Spinner y a TurnDuration y mantiene contadores en vivo mientras corre una herramienta. Está **desactivado por defecto**.
+El **transcript enriquecido** es la tercera funcionalidad y no usa el motor de voz: es un módulo de _function hooks_ (`dist/transcript.js`, declarado en `modules` de `hooks/hooks.json`) que Claude Code ejecuta en su propio sandbox, sin Node ni sistema de archivos. Envuelve los bloques compatibles del transcript en un recuadro con su hora de inicio y, cuando está disponible, la duración del trabajo y quién lo hizo (🧠 modelo, 🔧 herramienta o comando, 👤 usuario, 🔌 hooks); añade la hora al Spinner y a TurnDuration y mantiene contadores en vivo mientras corre una herramienta. El diálogo `AskUserQuestion` lleva solo la hora, sin recuadro; los grupos vacíos o con alguna llamada sin identificador se dejan al render nativo. Está **desactivado por defecto**.
 
 ---
 
@@ -191,7 +191,7 @@ Ver modelo de amenazas completo en [SECURITY.md](SECURITY.md). La skill `/evolut
 - **`voice_not_found`, notificación o aviso de voz inexistente al iniciar sesión:** la voz de `/config` → `evolutivex-agents.voice` no existe en el motor; con `custom`, todavía no clonaste tu voz. Clónala con `/evolutivex-agents:voice clone` o elige otra (por ejemplo, `default`).
 - **«Hay otra operación de voz en curso»:** otra operación de `clone`, `remove` o `presynth` tiene el bloqueo. Si no hay ninguna en marcha, borra `voice-operation.lock` del _state dir_.
 
-- **El transcript enriquecido desapareció a mitad de sesión:** se apagó por fallos repetidos (ver la protección en [Transcript enriquecido](#transcript-enriquecido-config)); el toast indica la causa. Vuelve al reiniciar Claude Code o con `/reload-plugins`.
+- **El transcript enriquecido desapareció a mitad de sesión:** si apareció el toast de desactivación, el guard detectó fallos repetidos (ver [Transcript enriquecido](#transcript-enriquecido-config)); copia el toast al reportarlo. Reiniciar Claude Code inicia una sesión nueva. Sin ese toast, la causa no queda identificada por esta protección.
 - **Reportar un error:** usa la [plantilla de issue](https://github.com/CristianRojas-SoftwareEngineer/EvolutiveX-Agents/issues/new?template=bug_report.md), que pide las versiones, la salida de `doctor --json`, las líneas de `worker.log` y el texto del toast.
 
 ---

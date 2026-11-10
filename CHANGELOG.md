@@ -6,6 +6,10 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+### Corregido
+
+- Transcript enriquecido: los grupos de herramientas vacíos o con alguna llamada sin identificador se delegan al render nativo, evitando excepciones y tiempos compartidos entre grupos distintos.
+
 ## [0.2.1] — 2026-11-05
 
 ### Corregido
