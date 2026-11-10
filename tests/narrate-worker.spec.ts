@@ -189,6 +189,34 @@ test("worker sale tras la ventana de inactividad y deja la cola vacía", () => {
   assert.equal(res.status, 0);
 });
 
+test("worker registra excepciones inesperadas y libera el lock", () => {
+  const dir = makeTempDir("avi-plugin-worker-error-");
+  restoreDirs.push(dir);
+  restoreEnv = withEnv({
+    LOCALAPPDATA: dir,
+    HOME: dir,
+    XDG_STATE_HOME: dir,
+    GEMINI_API_KEY: undefined,
+  });
+  enqueuePayload(
+    {
+      hook_event_name: "Stop",
+      last_assistant_message: 42,
+    } as never,
+    "default",
+  );
+
+  const result = runWorker({
+    ...process.env,
+    CLAUDE_PLUGIN_OPTION_VOICEENABLED: "true",
+    CLAUDE_PLUGIN_OPTION_MESSAGEMODE: "local",
+  });
+
+  assert.equal(result.status, 0);
+  assert.equal(existsSync(workerPidPath()), false);
+  assert.match(readFileSync(workerLogPath(), "utf8"), /worker error:/);
+});
+
 test("worker recupera lock huérfano (PID muerto en worker.pid) y drena la cola", () => {
   const dir = makeTempDir("avi-plugin-worker-stale-");
   restoreDirs.push(dir);

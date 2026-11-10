@@ -1278,7 +1278,6 @@ async function main() {
     await drainQueue();
   } finally {
     releaseLock();
-    process.exit(0);
   }
 }
 main().catch((err) => {

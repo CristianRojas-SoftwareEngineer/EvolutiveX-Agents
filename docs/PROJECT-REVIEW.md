@@ -2,9 +2,9 @@
 
 ## Resumen ejecutivo
 
-Auditoría de fiabilidad y seguridad de **EvolutiveX Agents**, plugin de Claude Code, sobre el commit `3035494` de la rama `main`. Se identificaron **16 hallazgos pendientes de corrección**: 7 de impacto alto (S3), 7 medio (S2) y 2 bajo (S1); no se identificaron hallazgos S4 ni S0. Se recomienda priorizar la privacidad y la exclusión mutua, seguidas de la persistencia, las notificaciones y los controles de release.
+Auditoría de fiabilidad y seguridad de **EvolutiveX Agents**, plugin de Claude Code, sobre el commit `3035494` de la rama `main`. Se identificaron **16 hallazgos**: 7 de impacto alto (S3), 7 medio (S2) y 2 bajo (S1); no se identificaron hallazgos S4 ni S0. Tras la auditoría se corrigió S2-03; quedan **15 pendientes**: 7 S3, 6 S2 y 2 S1. Se recomienda priorizar la privacidad y la exclusión mutua, seguidas de la persistencia, las notificaciones y los controles de release.
 
-Las verificaciones reproducen mecanismos bajo condiciones aisladas, no demuestran que todos los impactos hayan ocurrido en sesiones de usuarios ni miden la frecuencia natural de las carreras. La evidencia y los límites específicos acompañan a cada hallazgo. Ninguna de las correcciones propuestas se ha implementado como parte de esta auditoría.
+Las verificaciones reproducen mecanismos bajo condiciones aisladas, no demuestran que todos los impactos hayan ocurrido en sesiones de usuarios ni miden la frecuencia natural de las carreras. La evidencia y los límites específicos acompañan a cada hallazgo. Las correcciones posteriores a la auditoría se indican en el índice y en el hallazgo correspondiente.
 
 ## Contexto y alcance
 
@@ -39,7 +39,7 @@ En los apartados siguientes, «evidencia» identifica las fuentes; «causa» des
 | S3-07 | Payloads completos en cola con permisos heredados          | S3 — Alto  | P1        | Voz/privacidad            | Sí                 | Pendiente |
 | S2-01 | Inicio de subagente atribuido al agente principal          | S2 — Medio | P2        | Transcript                | No                 | Pendiente |
 | S2-02 | Promesa de carga del store no se recupera                  | S2 — Medio | P2        | Transcript                | Sí                 | Pendiente |
-| S2-03 | El worker silencia excepciones al salir                    | S2 — Medio | P2        | Voz/observabilidad        | No                 | Pendiente |
+| S2-03 | El worker silencia excepciones al salir                    | S2 — Medio | P2        | Voz/observabilidad        | No                 | Resuelto  |
 | S2-04 | Cola no garantiza FIFO entre procesos                      | S2 — Medio | P2        | Voz/concurrencia          | Sí                 | Pendiente |
 | S2-05 | Errores de SnoreToast pueden parecer éxito                 | S2 — Medio | P2        | Notificaciones/Windows    | Sí                 | Pendiente |
 | S2-06 | Formato de cadenas de accesos directos incorrecto          | S2 — Medio | P2        | Notificaciones/Windows    | Sí                 | Pendiente |
@@ -121,7 +121,8 @@ En los apartados siguientes, «evidencia» identifica las fuentes; «causa» des
 - **Categoría**: Observabilidad. **Área/plataforma**: voz.
 - **Evidencia**: `src/voice/narrate-worker.ts:312-330`, `src/voice/queue.ts:119-131`.
 - **Confianza**: Alta para el payload sintético ensayado. **Causa**: `process.exit(0)` en `finally` impide llegar al `catch` exterior. Con una respuesta numérica en la cola aislada, el worker salió con código cero, eliminó el ítem y no registró error; el control textual sí registró la ausencia del ejecutable. **Impacto**: errores y pérdidas de ítems pueden no quedar diagnosticados; no se ha probado que el host real envíe ese payload inválido.
-- **Corrección propuesta**: liberar lock sin finalizar antes de registrar el fallo, conservando el contrato del hook (recomendada). **Decisión requerida**: No. **Prioridad**: P2.
+- **Corrección aplicada**: se eliminó la salida del `finally`; el worker libera el lock y permite que el `catch` exterior registre la excepción, manteniendo la salida con código cero. Se regeneró `dist/narrate-worker.js`. **Estado**: resuelto. **Prioridad original**: P2.
+- **Verificación de la corrección**: `tests/narrate-worker.spec.ts` incorpora una regresión con respuesta numérica sintética: antes de la corrección faltaba el log; después se comprobó el registro de `worker error`, la liberación del lock y la salida con código cero. Pasaron las 12 pruebas del worker, TypeScript, ESLint, formato y `check-dist` en Windows. La corrección no recupera el ítem, que la cola elimina antes de narrarlo; tampoco demuestra que el host real envíe el payload sintético.
 
 #### S2-04 — Cola no garantiza FIFO entre procesos
 
@@ -170,7 +171,7 @@ En los apartados siguientes, «evidencia» identifica las fuentes; «causa» des
 ## Orden de corrección recomendado
 
 1. **P1**: abordar los riesgos de privacidad y exclusión mutua de S3-01 a S3-07 antes de los cambios dependientes de la cola. Conservar los controles existentes y completar las pruebas de integración y regresión que exija cada solución.
-2. **P2**: resolver S2-01 a S2-07 y S1-01 a S1-02 con pruebas de regresión y validación por plataforma.
+2. **P2**: resolver S2-01, S2-02, S2-04 a S2-07 y S1-01 a S1-02 con pruebas de regresión y validación por plataforma. S2-03 ya está resuelto.
 
 ## Confirmación en CI y límites
 

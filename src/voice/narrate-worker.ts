@@ -321,7 +321,6 @@ async function main(): Promise<void> {
     await drainQueue();
   } finally {
     releaseLock();
-    process.exit(0);
   }
 }
 
