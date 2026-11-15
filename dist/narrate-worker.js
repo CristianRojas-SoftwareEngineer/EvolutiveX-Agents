@@ -579,7 +579,7 @@ async function buildMessage(payload, cfg) {
 
 // src/voice/say-timeout.ts
 var SAY_BASE_MS = 3e4;
-var SAY_PER_CHAR_MS = 400;
+var SAY_PER_CHAR_MS = 100;
 function sayTimeoutMs(text) {
   return SAY_BASE_MS + text.length * SAY_PER_CHAR_MS;
 }

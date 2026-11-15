@@ -4,10 +4,15 @@
 // Copyright (c) 2026 Cristián Rojas Arredondo.
 // SPDX-License-Identifier: MPL-2.0
 
-// Timeout de `speech say`: crece con el texto porque cubre síntesis completa +
-// reproducción. Fija el margen fijo, la pendiente por carácter y que el plazo
-// cubra con holgura lo medido en el motor (≈ 3 s + 0,24 s por carácter) hasta el
-// techo de caracteres de toda locución dinámica.
+// Timeout de `speech say`: crece con el texto porque el comando dura lo que el
+// audio (reproduce mientras se sintetiza). Fija el margen fijo, la pendiente por
+// carácter y que el plazo cubra con holgura lo medido en el motor (27,2 s para
+// 450 caracteres, con carga de memoria) hasta el techo de caracteres de toda
+// locución dinámica.
+const MEASURED_MS = 27_204;
+const MEASURED_CHARS = 450;
+const MEASURED_MS_PER_CHAR = MEASURED_MS / MEASURED_CHARS;
+
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -23,16 +28,22 @@ test("sayTimeoutMs parte del margen fijo y crece linealmente con el texto", () =
     sayTimeoutMs("a".repeat(10)),
     SAY_BASE_MS + 10 * SAY_PER_CHAR_MS,
   );
-  assert.equal(sayTimeoutMs("a".repeat(254)), 131_600);
+  assert.equal(
+    sayTimeoutMs("a".repeat(254)),
+    SAY_BASE_MS + 254 * SAY_PER_CHAR_MS,
+  );
 });
 
 test("sayTimeoutMs cubre lo medido con margen en todo el rango de la locución", () => {
   for (const chars of [1, 50, 175, 254, SPEECH_MAX_CHARS]) {
-    const measuredMs = 3_000 + chars * 240;
+    const measuredMs = chars * MEASURED_MS_PER_CHAR;
     assert.ok(
       sayTimeoutMs("a".repeat(chars)) >= 1.5 * measuredMs,
       `${chars} caracteres`,
     );
   }
-  assert.equal(sayTimeoutMs("a".repeat(SPEECH_MAX_CHARS)), 230_000);
+  assert.equal(
+    sayTimeoutMs("a".repeat(SPEECH_MAX_CHARS)),
+    SAY_BASE_MS + SPEECH_MAX_CHARS * SAY_PER_CHAR_MS,
+  );
 });
