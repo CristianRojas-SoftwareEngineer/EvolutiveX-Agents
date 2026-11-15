@@ -58,9 +58,8 @@ perder la fidelidad al turno ni la privacidad por defecto.
 - Si el contexto crece, cachear y limitar la cola de mensajes para que el costo
   no dependa del tamaño del transcript.
 
-### Voz y streaming
+### Voz
 
-- `speech say --stream` para reproducir mientras el motor sintetiza.
 - Perfiles de voz por evento y voces por proyecto, sobre la voz activa única
   de `/config`.
 - Mostrar la operación en curso (síntesis, clonación, doblaje) en `status`.

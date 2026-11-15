@@ -36,12 +36,12 @@ El comando de instalación guía todo el proceso: detecta tu SO, instala el bina
 
 El plugin se integra via **hooks de Claude Code** y consume la **CLI pública** de AI Voice-InterConnector (`ai-voice-interconnector` en el `PATH`). No hay código compartido ni dependencias de build.
 
-| Hook                                            | Acción                             | Superficie CLI                                                                            |
-| ----------------------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
-| `UserPromptSubmit`                              | Acuse fijo «Procesando con Claude» | `speech play --label --voice`                                                             |
-| `Stop`                                          | Resumen del turno (local o LLM)    | `speech say --voice --daemon`                                                             |
-| `SubagentStop` / `StopFailure` / `Notification` | Avisos pre-sintetizados            | `speech play --label --voice`                                                             |
-| `SessionStart`                                  | Health-check + daemon autostart    | `doctor --json`, `daemon status --json`, `voice list --json`, `daemon start --warm-voice` |
+| Hook                                            | Acción                                  | Superficie CLI                                                                            |
+| ----------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `UserPromptSubmit`                              | Acuse fijo «Procesando con Claude»      | `speech play --label --voice`                                                             |
+| `Stop`                                          | Resumen del turno, narrado en streaming | `speech say --voice --daemon`                                                             |
+| `SubagentStop` / `StopFailure` / `Notification` | Avisos pre-sintetizados                 | `speech play --label --voice`                                                             |
+| `SessionStart`                                  | Health-check + daemon autostart         | `doctor --json`, `daemon status --json`, `voice list --json`, `daemon start --warm-voice` |
 
 Todas las rutas narran con la **voz activa** de `/config` (`default` si no está fijada), pasada siempre de forma explícita.
 
@@ -243,7 +243,7 @@ CircleCI (`.circleci/config.yml`): `check-dist`, `lint`, `format:check`, `typech
 - [`CHANGELOG.md`](CHANGELOG.md) — cambios por versión.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — direcciones futuras del plugin.
 
-Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.44.0/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.44.0.
+Contraparte del motor: [AI-Voice-InterConnector/docs/CLI/CONTRACT.md §12](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.45.0/docs/CLI/CONTRACT.md#12-contratos-externos) — verificado contra AI Voice-InterConnector v0.45.0.
 
 ---
 

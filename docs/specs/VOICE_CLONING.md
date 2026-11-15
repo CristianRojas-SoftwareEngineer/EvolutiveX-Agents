@@ -1,6 +1,6 @@
 # Especificación de diseño: clonado de voz y voz activa
 
-> **Estado**: implementada en el plugin (pendiente de release) · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.44.0 · **Fecha**: 2026-11-04
+> **Estado**: implementada en el plugin (pendiente de release) · **Versión base del plugin**: 0.1.0 · **Contrato del motor verificado**: AI Voice-InterConnector v0.45.0 · **Fecha**: 2026-11-15
 
 Este documento fija el diseño y los criterios de aceptación para que el usuario narre la actividad de Claude Code con **su propia voz**, clonada con el motor AI Voice-InterConnector. Es la fuente de verdad funcional de la feature: la implementación, la documentación de usuario y los tests se derivan de él.
 
@@ -69,9 +69,9 @@ El diseño respeta la arquitectura actual:
 - **`narrate-ctl`** (`src/narrate-ctl.ts`): corre desde la herramienta de shell, sin `/config`; por eso conoce la voz activa por la caché (D-03).
 - **Catálogo**: seis anuncios con etiqueta fija (`src/voice/message/static-announcements.ts`).
 - **Invocación del CLI**: `runCli`/`spawnCli` (`src/voice/resolve-cli.ts`) es la única costura; en Windows cita los argumentos para los shims `.cmd`.
-- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.44.0`); los hooks no comprueban la versión en tiempo de ejecución (D-11).
+- **Versión del motor**: el plugin está verificado contra un único corte, `engine.aiVoiceInterConnector` de `package.json` (hoy `0.45.0`); los hooks no comprueban la versión en tiempo de ejecución (D-11).
 
-### Motor (v0.44.0)
+### Motor (v0.45.0)
 
 - `voice list`, `voice clone` y `voice remove` existen; `--voice` está en `speech synthesize`, `speech say` y `speech play` (por defecto `default`), y `--warm-voice` en `daemon start` (por defecto `default`).
 - Las locuciones se guardan por `(voz, etiqueta)` en `<data_dir>/speech/<voz>/<etiqueta>.wav`: cada voz necesita sus propias seis locuciones.

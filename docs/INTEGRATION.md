@@ -3,8 +3,8 @@
 Este documento describe la integración de **EvolutiveX Agents** con el motor de síntesis **AI Voice-InterConnector**, desde la perspectiva del **plugin (el consumidor)**.
 
 La contraparte, escrita desde la perspectiva del motor, está en su contrato público:
-[docs/CLI/CONTRACT.md §12 «Contratos externos»](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.44.0/docs/CLI/CONTRACT.md#12-contratos-externos)
-(tag `v0.44.0`).
+[docs/CLI/CONTRACT.md §12 «Contratos externos»](https://github.com/CristianRojas-SoftwareEngineer/AI-Voice-InterConnector/blob/v0.45.0/docs/CLI/CONTRACT.md#12-contratos-externos)
+(tag `v0.45.0`).
 
 ## Tabla de contenidos
 
@@ -64,9 +64,11 @@ La voz activa es el campo `voice` de `/config` (`default` si no está fijado). E
   primeras oraciones del texto saneado, con 500 caracteres como freno de
   emergencia) o al aviso estático pre-sintetizado (`speech play`). La salida del
   LLM pasa por el mismo recorte, así que ninguna locución supera los 500
-  caracteres. Como `speech say` sintetiza la locución completa antes de
-  reproducirla, su timeout crece con el texto (30 s + 0,4 s por carácter); al
-  vencer, el daemon cancela la síntesis en curso. El worker corre desanclado;
+  caracteres. Como `speech say` reproduce el audio mientras el motor lo
+  sintetiza, el comando dura aproximadamente lo que dura la locución y su
+  timeout crece con el texto (30 s + 0,1 s por carácter, hasta 80 s para 500
+  caracteres); al vencer, el daemon cancela la síntesis en curso. Su `--json`
+  añade `first_audio_ms` y `stalls`, que el plugin tolera y no lee. El worker corre desanclado;
   nunca bloquea el turno.
 - **`SubagentStop` / `StopFailure` / `Notification`** → reproducen su anuncio
   pre-sintetizado con `speech play --label … --voice <voz> --json`: sin LLM ni síntesis por evento. Para
@@ -104,7 +106,7 @@ La resolución del ejecutable la hace `src/voice/resolve-cli.ts`, que escanea el
 
 ## Requisitos sobre el motor
 
-El plugin está verificado contra **AI Voice-InterConnector v0.44.0** (soporte exclusivo a ese corte; fuente única: `engine.aiVoiceInterConnector` en `package.json`). Para que la narración funcione, en la máquina del usuario debe existir:
+El plugin está verificado contra **AI Voice-InterConnector v0.45.0** (soporte exclusivo a ese corte; fuente única: `engine.aiVoiceInterConnector` en `package.json`). Para que la narración funcione, en la máquina del usuario debe existir:
 
 1. `ai-voice-interconnector` en el `PATH`, instalado con el instalador publicado en
    la release del tag (`install.sh` para Linux/macOS e `install.ps1` para Windows).
@@ -146,4 +148,4 @@ con `narrate-ctl presynth --voice <voz>`. No se recomienda `cleanup --all` ni ni
 
 ## Estabilidad del contrato
 
-El plugin asume estables los flags y el esquema JSON de las diez superficies de arriba. El contrato del motor (`docs/CLI/CONTRACT.md §12` y `docs/CLI/commands/VOICE.md`, contrastados con v0.44.0) publica esas superficies: `speech say`, `speech synthesize`, `speech play`, `doctor --json`, `daemon status --json`, `daemon start`, `voice list`, `voice clone`, `voice remove` y `version --json`, con `--voice` y `--warm-voice`. `doctor` es integral: incluye instalación, receipt, PATH, residuos y modelos, también en canal `unmanaged`; no es una comprobación parcial de recursos. Por eso el plugin aplica su propio gate de recursos (`models_provisioned` y `onnx_runtime`) y solo avisa del resto. `degraded` o estado incierto impiden el arranque y `warm_failed` se informa sin reiniciar. La gestión de voces exige como mínimo el motor v0.44.0, que `narrate-ctl` comprueba con `version --json` antes de cada operación `voice *`.
+El plugin asume estables los flags y el esquema JSON de las diez superficies de arriba. El contrato del motor (`docs/CLI/CONTRACT.md §12` y `docs/CLI/commands/VOICE.md`, contrastados con v0.45.0) publica esas superficies: `speech say`, `speech synthesize`, `speech play`, `doctor --json`, `daemon status --json`, `daemon start`, `voice list`, `voice clone`, `voice remove` y `version --json`, con `--voice` y `--warm-voice`. `doctor` es integral: incluye instalación, receipt, PATH, residuos y modelos, también en canal `unmanaged`; no es una comprobación parcial de recursos. Por eso el plugin aplica su propio gate de recursos (`models_provisioned` y `onnx_runtime`) y solo avisa del resto. `degraded` o estado incierto impiden el arranque y `warm_failed` se informa sin reiniciar. La gestión de voces exige como mínimo el motor v0.44.0, que `narrate-ctl` comprueba con `version --json` antes de cada operación `voice *`.

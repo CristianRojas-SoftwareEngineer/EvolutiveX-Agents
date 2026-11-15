@@ -102,7 +102,7 @@ Advertencias a comunicar:
 
 ## Paso 3 — Dejar el daemon en marcha
 
-El plugin narra con `speech say --daemon`, que **usa el daemon y falla si no está levantado** (no lo arranca solo). El daemon mantiene el modelo en memoria, así cada narración tarda segundos en vez de decenas.
+El plugin narra con `speech say --daemon`, que **usa el daemon y falla si no está levantado** (no lo arranca solo). El daemon mantiene el modelo en memoria, así cada narración empieza a sonar en torno a un segundo y se reproduce mientras el motor la sintetiza.
 
 ```bash
 ai-voice-interconnector daemon start

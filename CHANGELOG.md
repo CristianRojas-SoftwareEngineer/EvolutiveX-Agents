@@ -6,6 +6,10 @@ El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/
 
 ## [No publicado]
 
+### Cambiado
+
+- Sincronizado con AI Voice-InterConnector v0.45.0, que pasa a ser la versión verificada. `speech say` reproduce ahora el audio mientras el motor lo sintetiza (la voz empieza en torno a 1,2 s en lugar de esperar a la síntesis completa) y su `--json` añade `first_audio_ms` y `stalls`, que el plugin tolera y no lee. El plazo de `speech say` pasa de 30 s más 0,4 s por carácter (hasta 230 s) a 30 s más 0,1 s por carácter (hasta 80 s), recalibrado con una medición con el motor publicado. Verificado contra AI Voice-InterConnector v0.45.0.
+
 ### Corregido
 
 - Transcript enriquecido: los grupos de herramientas vacíos o con alguna llamada sin identificador se delegan al render nativo, evitando excepciones y tiempos compartidos entre grupos distintos.
